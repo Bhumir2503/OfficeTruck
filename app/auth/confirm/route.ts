@@ -4,9 +4,8 @@ import { NextResponse, type NextRequest } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 
 /**
- * Landing point for email links and OAuth. Handles both link styles Supabase
- * can send: `code` (default email templates and OAuth) and `token_hash`
- * (customised email templates).
+ * Landing point for email links. Handles both link styles Supabase can send:
+ * `code` (default email templates) and `token_hash` (customised templates).
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl

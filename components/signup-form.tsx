@@ -5,7 +5,6 @@ import { cn } from "cn"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
-import { GoogleAuthButton } from "@/components/google-auth-button"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -20,7 +19,6 @@ import {
   FieldError,
   FieldGroup,
   FieldLabel,
-  FieldSeparator,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { useZodForm } from "@/hooks/use-zod-form"
@@ -142,11 +140,7 @@ export function SignupForm({
                   </FieldDescription>
                 )}
               </Field>
-              <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">
-                Or continue with
-              </FieldSeparator>
               <Field>
-                <GoogleAuthButton>Sign up with Google</GoogleAuthButton>
                 <FieldDescription className="text-center">
                   Already have an account? <Link href="/login">Sign in</Link>
                 </FieldDescription>

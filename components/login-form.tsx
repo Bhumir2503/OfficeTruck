@@ -6,7 +6,6 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 
 import { ForgotPasswordDialog } from "@/components/forgot-password-dialog"
-import { GoogleAuthButton } from "@/components/google-auth-button"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -21,7 +20,6 @@ import {
   FieldError,
   FieldGroup,
   FieldLabel,
-  FieldSeparator,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { useZodForm } from "@/hooks/use-zod-form"
@@ -53,9 +51,7 @@ export function LoginForm({
       <Card>
         <CardHeader className="text-center">
           <CardTitle className="text-xl">Welcome back</CardTitle>
-          <CardDescription>
-            Login with your email or Google account
-          </CardDescription>
+          <CardDescription>Login with your email and password</CardDescription>
         </CardHeader>
         <CardContent>
           <form {...formProps}>
@@ -102,11 +98,7 @@ export function LoginForm({
                   {formError ?? linkError}
                 </FieldError>
               </Field>
-              <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">
-                Or continue with
-              </FieldSeparator>
               <Field>
-                <GoogleAuthButton>Login with Google</GoogleAuthButton>
                 <FieldDescription className="text-center">
                   Don&apos;t have an account?{" "}
                   <Link href="/signup">Sign up</Link>

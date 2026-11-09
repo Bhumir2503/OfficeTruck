@@ -6,7 +6,6 @@ This is a Next.js template with shadcn/ui.
 
 1. Copy `.env.example` to `.env.local` and fill in your project's URL and publishable key.
 2. In the Supabase dashboard under Authentication > URL Configuration, set the Site URL and add `http://localhost:3000/**` (plus your production URL) to the Redirect URLs.
-3. For Google login, enable the Google provider under Authentication > Providers.
 
 ## Adding components
 

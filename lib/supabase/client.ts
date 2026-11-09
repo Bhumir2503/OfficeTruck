@@ -7,7 +7,7 @@ export function createClient() {
   )
 }
 
-/** URL Supabase sends users back to from emails and OAuth. */
+/** URL Supabase sends users back to from emails. */
 export function authRedirectUrl(next: "/" | "/reset-password" = "/") {
   return `${window.location.origin}/auth/confirm?next=${next}`
 }
