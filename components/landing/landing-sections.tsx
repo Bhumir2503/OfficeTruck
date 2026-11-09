@@ -224,7 +224,7 @@ export function GetStarted({ className }: { className?: string }) {
   )
 }
 
-export function Hero({ email }: { email?: string }) {
+export function Hero() {
   return (
     <section className="px-3 sm:px-4">
       <div
@@ -247,21 +247,15 @@ export function Hero({ email }: { email?: string }) {
               Loads, drivers, paperwork, invoices and cash flow in one connected
               place, built for owner-operators and fleets of 1 to 20 trucks.
             </p>
-            {email ? (
-              <p className="mt-8 text-primary-foreground/80">
-                You&apos;re signed in as {email}.
-              </p>
-            ) : (
-              <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
-                <GetStarted />
-                <a
-                  href="#how-it-works"
-                  className="text-sm font-medium underline-offset-4 hover:underline"
-                >
-                  See how it works
-                </a>
-              </div>
-            )}
+            <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
+              <GetStarted />
+              <a
+                href="#how-it-works"
+                className="text-sm font-medium underline-offset-4 hover:underline"
+              >
+                See how it works
+              </a>
+            </div>
           </div>
           <div className="duration-700 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-6">
             <LoadSheet />
@@ -525,7 +519,7 @@ export function Roadmap() {
   )
 }
 
-export function Pricing({ signedIn }: { signedIn: boolean }) {
+export function Pricing() {
   return (
     <section id="pricing" className="scroll-mt-6 bg-muted py-20 sm:py-28">
       <div className={container}>
@@ -556,17 +550,15 @@ export function Pricing({ signedIn }: { signedIn: boolean }) {
                   </li>
                 ))}
               </ul>
-              {!signedIn && (
-                <Link
-                  href="/signup"
-                  className={cn(
-                    buttonVariants({ variant: "outline", size: "lg" }),
-                    "mt-8 h-11"
-                  )}
-                >
-                  Join the pilot
-                </Link>
-              )}
+              <Link
+                href="/signup"
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "lg" }),
+                  "mt-8 h-11"
+                )}
+              >
+                Join the pilot
+              </Link>
             </div>
           ))}
         </div>

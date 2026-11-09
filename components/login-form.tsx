@@ -42,7 +42,7 @@ export function LoginForm({
       if (error) {
         return error.message
       }
-      router.replace("/")
+      router.replace("/dashboard")
       router.refresh()
     }
   )

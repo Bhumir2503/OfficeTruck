@@ -61,13 +61,7 @@ function ExampleCard({ example }: { example: Solution["example"] }) {
   )
 }
 
-export function SolutionPage({
-  solution,
-  signedIn,
-}: {
-  solution: Solution
-  signedIn: boolean
-}) {
+export function SolutionPage({ solution }: { solution: Solution }) {
   const related = solutions.filter((item) => item.slug !== solution.slug)
 
   return (
@@ -90,14 +84,12 @@ export function SolutionPage({
               <p className="mt-6 max-w-lg text-lg text-pretty text-primary-foreground/80">
                 {solution.lead}
               </p>
-              {!signedIn && (
-                <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
-                  <GetStarted />
-                  <p className="text-sm text-primary-foreground/80">
-                    Now recruiting pilot carriers
-                  </p>
-                </div>
-              )}
+              <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
+                <GetStarted />
+                <p className="text-sm text-primary-foreground/80">
+                  Now recruiting pilot carriers
+                </p>
+              </div>
             </div>
             <ExampleCard example={solution.example} />
           </div>
@@ -183,7 +175,7 @@ export function SolutionPage({
         </ul>
       </section>
 
-      {!signedIn && <FinalCta />}
+      <FinalCta />
     </>
   )
 }

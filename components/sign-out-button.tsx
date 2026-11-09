@@ -15,7 +15,7 @@ export function SignOutButton({
   async function signOut() {
     setPending(true)
     await createClient().auth.signOut()
-    setPending(false)
+    router.replace("/login")
     router.refresh()
   }
 

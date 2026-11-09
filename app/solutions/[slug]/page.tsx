@@ -4,7 +4,6 @@ import { notFound } from "next/navigation"
 import { SiteFooter, SiteHeader } from "@/components/landing/site-chrome"
 import { SolutionPage } from "@/components/landing/solution-page"
 import { solutions } from "@/lib/solutions"
-import { createClient } from "@/lib/supabase/server"
 
 type Props = { params: Promise<{ slug: string }> }
 
@@ -26,15 +25,11 @@ export default async function Page({ params }: Props) {
     notFound()
   }
 
-  const supabase = await createClient()
-  const { data } = await supabase.auth.getClaims()
-  const signedIn = !!data?.claims
-
   return (
     <div className="flex min-h-svh flex-col">
-      <SiteHeader signedIn={signedIn} />
+      <SiteHeader />
       <main className="flex-1">
-        <SolutionPage solution={solution} signedIn={signedIn} />
+        <SolutionPage solution={solution} />
       </main>
       <SiteFooter />
     </div>

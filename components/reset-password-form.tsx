@@ -31,7 +31,7 @@ export function ResetPasswordForm() {
       if (error) {
         return error.message
       }
-      router.replace("/")
+      router.replace("/dashboard")
       router.refresh()
     }
   )
