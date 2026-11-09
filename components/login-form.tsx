@@ -3,9 +3,10 @@
 import { useState } from "react"
 import { cn } from "cn"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 
 import { ForgotPasswordDialog } from "@/components/forgot-password-dialog"
-import { GoogleIcon } from "@/components/google-icon"
+import { GoogleAuthButton } from "@/components/google-auth-button"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -25,12 +26,26 @@ import {
 import { Input } from "@/components/ui/input"
 import { useZodForm } from "@/hooks/use-zod-form"
 import { loginSchema } from "@/lib/schemas/auth"
+import { createClient } from "@/lib/supabase/client"
 
 export function LoginForm({
   className,
+  linkError,
   ...props
-}: React.ComponentProps<"div">) {
-  const { errors, submitted, formProps } = useZodForm(loginSchema)
+}: React.ComponentProps<"div"> & { linkError?: string }) {
+  const router = useRouter()
+  const { errors, formError, pending, formProps } = useZodForm(
+    loginSchema,
+    async (credentials) => {
+      const { error } =
+        await createClient().auth.signInWithPassword(credentials)
+      if (error) {
+        return error.message
+      }
+      router.replace("/")
+      router.refresh()
+    }
+  )
   const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false)
 
   return (
@@ -80,21 +95,18 @@ export function LoginForm({
                 <FieldError errors={errors.password} />
               </Field>
               <Field>
-                <Button type="submit">Login</Button>
-                {submitted && (
-                  <FieldDescription role="status" className="text-center">
-                    Looks good, but login isn&apos;t connected yet.
-                  </FieldDescription>
-                )}
+                <Button type="submit" disabled={pending}>
+                  Login
+                </Button>
+                <FieldError className="text-center">
+                  {formError ?? linkError}
+                </FieldError>
               </Field>
               <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">
                 Or continue with
               </FieldSeparator>
               <Field>
-                <Button variant="outline" type="button">
-                  <GoogleIcon />
-                  Login with Google
-                </Button>
+                <GoogleAuthButton>Login with Google</GoogleAuthButton>
                 <FieldDescription className="text-center">
                   Don&apos;t have an account?{" "}
                   <Link href="/signup">Sign up</Link>

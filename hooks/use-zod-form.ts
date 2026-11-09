@@ -9,15 +9,20 @@ type FieldErrors<Values> = Partial<Record<keyof Values, { message: string }[]>>
  * Validates an uncontrolled form against a Zod schema on submit, then
  * re-validates on every change so errors clear as they are fixed. Inputs are
  * matched to schema keys by their `name` attribute.
+ *
+ * `onValid` runs with the parsed values and may return a message to show as a
+ * form-level error.
  */
 export function useZodForm<Schema extends z.ZodType<Record<string, unknown>>>(
-  schema: Schema
+  schema: Schema,
+  onValid: (values: z.output<Schema>) => Promise<string | void>
 ) {
   type Values = z.input<Schema>
 
   const [errors, setErrors] = useState<FieldErrors<Values>>({})
   const [attempted, setAttempted] = useState(false)
-  const [submitted, setSubmitted] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [pending, setPending] = useState(false)
 
   function validate(form: HTMLFormElement) {
     const result = schema.safeParse(Object.fromEntries(new FormData(form)))
@@ -34,21 +39,36 @@ export function useZodForm<Schema extends z.ZodType<Record<string, unknown>>>(
     }
 
     setErrors(nextErrors as FieldErrors<Values>)
-    return result.success
+    return result
   }
 
   return {
     errors,
-    submitted,
+    formError,
+    pending,
     formProps: {
       noValidate: true,
-      onSubmit(event: FormEvent<HTMLFormElement>) {
+      async onSubmit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
         setAttempted(true)
-        setSubmitted(validate(event.currentTarget))
+        setFormError(null)
+
+        const result = validate(event.currentTarget)
+        if (!result.success || pending) {
+          return
+        }
+
+        setPending(true)
+        try {
+          setFormError((await onValid(result.data)) || null)
+        } catch {
+          setFormError("Something went wrong. Please try again.")
+        } finally {
+          setPending(false)
+        }
       },
       onChange(event: FormEvent<HTMLFormElement>) {
-        setSubmitted(false)
+        setFormError(null)
         if (attempted) {
           validate(event.currentTarget)
         }

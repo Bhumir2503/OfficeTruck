@@ -1,5 +1,7 @@
 "use client"
 
+import { useState } from "react"
+
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -18,10 +20,24 @@ import {
 import { Input } from "@/components/ui/input"
 import { useZodForm } from "@/hooks/use-zod-form"
 import { forgotPasswordSchema } from "@/lib/schemas/auth"
+import { authRedirectUrl, createClient } from "@/lib/supabase/client"
 
 // Lives inside the dialog content so its state resets each time it closes.
 function ForgotPasswordForm() {
-  const { errors, submitted, formProps } = useZodForm(forgotPasswordSchema)
+  const [sent, setSent] = useState(false)
+  const { errors, formError, pending, formProps } = useZodForm(
+    forgotPasswordSchema,
+    async ({ email }) => {
+      setSent(false)
+      const { error } = await createClient().auth.resetPasswordForEmail(email, {
+        redirectTo: authRedirectUrl("/reset-password"),
+      })
+      if (error) {
+        return error.message
+      }
+      setSent(true)
+    }
+  )
 
   return (
     <form {...formProps}>
@@ -40,10 +56,13 @@ function ForgotPasswordForm() {
           <FieldError errors={errors.email} />
         </Field>
         <Field>
-          <Button type="submit">Send reset link</Button>
-          {submitted && (
+          <Button type="submit" disabled={pending}>
+            Send reset link
+          </Button>
+          <FieldError className="text-center">{formError}</FieldError>
+          {sent && (
             <FieldDescription role="status" className="text-center">
-              Looks good, but password reset isn&apos;t connected yet.
+              If an account exists for that email, a reset link is on its way.
             </FieldDescription>
           )}
         </Field>
