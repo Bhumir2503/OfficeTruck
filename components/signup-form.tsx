@@ -1,9 +1,10 @@
 "use client"
 
+import { useState } from "react"
 import { cn } from "cn"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 
-import { GoogleIcon } from "@/components/google-icon"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -18,17 +19,42 @@ import {
   FieldError,
   FieldGroup,
   FieldLabel,
-  FieldSeparator,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { useZodForm } from "@/hooks/use-zod-form"
 import { signupSchema } from "@/lib/schemas/auth"
+import { authRedirectUrl, createClient } from "@/lib/supabase/client"
 
 export function SignupForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
-  const { errors, submitted, formProps } = useZodForm(signupSchema)
+  const router = useRouter()
+  const [confirmationSent, setConfirmationSent] = useState(false)
+  const { errors, formError, pending, formProps } = useZodForm(
+    signupSchema,
+    async ({ name, email, password }) => {
+      setConfirmationSent(false)
+      const { data, error } = await createClient().auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: name },
+          emailRedirectTo: authRedirectUrl(),
+        },
+      })
+      if (error) {
+        return error.message
+      }
+      // No session means the project requires email confirmation first.
+      if (!data.session) {
+        setConfirmationSent(true)
+        return
+      }
+      router.replace("/dashboard")
+      router.refresh()
+    }
+  )
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
@@ -104,21 +130,17 @@ export function SignupForm({
                 )}
               </Field>
               <Field>
-                <Button type="submit">Create Account</Button>
-                {submitted && (
+                <Button type="submit" disabled={pending}>
+                  Create Account
+                </Button>
+                <FieldError className="text-center">{formError}</FieldError>
+                {confirmationSent && (
                   <FieldDescription role="status" className="text-center">
-                    Looks good, but sign up isn&apos;t connected yet.
+                    Check your email for a link to confirm your account.
                   </FieldDescription>
                 )}
               </Field>
-              <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">
-                Or continue with
-              </FieldSeparator>
               <Field>
-                <Button variant="outline" type="button">
-                  <GoogleIcon />
-                  Sign up with Google
-                </Button>
                 <FieldDescription className="text-center">
                   Already have an account? <Link href="/login">Sign in</Link>
                 </FieldDescription>

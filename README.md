@@ -2,6 +2,11 @@
 
 This is a Next.js template with shadcn/ui.
 
+## Supabase auth
+
+1. Copy `.env.example` to `.env.local` and fill in your project's URL and publishable key.
+2. In the Supabase dashboard under Authentication > URL Configuration, set the Site URL and add `http://localhost:3000/**` (plus your production URL) to the Redirect URLs.
+
 ## Adding components
 
 To add components to your app, run the following command:
