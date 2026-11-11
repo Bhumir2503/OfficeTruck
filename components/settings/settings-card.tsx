@@ -47,6 +47,7 @@ export function SettingsCard({
   action?: React.ReactNode
   footer?: React.ReactNode
   contentClassName?: string
+  children?: React.ReactNode
 }) {
   return (
     <section
@@ -56,7 +57,12 @@ export function SettingsCard({
       )}
       {...props}
     >
-      <div className="flex items-start justify-between gap-4 px-6 pt-5">
+      <div
+        className={cn(
+          "flex items-start justify-between gap-4 px-6 pt-5",
+          !children && "pb-5"
+        )}
+      >
         <div className="space-y-1">
           <h4 className="font-semibold">{title}</h4>
           {description && (
@@ -65,7 +71,9 @@ export function SettingsCard({
         </div>
         {action}
       </div>
-      <div className={cn("px-6 pt-5 pb-6", contentClassName)}>{children}</div>
+      {children && (
+        <div className={cn("px-6 pt-5 pb-6", contentClassName)}>{children}</div>
+      )}
       {footer}
     </section>
   )

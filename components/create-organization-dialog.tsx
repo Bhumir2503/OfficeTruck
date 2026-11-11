@@ -44,7 +44,8 @@ function CreateOrganizationForm() {
           ? "That URL is already taken. Try another."
           : error.message
       }
-      router.push(`/org/${slug}`)
+      // ?welcome opens the company setup popup on the new dashboard.
+      router.push(`/org/${slug}?welcome=1`)
       router.refresh()
     }
   )
@@ -111,13 +112,25 @@ function CreateOrganizationForm() {
   )
 }
 
-export function CreateOrganizationDialog() {
+/**
+ * Renders its own "New organization" button, unless `open` is passed to
+ * control it from elsewhere (such as the sidebar's organization menu).
+ */
+export function CreateOrganizationDialog({
+  open,
+  onOpenChange,
+}: {
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+}) {
   return (
-    <Dialog>
-      <DialogTrigger render={<Button variant="outline" size="lg" />}>
-        <Plus />
-        New organization
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {open === undefined && (
+        <DialogTrigger render={<Button variant="outline" size="lg" />}>
+          <Plus />
+          New organization
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>Create an organization</DialogTitle>

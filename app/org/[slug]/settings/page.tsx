@@ -2,11 +2,9 @@ import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
 import { CompanyProfileSection } from "@/components/settings/company-profile-form"
-import {
-  SettingsCard,
-  SettingsCardFooter,
-  SettingsPage,
-} from "@/components/settings/settings-card"
+import { DeleteOrganization } from "@/components/settings/delete-organization"
+import { OrganizationUrlForm } from "@/components/settings/organization-url-form"
+import { SettingsPage } from "@/components/settings/settings-card"
 import {
   canManage,
   getOrganization,
@@ -37,18 +35,17 @@ export default async function GeneralSettingsPage({
       <CompanyProfileSection section="company" {...props} />
       <CompanyProfileSection section="contact" {...props} />
       <CompanyProfileSection section="address" {...props} />
-      <SettingsCard
-        title="Organization URL"
-        description="The web address for your organization in OfficeTruck."
-        footer={
-          <SettingsCardFooter hint="The URL can't be changed, so links your team has saved keep working." />
-        }
-      >
-        <div className="flex h-9 items-center rounded-md border bg-muted/40 px-3 text-sm">
-          <span className="text-muted-foreground">/org/</span>
-          <span className="font-medium">{organization.slug}</span>
-        </div>
-      </SettingsCard>
+      <OrganizationUrlForm
+        organizationId={organization.id}
+        slug={organization.slug}
+        canEdit={canManage(organization)}
+      />
+      <DeleteOrganization
+        organizationId={organization.id}
+        name={organization.name}
+        slug={organization.slug}
+        canDelete={organization.role === "owner"}
+      />
     </SettingsPage>
   )
 }

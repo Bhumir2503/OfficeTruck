@@ -1,0 +1,5 @@
+import { MembersSettingsSkeleton } from "@/components/settings/settings-skeletons"
+
+export default function Loading() {
+  return <MembersSettingsSkeleton />
+}

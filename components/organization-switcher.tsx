@@ -1,8 +1,10 @@
 "use client"
 
-import { CheckIcon, ChevronsUpDownIcon } from "lucide-react"
+import { CheckIcon, ChevronsUpDownIcon, PlusIcon } from "lucide-react"
 import Link from "next/link"
+import { useState } from "react"
 
+import { CreateOrganizationDialog } from "@/components/create-organization-dialog"
 import { OrganizationAvatar } from "@/components/organization-avatar"
 import {
   DropdownMenu,
@@ -10,6 +12,7 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -27,6 +30,7 @@ export function OrganizationSwitcher({
   organizations: Organization[]
 }) {
   const { isMobile } = useSidebar()
+  const [createOpen, setCreateOpen] = useState(false)
 
   return (
     <SidebarMenuItem>
@@ -72,8 +76,23 @@ export function OrganizationSwitcher({
               </DropdownMenuItem>
             ))}
           </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            className="gap-2 p-2"
+            onClick={() => setCreateOpen(true)}
+          >
+            <div className="flex size-6 items-center justify-center rounded border">
+              <PlusIcon className="size-4" />
+            </div>
+            New organization
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      {/* Outside the menu so it stays open after the menu closes. */}
+      <CreateOrganizationDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+      />
     </SidebarMenuItem>
   )
 }
