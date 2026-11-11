@@ -51,7 +51,7 @@ export function SignupForm({
         setConfirmationSent(true)
         return
       }
-      router.replace("/dashboard")
+      router.replace("/")
       router.refresh()
     }
   )

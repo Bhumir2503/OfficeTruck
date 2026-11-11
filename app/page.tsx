@@ -1,42 +1,16 @@
-import type { Metadata } from "next"
+import { redirect } from "next/navigation"
 
-import {
-  Control,
-  Faq,
-  Features,
-  FinalCta,
-  Hero,
-  HowItWorks,
-  Pricing,
-  Problem,
-  Roadmap,
-  Solutions,
-} from "@/components/landing/landing-sections"
-import { SiteFooter, SiteHeader } from "@/components/landing/site-chrome"
+import { getMyOrganizations, getUser } from "@/lib/organizations"
 
-export const metadata: Metadata = {
-  title: "OfficeTruck | Your trucking business. One office.",
-  description:
-    "Loads, drivers, paperwork, invoices and cash flow in one connected place, built for owner-operators and fleets of 1 to 20 trucks.",
-}
+// Where everyone lands after signing in: straight into their organization when
+// they have exactly one, otherwise the picker at /org.
+export default async function Page() {
+  if (!(await getUser())) {
+    redirect("/login")
+  }
 
-export default function Page() {
-  return (
-    <div className="flex min-h-svh flex-col">
-      <SiteHeader />
-      <main className="flex-1">
-        <Hero />
-        <Problem />
-        <HowItWorks />
-        <Features />
-        <Control />
-        <Roadmap />
-        <Pricing />
-        <Solutions />
-        <Faq />
-        <FinalCta />
-      </main>
-      <SiteFooter />
-    </div>
+  const organizations = await getMyOrganizations()
+  redirect(
+    organizations.length === 1 ? `/org/${organizations[0].slug}` : "/org"
   )
 }

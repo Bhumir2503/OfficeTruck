@@ -1,17 +1,15 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
-const SIGNED_OUT_ONLY_PATHS = ["/", "/login", "/signup"]
+const SIGNED_OUT_ONLY_PATHS = ["/login", "/signup"]
 
 function isSignedOutOnly(pathname: string) {
-  return (
-    SIGNED_OUT_ONLY_PATHS.includes(pathname) ||
-    pathname.startsWith("/solutions/")
-  )
+  return SIGNED_OUT_ONLY_PATHS.includes(pathname)
 }
 
+// "/" is included because it only routes signed-in users to their organization.
 function requiresSignIn(pathname: string) {
-  return pathname === "/dashboard" || pathname.startsWith("/dashboard/")
+  return pathname === "/" || pathname === "/org" || pathname.startsWith("/org/")
 }
 
 /** Refreshes the auth session and sends each visitor to the side they belong on. */
@@ -47,8 +45,9 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getClaims()
   const { pathname } = request.nextUrl
 
+  // Signed-in users go to "/", which routes them on to their organization.
   const destination = data?.claims
-    ? isSignedOutOnly(pathname) && "/dashboard"
+    ? isSignedOutOnly(pathname) && "/"
     : requiresSignIn(pathname) && "/login"
 
   if (destination) {
