@@ -29,6 +29,7 @@ export type OrganizationProfile = {
 export type OrganizationMember = {
   userId: string
   name: string | null
+  avatarUrl: string | null
   role: OrganizationRole
   joinedAt: string
 }
@@ -117,7 +118,7 @@ export async function getOrganizationMembers(
   // There's no foreign key from organization_users to profiles, so join here.
   const { data: profiles, error: profilesError } = await supabase
     .from("profiles")
-    .select("id, full_name")
+    .select("id, full_name, avatar_url")
     .in(
       "id",
       members.map((member) => member.user_id)
@@ -127,13 +128,14 @@ export async function getOrganizationMembers(
     throw profilesError
   }
 
-  const names = new Map(profiles.map((p) => [p.id, p.full_name]))
+  const byId = new Map(profiles.map((p) => [p.id, p]))
   const rank = { owner: 0, admin: 1, member: 2 }
 
   return members
     .map((member) => ({
       userId: member.user_id,
-      name: names.get(member.user_id) ?? null,
+      name: byId.get(member.user_id)?.full_name ?? null,
+      avatarUrl: byId.get(member.user_id)?.avatar_url ?? null,
       role: member.role as OrganizationRole,
       joinedAt: member.created_at,
     }))

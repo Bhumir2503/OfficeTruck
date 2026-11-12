@@ -38,6 +38,10 @@ export default async function OrganizationLayout({
 
   const email = user.email ?? ""
   const name = String(user.user_metadata?.full_name || email.split("@")[0])
+  const avatarUrl =
+    typeof user.user_metadata?.avatar_url === "string"
+      ? user.user_metadata.avatar_url
+      : null
 
   return (
     <SidebarProvider
@@ -51,7 +55,7 @@ export default async function OrganizationLayout({
       <AppSidebar
         variant="inset"
         organization={organization}
-        user={{ name, email }}
+        user={{ name, email, avatarUrl }}
         organizations={await getMyOrganizations()}
         dashboardBadge={totalActions(await getActionCounts())}
       />
