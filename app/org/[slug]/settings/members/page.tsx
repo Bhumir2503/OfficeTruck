@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
 import { SettingsMembers1, type Member } from "@/components/settings-members1"
+import { getPendingInvitations } from "@/lib/invitations"
 import {
   canManage,
   getOrganization,
@@ -35,11 +36,20 @@ export default async function MembersSettingsPage({
     }
   )
 
+  const manager = canManage(organization)
+  const invitations = manager
+    ? await getPendingInvitations(organization.id)
+    : []
+
   return (
     <SettingsMembers1
       subHeading={`Everyone with access to ${organization.name}, and the role each person has.`}
       users={members}
-      canInvite={canManage(organization)}
+      organizationId={organization.id}
+      organizationName={organization.name}
+      canInvite={manager}
+      canChangeRoles={organization.role === "owner"}
+      invitations={invitations}
     />
   )
 }

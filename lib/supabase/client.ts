@@ -8,8 +8,7 @@ export function createClient() {
 }
 
 /** URL Supabase sends users back to from emails. */
-export function authRedirectUrl(
-  next: "/" | "/reset-password" | "/account" = "/"
-) {
+/** `next` must be allowed by safeNext() in lib/safe-next.ts, or "/" is used. */
+export function authRedirectUrl(next = "/") {
   return `${window.location.origin}/auth/confirm?next=${next}`
 }

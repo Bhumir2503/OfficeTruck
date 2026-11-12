@@ -2,12 +2,22 @@
 
 import {
   CornerDownLeft,
+  Mail,
+  RotateCw,
   Search,
   SlidersHorizontal,
   UserRoundPlus,
+  X,
 } from "lucide-react"
 import { useMemo, useState } from "react"
+import { toast } from "sonner"
 
+import {
+  inviteMember,
+  resendInvitation,
+  revokeInvitation,
+  type ActionResult,
+} from "@/app/org/[slug]/settings/members/actions"
 import {
   SettingsCard,
   SettingsCardFooter,
@@ -46,7 +56,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { MemberRoleMenu } from "@/components/member-role-menu"
+import { Field, FieldError } from "@/components/ui/field"
+import { useZodForm } from "@/hooks/use-zod-form"
+import type { PendingInvitation } from "@/lib/invitations"
 import type { OrganizationRole } from "@/lib/organizations"
+import { inviteSchema, type InviteRole } from "@/lib/schemas/invitation"
 
 export interface Member {
   id: string
@@ -73,12 +88,21 @@ const joined = new Intl.DateTimeFormat("en-US", {
   timeZone: "UTC",
 })
 
-const INVITE_ROLES = [
-  { value: "admin", label: "Admin" },
+const INVITE_ROLE_OPTIONS = [
   { value: "member", label: "Member" },
+  { value: "admin", label: "Admin" },
 ]
 
-const UsersTable = ({ users }: { users: Member[] }) => {
+type RoleChanges = { organizationId: string; organizationName: string }
+
+const UsersTable = ({
+  users,
+  roleChanges,
+}: {
+  users: Member[]
+  /** Set for the owner, who gets a menu on everyone else's row. */
+  roleChanges: RoleChanges | null
+}) => {
   return (
     // Line the first and last columns up with the card's padding.
     <Table className="[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6">
@@ -89,13 +113,18 @@ const UsersTable = ({ users }: { users: Member[] }) => {
           <TableHead className="hidden text-right sm:table-cell">
             Joined
           </TableHead>
+          {roleChanges && (
+            <TableHead className="w-12">
+              <span className="sr-only">Actions</span>
+            </TableHead>
+          )}
         </TableRow>
       </TableHeader>
       <TableBody>
         {users.length === 0 && (
           <TableRow>
             <TableCell
-              colSpan={3}
+              colSpan={roleChanges ? 4 : 3}
               className="h-24 text-center text-muted-foreground"
             >
               No members match your search.
@@ -135,6 +164,17 @@ const UsersTable = ({ users }: { users: Member[] }) => {
             <TableCell className="hidden text-right text-muted-foreground sm:table-cell">
               {joined.format(new Date(user.joinedAt))}
             </TableCell>
+            {roleChanges && (
+              <TableCell className="text-right">
+                {user.role !== "owner" && !user.isYou && (
+                  <MemberRoleMenu
+                    organizationId={roleChanges.organizationId}
+                    organizationName={roleChanges.organizationName}
+                    member={{ id: user.id, name: user.name, role: user.role }}
+                  />
+                )}
+              </TableCell>
+            )}
           </TableRow>
         ))}
       </TableBody>
@@ -142,58 +182,103 @@ const UsersTable = ({ users }: { users: Member[] }) => {
   )
 }
 
-// Inviting isn't built yet: the form shows what it will look like, and says so.
-const InviteUserForm = () => {
+function InviteUserForm({ organizationId }: { organizationId: string }) {
+  const [open, setOpen] = useState(false)
+  const [role, setRole] = useState<InviteRole>("member")
+  const { errors, formError, pending, formProps } = useZodForm(
+    inviteSchema,
+    async (values) => {
+      const result = await inviteMember(organizationId, values)
+      if ("error" in result) {
+        return result.error
+      }
+      toast.success(`Invitation sent to ${values.email}.`)
+      setOpen(false)
+    }
+  )
+
   return (
-    <Dialog>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (next) {
+          setRole("member")
+        }
+      }}
+    >
       <DialogTrigger render={<Button className="shrink-0" />}>
         <UserRoundPlus />
-        Add member
+        Invite member
       </DialogTrigger>
       <DialogContent className="gap-0 overflow-hidden p-0">
         <DialogTitle className="flex items-center gap-2 border-b p-4 text-sm font-medium">
           <UserRoundPlus className="size-4" />
-          Add new member
+          Invite a new member
         </DialogTitle>
         <form
           autoComplete="off"
-          onSubmit={(e) => e.preventDefault()}
+          {...formProps}
           className="flex flex-col gap-4 bg-muted pt-4"
         >
-          <fieldset disabled className="flex flex-col gap-4 px-4">
-            <div className="space-y-1">
+          <fieldset disabled={pending} className="flex flex-col gap-4 px-4">
+            <Field data-invalid={!!errors.email} className="gap-1">
               <Label htmlFor="invite-email" className="text-xs">
                 Email address
               </Label>
               <Input
                 id="invite-email"
+                name="email"
                 type="email"
                 placeholder="driver@yourcompany.com"
                 className="bg-background"
+                aria-invalid={!!errors.email}
+                autoFocus
               />
-            </div>
+              <FieldError errors={errors.email} />
+            </Field>
             <div className="space-y-1">
               <Label className="text-xs">Assign role</Label>
-              <Select defaultValue="member" items={INVITE_ROLES}>
-                <SelectTrigger className="w-full bg-background">
+              <input type="hidden" name="role" value={role} />
+              <Select
+                value={role}
+                onValueChange={(value) => setRole(value as InviteRole)}
+                items={INVITE_ROLE_OPTIONS}
+              >
+                <SelectTrigger
+                  className="w-full bg-background"
+                  aria-label="Assign role"
+                >
                   <SelectValue placeholder="Select a role" />
                 </SelectTrigger>
                 <SelectContent>
-                  {INVITE_ROLES.map((role) => (
-                    <SelectItem key={role.value} value={role.value}>
-                      {role.label}
+                  {INVITE_ROLE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">
+                {role === "admin"
+                  ? "Admins can edit company settings and invite people."
+                  : "Members can work with loads, documents and invoices."}
+              </p>
             </div>
           </fieldset>
           <DialogFooter className="items-center border-t bg-background px-4 py-3 sm:justify-between">
-            <p className="text-sm text-muted-foreground">
-              Sending invites is coming soon.
+            <p
+              role="status"
+              className={
+                formError
+                  ? "text-sm text-destructive"
+                  : "text-sm text-muted-foreground"
+              }
+            >
+              {formError ?? "The link in the email expires in 7 days."}
             </p>
-            <Button size="sm" type="submit" disabled>
-              Send invite <CornerDownLeft />
+            <Button size="sm" type="submit" disabled={pending}>
+              {pending ? "Sending…" : "Send invite"} <CornerDownLeft />
             </Button>
           </DialogFooter>
         </form>
@@ -202,18 +287,130 @@ const InviteUserForm = () => {
   )
 }
 
+function expiresIn(expiresAt: string, now: number) {
+  const hours = Math.max(0, (new Date(expiresAt).getTime() - now) / 3_600_000)
+  if (hours < 1) {
+    return "Expires in less than an hour"
+  }
+  if (hours < 24) {
+    const whole = Math.floor(hours)
+    return `Expires in ${whole} ${whole === 1 ? "hour" : "hours"}`
+  }
+  // Rounded, so a just-sent (or just-resent) invitation reads "7 days".
+  const days = Math.round(hours / 24)
+  return `Expires in ${days} ${days === 1 ? "day" : "days"}`
+}
+
+function PendingInvitations({
+  invitations,
+}: {
+  invitations: PendingInvitation[]
+}) {
+  const [busy, setBusy] = useState<string | null>(null)
+  // Fixed per render of the list, so server and browser agree on the text.
+  const [now] = useState(() => Date.now())
+
+  async function run(
+    id: string,
+    action: () => Promise<ActionResult>,
+    success: string
+  ) {
+    setBusy(id)
+    const result = await action()
+    setBusy(null)
+    if ("error" in result) {
+      toast.error(result.error)
+    } else {
+      toast.success(success)
+    }
+  }
+
+  return (
+    <SettingsCard
+      title="Pending invitations"
+      description="People who've been invited but haven't joined yet."
+      contentClassName="px-0 pb-0"
+      footer={
+        <SettingsCardFooter
+          hint={`${invitations.length} pending ${invitations.length === 1 ? "invitation" : "invitations"}. Unaccepted invitations are deleted after 7 days.`}
+        />
+      }
+    >
+      <ul className="divide-y border-t">
+        {invitations.map((invitation) => (
+          <li key={invitation.id} className="flex items-center gap-3 px-6 py-3">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full border border-dashed text-muted-foreground">
+              <Mail className="size-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">{invitation.email}</p>
+              <p className="truncate text-sm text-muted-foreground">
+                {expiresIn(invitation.expiresAt, now)}
+              </p>
+            </div>
+            <Badge variant="secondary" className="hidden sm:inline-flex">
+              {ROLE_LABELS[invitation.role]}
+            </Badge>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={busy === invitation.id}
+              onClick={() =>
+                run(
+                  invitation.id,
+                  () => resendInvitation(invitation.id),
+                  `Invitation sent to ${invitation.email} again.`
+                )
+              }
+            >
+              <RotateCw />
+              <span className="sr-only sm:not-sr-only">Resend</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+              disabled={busy === invitation.id}
+              onClick={() =>
+                run(
+                  invitation.id,
+                  () => revokeInvitation(invitation.id),
+                  `Invitation to ${invitation.email} revoked.`
+                )
+              }
+            >
+              <X />
+              <span className="sr-only sm:not-sr-only">Revoke</span>
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </SettingsCard>
+  )
+}
+
 interface SettingsMembers1Props {
   heading?: string
   subHeading?: string
   users: Member[]
+  organizationId: string
+  organizationName: string
   canInvite?: boolean
+  /** Only the owner can change roles and transfer ownership. */
+  canChangeRoles?: boolean
+  /** Shown to owners and admins only. */
+  invitations?: PendingInvitation[]
 }
 
 const SettingsMembers1 = ({
   heading = "Members",
   subHeading = "Everyone with access to your organization, and the role each person has.",
   users,
+  organizationId,
+  organizationName,
   canInvite = false,
+  canChangeRoles = false,
+  invitations = [],
 }: SettingsMembers1Props) => {
   const [searchValue, setSearchValue] = useState("")
   const [selectedRoles, setSelectedRoles] = useState<OrganizationRole[]>([])
@@ -248,7 +445,7 @@ const SettingsMembers1 = ({
     <SettingsPage
       title={heading}
       description={subHeading}
-      action={canInvite && <InviteUserForm />}
+      action={canInvite && <InviteUserForm organizationId={organizationId} />}
     >
       <SettingsCard
         title="Team"
@@ -303,8 +500,16 @@ const SettingsMembers1 = ({
             </PopoverContent>
           </Popover>
         </div>
-        <UsersTable users={filteredUsers} />
+        <UsersTable
+          users={filteredUsers}
+          roleChanges={
+            canChangeRoles ? { organizationId, organizationName } : null
+          }
+        />
       </SettingsCard>
+      {canInvite && invitations.length > 0 && (
+        <PendingInvitations invitations={invitations} />
+      )}
     </SettingsPage>
   )
 }
