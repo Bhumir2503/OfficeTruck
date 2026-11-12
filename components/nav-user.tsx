@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,19 +25,8 @@ import {
 } from "lucide-react"
 
 import { useSignOut } from "@/hooks/use-sign-out"
+import { initials } from "@/lib/initials"
 import { ACCOUNT } from "@/lib/org-nav"
-
-function initials(name: string) {
-  return (
-    name
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0])
-      .join("")
-      .toUpperCase() || "?"
-  )
-}
 
 export function NavUser({
   base,
@@ -47,6 +36,7 @@ export function NavUser({
   user: {
     name: string
     email: string
+    avatarUrl: string | null
   }
 }) {
   const { isMobile } = useSidebar()
@@ -60,10 +50,9 @@ export function NavUser({
               <SidebarMenuButton size="lg" className="aria-expanded:bg-muted" />
             }
           >
-            <Avatar className="size-8 rounded-lg grayscale">
-              <AvatarFallback className="rounded-lg">
-                {initials(user.name)}
-              </AvatarFallback>
+            <Avatar className="size-8">
+              {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt="" />}
+              <AvatarFallback>{initials(user.name)}</AvatarFallback>
             </Avatar>
             <div className="grid flex-1 text-left text-sm leading-tight">
               <span className="truncate font-medium">{user.name}</span>
@@ -83,9 +72,10 @@ export function NavUser({
               <DropdownMenuLabel className="p-0 font-normal">
                 <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                   <Avatar className="size-8">
-                    <AvatarFallback className="rounded-lg">
-                      {initials(user.name)}
-                    </AvatarFallback>
+                    {user.avatarUrl && (
+                      <AvatarImage src={user.avatarUrl} alt="" />
+                    )}
+                    <AvatarFallback>{initials(user.name)}</AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left text-sm leading-tight">
                     <span className="truncate font-medium">{user.name}</span>

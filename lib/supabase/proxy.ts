@@ -9,7 +9,12 @@ function isSignedOutOnly(pathname: string) {
 
 // "/" is included because it only routes signed-in users to their organization.
 function requiresSignIn(pathname: string) {
-  return pathname === "/" || pathname === "/org" || pathname.startsWith("/org/")
+  return (
+    pathname === "/" ||
+    pathname === "/account" ||
+    pathname === "/org" ||
+    pathname.startsWith("/org/")
+  )
 }
 
 /** Refreshes the auth session and sends each visitor to the side they belong on. */

@@ -13,6 +13,7 @@ import {
   SettingsCardFooter,
   SettingsPage,
 } from "@/components/settings/settings-card"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -52,6 +53,7 @@ export interface Member {
   name: string
   /** Only known for the signed-in user; other members' emails aren't readable. */
   email?: string
+  avatarUrl: string | null
   role: OrganizationRole
   joinedAt: string
   isYou: boolean
@@ -104,9 +106,14 @@ const UsersTable = ({ users }: { users: Member[] }) => {
           <TableRow key={user.id}>
             <TableCell className="max-w-72 py-3">
               <div className="flex items-center gap-3">
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary uppercase">
-                  {user.name.charAt(0) || "?"}
-                </span>
+                <Avatar>
+                  {user.avatarUrl && (
+                    <AvatarImage src={user.avatarUrl} alt="" />
+                  )}
+                  <AvatarFallback className="bg-primary/10 font-semibold text-primary uppercase">
+                    {user.name.charAt(0) || "?"}
+                  </AvatarFallback>
+                </Avatar>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="truncate font-medium">{user.name}</span>

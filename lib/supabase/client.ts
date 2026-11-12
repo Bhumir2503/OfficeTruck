@@ -8,6 +8,8 @@ export function createClient() {
 }
 
 /** URL Supabase sends users back to from emails. */
-export function authRedirectUrl(next: "/" | "/reset-password" = "/") {
+export function authRedirectUrl(
+  next: "/" | "/reset-password" | "/account" = "/"
+) {
   return `${window.location.origin}/auth/confirm?next=${next}`
 }

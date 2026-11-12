@@ -28,7 +28,7 @@ export function AppSidebar({
   ...props
 }: React.ComponentProps<typeof Sidebar> & {
   organization: Organization
-  user: { name: string; email: string }
+  user: { name: string; email: string; avatarUrl: string | null }
   organizations: Organization[]
   dashboardBadge: number
 }) {

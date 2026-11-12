@@ -137,7 +137,8 @@ export const ACCOUNT: OrgSection = {
   title: "Your profile",
   path: "account",
   icon: CircleUserRoundIcon,
-  description: "Your name, email, password and notification preferences.",
+  description:
+    "Your name, sign-in details and the organizations you belong to.",
 }
 
 const ALL_SECTIONS = [

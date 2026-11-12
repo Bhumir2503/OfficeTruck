@@ -27,6 +27,7 @@ export default async function MembersSettingsPage({
         id: member.userId,
         name: member.name || (isYou ? String(user.email) : "Unnamed member"),
         email: isYou ? user.email : undefined,
+        avatarUrl: member.avatarUrl,
         role: member.role,
         joinedAt: member.joinedAt,
         isYou,
