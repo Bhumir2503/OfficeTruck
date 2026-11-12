@@ -25,6 +25,7 @@ import {
   type ProfileSection,
 } from "@/lib/company-profile-fields"
 import type { OrganizationProfile } from "@/lib/organizations"
+import { formatPhone, handlePhoneInput, handlePhoneKeyDown } from "@/lib/phone"
 import { organizationProfileSchema } from "@/lib/schemas/organization"
 import { createClient } from "@/lib/supabase/client"
 
@@ -113,9 +114,17 @@ export function ProfileFields({
         <Input
           id={id}
           name={field.name}
-          defaultValue={profile[field.name] ?? ""}
+          defaultValue={
+            field.format === "phone"
+              ? formatPhone(profile[field.name] ?? "")
+              : (profile[field.name] ?? "")
+          }
           aria-invalid={!!fieldErrors}
           {...field.input}
+          {...(field.format === "phone" && {
+            onChange: handlePhoneInput,
+            onKeyDown: handlePhoneKeyDown,
+          })}
         />
         {fieldErrors ? (
           <FieldError errors={fieldErrors} />

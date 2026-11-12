@@ -14,6 +14,8 @@ export type FieldConfig = {
   /** Columns out of 6 on wider screens. */
   span: 2 | 3 | 6 | 1
   input?: ComponentProps<"input">
+  /** Reformat the value as it's typed. */
+  format?: "phone"
 }
 
 export const SPANS = {
@@ -64,6 +66,7 @@ export const PROFILE_SECTIONS = {
         name: "phone",
         label: "Phone",
         span: 3,
+        format: "phone",
         input: {
           type: "tel",
           autoComplete: "tel",
