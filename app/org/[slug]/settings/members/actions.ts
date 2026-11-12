@@ -150,6 +150,41 @@ export async function changeMemberRole(
   return { ok: true }
 }
 
+function removeErrorMessage(error: { hint?: string | null; message: string }) {
+  switch (error.hint) {
+    case "not_allowed":
+      return "You don't have permission to remove this person."
+    case "cannot_remove_self":
+      return "You can't remove yourself."
+    case "cannot_remove_owner":
+      return "The owner can't be removed."
+    case "not_a_member":
+      return "That person isn't a member of this organization anymore."
+    default:
+      return error.message
+  }
+}
+
+/**
+ * Removes someone from the organization. The owner can remove admins and
+ * members; admins can remove members.
+ */
+export async function removeMember(
+  organizationId: string,
+  userId: string
+): Promise<ActionResult> {
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("remove_member", {
+    org_id: organizationId,
+    member_id: userId,
+  })
+  if (error) {
+    return { error: removeErrorMessage(error) }
+  }
+  refresh()
+  return { ok: true }
+}
+
 /** Makes someone else the owner. The current owner becomes an admin. */
 export async function transferOwnership(
   organizationId: string,

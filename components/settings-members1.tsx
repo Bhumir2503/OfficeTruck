@@ -93,15 +93,28 @@ const INVITE_ROLE_OPTIONS = [
   { value: "admin", label: "Admin" },
 ]
 
-type RoleChanges = { organizationId: string; organizationName: string }
+type MemberActions = {
+  organizationId: string
+  organizationName: string
+  /** The signed-in user's role, which decides what they can do to others. */
+  viewerRole: OrganizationRole
+}
+
+/** The owner can remove admins and members; admins can remove members. */
+function canRemove(viewerRole: OrganizationRole, role: OrganizationRole) {
+  return (
+    (viewerRole === "owner" && role !== "owner") ||
+    (viewerRole === "admin" && role === "member")
+  )
+}
 
 const UsersTable = ({
   users,
-  roleChanges,
+  memberActions,
 }: {
   users: Member[]
-  /** Set for the owner, who gets a menu on everyone else's row. */
-  roleChanges: RoleChanges | null
+  /** Set for owners and admins, who get a menu on rows they can manage. */
+  memberActions: MemberActions | null
 }) => {
   return (
     // Line the first and last columns up with the card's padding.
@@ -113,7 +126,7 @@ const UsersTable = ({
           <TableHead className="hidden text-right sm:table-cell">
             Joined
           </TableHead>
-          {roleChanges && (
+          {memberActions && (
             <TableHead className="w-12">
               <span className="sr-only">Actions</span>
             </TableHead>
@@ -124,7 +137,7 @@ const UsersTable = ({
         {users.length === 0 && (
           <TableRow>
             <TableCell
-              colSpan={roleChanges ? 4 : 3}
+              colSpan={memberActions ? 4 : 3}
               className="h-24 text-center text-muted-foreground"
             >
               No members match your search.
@@ -164,13 +177,15 @@ const UsersTable = ({
             <TableCell className="hidden text-right text-muted-foreground sm:table-cell">
               {joined.format(new Date(user.joinedAt))}
             </TableCell>
-            {roleChanges && (
+            {memberActions && (
               <TableCell className="text-right">
                 {user.role !== "owner" && !user.isYou && (
                   <MemberRoleMenu
-                    organizationId={roleChanges.organizationId}
-                    organizationName={roleChanges.organizationName}
+                    organizationId={memberActions.organizationId}
+                    organizationName={memberActions.organizationName}
                     member={{ id: user.id, name: user.name, role: user.role }}
+                    canChangeRole={memberActions.viewerRole === "owner"}
+                    canRemove={canRemove(memberActions.viewerRole, user.role)}
                   />
                 )}
               </TableCell>
@@ -395,9 +410,8 @@ interface SettingsMembers1Props {
   users: Member[]
   organizationId: string
   organizationName: string
-  canInvite?: boolean
-  /** Only the owner can change roles and transfer ownership. */
-  canChangeRoles?: boolean
+  /** The signed-in user's role in this organization. */
+  viewerRole: OrganizationRole
   /** Shown to owners and admins only. */
   invitations?: PendingInvitation[]
 }
@@ -408,10 +422,10 @@ const SettingsMembers1 = ({
   users,
   organizationId,
   organizationName,
-  canInvite = false,
-  canChangeRoles = false,
+  viewerRole,
   invitations = [],
 }: SettingsMembers1Props) => {
+  const canInvite = viewerRole === "owner" || viewerRole === "admin"
   const [searchValue, setSearchValue] = useState("")
   const [selectedRoles, setSelectedRoles] = useState<OrganizationRole[]>([])
 
@@ -502,8 +516,10 @@ const SettingsMembers1 = ({
         </div>
         <UsersTable
           users={filteredUsers}
-          roleChanges={
-            canChangeRoles ? { organizationId, organizationName } : null
+          memberActions={
+            canInvite
+              ? { organizationId, organizationName, viewerRole }
+              : null
           }
         />
       </SettingsCard>

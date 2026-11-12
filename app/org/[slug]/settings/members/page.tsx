@@ -47,8 +47,7 @@ export default async function MembersSettingsPage({
       users={members}
       organizationId={organization.id}
       organizationName={organization.name}
-      canInvite={manager}
-      canChangeRoles={organization.role === "owner"}
+      viewerRole={organization.role}
       invitations={invitations}
     />
   )

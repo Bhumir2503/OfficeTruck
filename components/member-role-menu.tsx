@@ -5,12 +5,14 @@ import {
   EllipsisIcon,
   ShieldIcon,
   UserRoundIcon,
+  UserRoundMinusIcon,
 } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
 
 import {
   changeMemberRole,
+  removeMember,
   transferOwnership,
 } from "@/app/org/[slug]/settings/members/actions"
 import { Button } from "@/components/ui/button"
@@ -32,22 +34,30 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
+type Confirm = "transfer" | "remove" | null
+
 /**
- * The owner's menu on another member's row: switch them between admin and
- * member, or hand them ownership (which makes the current owner an admin).
+ * The menu on another member's row. The owner can switch them between admin
+ * and member, hand them ownership (which makes the current owner an admin),
+ * or remove them. Admins can only remove members.
  */
 export function MemberRoleMenu({
   organizationId,
   organizationName,
   member,
+  canChangeRole,
+  canRemove,
 }: {
   organizationId: string
   organizationName: string
   member: { id: string; name: string; role: "admin" | "member" }
+  /** Owner only: change role and transfer ownership. */
+  canChangeRole: boolean
+  canRemove: boolean
 }) {
   const [pending, setPending] = useState(false)
-  const [confirmOpen, setConfirmOpen] = useState(false)
-  const [transferError, setTransferError] = useState<string | null>(null)
+  const [confirm, setConfirm] = useState<Confirm>(null)
+  const [confirmError, setConfirmError] = useState<string | null>(null)
 
   async function changeRole(role: "admin" | "member") {
     setPending(true)
@@ -64,17 +74,33 @@ export function MemberRoleMenu({
     }
   }
 
-  async function transfer() {
+  async function runConfirmed() {
     setPending(true)
-    setTransferError(null)
-    const result = await transferOwnership(organizationId, member.id)
+    setConfirmError(null)
+    const result =
+      confirm === "transfer"
+        ? await transferOwnership(organizationId, member.id)
+        : await removeMember(organizationId, member.id)
     setPending(false)
     if ("error" in result) {
-      setTransferError(result.error)
+      setConfirmError(result.error)
       return
     }
-    setConfirmOpen(false)
-    toast.success(`${member.name} is now the owner. You're an admin.`)
+    setConfirm(null)
+    toast.success(
+      confirm === "transfer"
+        ? `${member.name} is now the owner. You're an admin.`
+        : `${member.name} was removed from ${organizationName}.`
+    )
+  }
+
+  function openConfirm(kind: Exclude<Confirm, null>) {
+    setConfirmError(null)
+    setConfirm(kind)
+  }
+
+  if (!canChangeRole && !canRemove) {
+    return null
   }
 
   return (
@@ -86,7 +112,7 @@ export function MemberRoleMenu({
               variant="ghost"
               size="icon-sm"
               disabled={pending}
-              aria-label={`Change ${member.name}'s role`}
+              aria-label={`Manage ${member.name}`}
             />
           }
         >
@@ -98,59 +124,92 @@ export function MemberRoleMenu({
               {member.name}
             </DropdownMenuLabel>
           </DropdownMenuGroup>
-          {member.role === "member" ? (
-            <DropdownMenuItem onClick={() => changeRole("admin")}>
-              <ShieldIcon />
-              Make admin
-            </DropdownMenuItem>
-          ) : (
-            <DropdownMenuItem onClick={() => changeRole("member")}>
-              <UserRoundIcon />
-              Change to member
+          {canChangeRole && (
+            <>
+              {member.role === "member" ? (
+                <DropdownMenuItem onClick={() => changeRole("admin")}>
+                  <ShieldIcon />
+                  Make admin
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem onClick={() => changeRole("member")}>
+                  <UserRoundIcon />
+                  Change to member
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => openConfirm("transfer")}>
+                <CrownIcon />
+                Transfer ownership
+              </DropdownMenuItem>
+            </>
+          )}
+          {canChangeRole && canRemove && <DropdownMenuSeparator />}
+          {canRemove && (
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={() => openConfirm("remove")}
+            >
+              <UserRoundMinusIcon />
+              Remove member
             </DropdownMenuItem>
           )}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onClick={() => {
-              setTransferError(null)
-              setConfirmOpen(true)
-            }}
-          >
-            <CrownIcon />
-            Transfer ownership…
-          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
       <Dialog
-        open={confirmOpen}
-        onOpenChange={(open) => !pending && setConfirmOpen(open)}
+        open={confirm !== null}
+        onOpenChange={(open) => !pending && !open && setConfirm(null)}
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Make {member.name} the owner?</DialogTitle>
+            <DialogTitle>
+              {confirm === "transfer"
+                ? `Make ${member.name} the owner?`
+                : `Remove ${member.name}?`}
+            </DialogTitle>
             <DialogDescription>
-              {member.name} will become the owner of {organizationName}, and
-              you&apos;ll become an admin. Only the owner can change roles,
-              transfer ownership and delete the organization, so you won&apos;t
-              be able to undo this yourself.
+              {confirm === "transfer" ? (
+                <>
+                  {member.name} will become the owner of {organizationName},
+                  and you&apos;ll become an admin. Only the owner can change
+                  roles, transfer ownership and delete the organization, so
+                  you won&apos;t be able to undo this yourself.
+                </>
+              ) : (
+                <>
+                  {member.name} will lose access to {organizationName} right
+                  away. To bring them back, you&apos;ll need to invite them
+                  again.
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
-          {transferError && (
+          {confirmError && (
             <p role="alert" className="text-sm text-destructive">
-              {transferError}
+              {confirmError}
             </p>
           )}
           <DialogFooter>
             <Button
               variant="outline"
               disabled={pending}
-              onClick={() => setConfirmOpen(false)}
+              onClick={() => setConfirm(null)}
             >
               Cancel
             </Button>
-            <Button disabled={pending} onClick={transfer}>
-              {pending ? "Transferring…" : "Transfer ownership"}
+            <Button
+              variant={confirm === "remove" ? "destructive" : "default"}
+              disabled={pending}
+              onClick={runConfirmed}
+            >
+              {confirm === "transfer"
+                ? pending
+                  ? "Transferring…"
+                  : "Transfer ownership"
+                : pending
+                  ? "Removing…"
+                  : "Remove"}
             </Button>
           </DialogFooter>
         </DialogContent>
