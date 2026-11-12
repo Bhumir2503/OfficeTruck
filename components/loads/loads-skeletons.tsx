@@ -44,7 +44,7 @@ const LOAD_ROWS = [
 export function LoadsListSkeleton() {
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
-      <div className="mx-auto max-w-6xl">
+      <div>
         <SettingsCard
           title="All loads"
           description="Search by load number or broker, or filter by status."
@@ -173,7 +173,7 @@ export function NewLoadSkeleton() {
         <SettingsCard
           title="Assignment"
           description="Optional. You can fill these in later."
-          contentClassName="grid gap-5 sm:grid-cols-2"
+          contentClassName="grid gap-5 sm:grid-cols-3"
           footer={
             <SettingsCardFooter hint="New loads start as booked.">
               <Skeleton className="h-8 w-16 rounded-md bg-foreground/10" />
@@ -183,9 +183,10 @@ export function NewLoadSkeleton() {
         >
           <FieldSkeleton label="Driver" />
           <FieldSkeleton label="Truck" />
+          <FieldSkeleton label="Miles" hint="Used for per-mile pay." />
           <FieldSkeleton
             label="Notes"
-            className="sm:col-span-2"
+            className="sm:col-span-3"
             inputClassName="h-20"
           />
         </SettingsCard>
@@ -239,7 +240,7 @@ export function LoadDetailSkeleton() {
         <SettingsCard title="Details">
           <div className="grid gap-5 sm:grid-cols-3">
             <DetailSkeleton label="Rate" lines={["w-20"]} />
-            <DetailSkeleton label="Driver" lines={["w-24"]} />
+            <DetailSkeleton label="Rate per mile" lines={["w-24"]} />
             <DetailSkeleton label="Truck" lines={["w-16"]} />
             <DetailSkeleton
               label="Notes"
@@ -247,6 +248,24 @@ export function LoadDetailSkeleton() {
               lines={["w-64"]}
             />
           </div>
+        </SettingsCard>
+        <SettingsCard
+          title="Driver and miles"
+          description={
+            // The description is a <p>, so an inline placeholder.
+            <span className="inline-block h-4 w-48 animate-pulse rounded-md bg-muted align-middle" />
+          }
+          contentClassName="grid gap-5 sm:grid-cols-2"
+          footer={
+            <SettingsCardFooter
+              hint={<Skeleton className="h-4 w-56 bg-foreground/10" />}
+            >
+              <Skeleton className="h-8 w-16 rounded-md bg-foreground/10" />
+            </SettingsCardFooter>
+          }
+        >
+          <FieldSkeleton label="Driver" />
+          <FieldSkeleton label="Miles" hint="Used for per-mile pay." />
         </SettingsCard>
       </div>
     </div>

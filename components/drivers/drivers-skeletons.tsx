@@ -41,7 +41,7 @@ const DRIVER_ROWS = [
 export function DriversListSkeleton() {
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
-      <div className="mx-auto max-w-6xl">
+      <div>
         <SettingsCard
           title="Drivers"
           description="Search by name, or filter by status."
@@ -67,11 +67,9 @@ export function DriversListSkeleton() {
               <TableRow>
                 <TableHead>Driver</TableHead>
                 <TableHead className="hidden lg:table-cell">CDL</TableHead>
+                <TableHead className="hidden md:table-cell">Pay</TableHead>
                 <TableHead className="hidden sm:table-cell">
-                  CDL expires
-                </TableHead>
-                <TableHead className="hidden md:table-cell">
-                  Medical card
+                  Compliance
                 </TableHead>
                 <TableHead className="w-24">Status</TableHead>
               </TableRow>
@@ -91,11 +89,11 @@ export function DriversListSkeleton() {
                   <TableCell className="hidden lg:table-cell">
                     <Skeleton className={cn("h-4", row.cdl)} />
                   </TableCell>
-                  <TableCell className="hidden sm:table-cell">
-                    <Skeleton className="h-4 w-24" />
-                  </TableCell>
                   <TableCell className="hidden md:table-cell">
                     <Skeleton className="h-4 w-24" />
+                  </TableCell>
+                  <TableCell className="hidden sm:table-cell">
+                    <Skeleton className="h-6 w-36 rounded-full" />
                   </TableCell>
                   <TableCell>
                     <Skeleton className="h-6 w-16 rounded-full" />
@@ -144,18 +142,44 @@ function DriverFormSkeleton({ editing = false }: { editing?: boolean }) {
         <FieldSkeleton label="Email" className="sm:col-span-3" />
       </SettingsCard>
       <SettingsCard
-        title="License and medical card"
-        description="You'll see a warning 30 days before either one expires."
+        title="Compliance"
+        description="You'll see a warning 60, 30 and 7 days before each one is due."
         contentClassName="grid gap-5 sm:grid-cols-6"
       >
         <FieldSkeleton label="CDL number" className="sm:col-span-4" />
         <FieldSkeleton label="Issuing state" className="sm:col-span-2" />
-        <FieldSkeleton label="CDL expires" className="sm:col-span-3" />
+        <FieldSkeleton
+          label="CDL expires"
+          hint="The expiration date printed on the license."
+          className="sm:col-span-3"
+        />
         <FieldSkeleton
           label="Medical card expires"
           hint="From the DOT medical examiner's certificate."
           className="sm:col-span-3"
         />
+        <FieldSkeleton
+          label="Last annual review"
+          hint="Review of the driving record. Due again a year later."
+          className="sm:col-span-3"
+        />
+        <FieldSkeleton
+          label="Last Clearinghouse query"
+          hint="The yearly limited query. Due again a year later."
+          className="sm:col-span-3"
+        />
+      </SettingsCard>
+      <SettingsCard title="Pay" description="Used to work out profit per load.">
+        <Field>
+          <FieldLabel>Paid</FieldLabel>
+          {/* Not set, Per mile, % of load, Flat per load. */}
+          <div className="flex flex-wrap gap-1">
+            <Skeleton className="h-8 w-18 rounded-md" />
+            <Skeleton className="h-8 w-20 rounded-md" />
+            <Skeleton className="h-8 w-22 rounded-md" />
+            <Skeleton className="h-8 w-28 rounded-md" />
+          </div>
+        </Field>
       </SettingsCard>
       <SettingsCard
         title="Notes"
@@ -164,7 +188,7 @@ function DriverFormSkeleton({ editing = false }: { editing?: boolean }) {
             hint={
               editing
                 ? "Changes are saved for everyone in your organization."
-                : "New drivers start as active."
+                : "New drivers start as active. Add photos after saving."
             }
           >
             {!editing && (
@@ -190,13 +214,38 @@ export function NewDriverSkeleton() {
   )
 }
 
-function DetailSkeleton({ label, width }: { label: string; width: string }) {
+function DetailSkeleton({
+  label,
+  width,
+  lines = 1,
+}: {
+  label: string
+  width: string
+  /** 2 for the yearly checks, which add a "Last done" line. */
+  lines?: 1 | 2
+}) {
   return (
     <div>
       <div className="text-sm text-muted-foreground">{label}</div>
       <div className="mt-1">
         <Line className={width} />
+        {lines === 2 && (
+          <div className="mt-0.5">
+            <Line className="w-32" />
+          </div>
+        )}
       </div>
+    </div>
+  )
+}
+
+/** A card-shaped photo slot with its label and buttons. */
+function PhotoSkeleton({ label }: { label: string }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="text-sm font-medium">{label}</div>
+      <Skeleton className="aspect-[1.586] w-full rounded-lg" />
+      <Skeleton className="h-8 w-24 rounded-md" />
     </div>
   )
 }
@@ -224,12 +273,36 @@ export function DriverDetailSkeleton() {
           <div className="grid gap-5 px-6 pt-5 pb-6 sm:grid-cols-2">
             <DetailSkeleton label="CDL expires" width="w-24" />
             <DetailSkeleton label="Medical card expires" width="w-24" />
+            <DetailSkeleton label="Annual review due" width="w-24" lines={2} />
+            <DetailSkeleton
+              label="Clearinghouse query due"
+              width="w-24"
+              lines={2}
+            />
+            <DetailSkeleton label="Pay" width="w-28" />
           </div>
           <div className="flex min-h-14 flex-col gap-3 border-t bg-muted/40 px-6 py-3 sm:flex-row sm:items-center sm:justify-between">
             <Skeleton className="h-4 w-80 max-w-full bg-foreground/10" />
             <Skeleton className="h-8 w-32 rounded-md bg-foreground/10" />
           </div>
         </section>
+        <SettingsCard
+          title="CDL and medical card"
+          description="Photos or PDFs, kept private to your organization."
+        >
+          <div className="grid gap-6 sm:grid-cols-2">
+            <PhotoSkeleton label="CDL" />
+            <PhotoSkeleton label="Medical card" />
+          </div>
+        </SettingsCard>
+        <SettingsCard
+          title="Loads"
+          description="Driver pay uses their current rate."
+          contentClassName="space-y-3"
+        >
+          <Skeleton className="h-9 w-full" />
+          <Skeleton className="h-9 w-full" />
+        </SettingsCard>
         <div className="mt-2">
           <DriverFormSkeleton editing />
         </div>

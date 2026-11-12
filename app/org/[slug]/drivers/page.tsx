@@ -20,7 +20,7 @@ export default async function DriversPage({
 
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
-      <div className="mx-auto max-w-6xl">
+      <div>
         <DriversTable
           drivers={drivers}
           base={`/org/${organization.slug}/drivers`}

@@ -7,6 +7,7 @@ import { toast } from "sonner"
 
 import { createDriver, updateDriver } from "@/app/org/[slug]/drivers/actions"
 import { DateField } from "@/components/drivers/date-field"
+import { PayFields } from "@/components/drivers/pay-fields"
 import {
   SettingsCard,
   SettingsCardFooter,
@@ -158,8 +159,8 @@ export function DriverForm({
         </SettingsCard>
 
         <SettingsCard
-          title="License and medical card"
-          description="You'll see a warning 30 days before either one expires."
+          title="Compliance"
+          description="You'll see a warning 60, 30 and 7 days before each one is due."
           contentClassName="grid gap-5 sm:grid-cols-6"
         >
           <TextField
@@ -185,6 +186,7 @@ export function DriverForm({
             id={fieldId("cdl_expires_on")}
             name="cdl_expires_on"
             label="CDL expires"
+            hint="The expiration date printed on the license."
             defaultValue={driver?.cdl_expires_on}
             errors={errors.cdl_expires_on}
             onUpdate={revalidate}
@@ -200,6 +202,39 @@ export function DriverForm({
             onUpdate={revalidate}
             className="sm:col-span-3"
           />
+          <DateField
+            id={fieldId("annual_review_on")}
+            name="annual_review_on"
+            label="Last annual review"
+            hint="Review of the driving record. Due again a year later."
+            defaultValue={driver?.annual_review_on}
+            errors={errors.annual_review_on}
+            onUpdate={revalidate}
+            className="sm:col-span-3"
+          />
+          <DateField
+            id={fieldId("clearinghouse_query_on")}
+            name="clearinghouse_query_on"
+            label="Last Clearinghouse query"
+            hint="The yearly limited query. Due again a year later."
+            defaultValue={driver?.clearinghouse_query_on}
+            errors={errors.clearinghouse_query_on}
+            onUpdate={revalidate}
+            className="sm:col-span-3"
+          />
+        </SettingsCard>
+
+        <SettingsCard
+          title="Pay"
+          description="Used to work out profit per load."
+          contentClassName="grid gap-5 sm:grid-cols-6"
+        >
+          <PayFields
+            defaultType={driver?.pay_type ?? null}
+            defaultRate={driver?.pay_rate ?? null}
+            errors={errors}
+            onUpdate={revalidate}
+          />
         </SettingsCard>
 
         <SettingsCard
@@ -212,7 +247,7 @@ export function DriverForm({
                 ) : driver ? (
                   "Changes are saved for everyone in your organization."
                 ) : (
-                  "New drivers start as active."
+                  "New drivers start as active. Add photos after saving."
                 )
               }
             >

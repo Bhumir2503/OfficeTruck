@@ -21,12 +21,17 @@ import {
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { DateTimeField } from "@/components/loads/date-time-field"
+import {
+  DriverSelect,
+  handleMilesInput,
+} from "@/components/loads/driver-select"
 import { useZodForm } from "@/hooks/use-zod-form"
 import {
   handleCurrencyBlur,
   handleCurrencyInput,
   handleCurrencyKeyDown,
 } from "@/lib/currency"
+import type { DriverOption } from "@/lib/drivers"
 import { loadSchema, type LoadInput } from "@/lib/schemas/load"
 
 type Name = keyof LoadInput
@@ -127,10 +132,15 @@ function StopFields({
 export function NewLoadForm({
   organizationId,
   base,
+  drivers,
+  driversHref,
 }: {
   organizationId: string
   /** /org/<slug>/loads */
   base: string
+  drivers: DriverOption[]
+  /** /org/<slug>/drivers */
+  driversHref: string
 }) {
   const router = useRouter()
   const { errors, formError, pending, formProps, revalidate } = useZodForm(
@@ -193,7 +203,7 @@ export function NewLoadForm({
         <SettingsCard
           title="Assignment"
           description="Optional. You can fill these in later."
-          contentClassName="grid gap-5 sm:grid-cols-2"
+          contentClassName="grid gap-5 sm:grid-cols-3"
           footer={
             <SettingsCardFooter
               hint={
@@ -218,19 +228,43 @@ export function NewLoadForm({
             </SettingsCardFooter>
           }
         >
-          <TextField
-            name="driver_name"
-            label="Driver"
-            placeholder="e.g. Marcus Hill"
-            errors={errors}
-          />
+          <Field data-invalid={!!errors.driver_id}>
+            <FieldLabel htmlFor="load-driver-id">Driver</FieldLabel>
+            <DriverSelect
+              id="load-driver-id"
+              drivers={drivers}
+              invalid={!!errors.driver_id}
+              onUpdate={revalidate}
+            />
+            {errors.driver_id ? (
+              <FieldError errors={errors.driver_id} />
+            ) : (
+              drivers.length === 0 && (
+                <FieldDescription>
+                  <Link href={driversHref} className="underline">
+                    Add drivers
+                  </Link>{" "}
+                  to pick them here.
+                </FieldDescription>
+              )
+            )}
+          </Field>
           <TextField
             name="truck"
             label="Truck"
             placeholder="e.g. Unit 112"
             errors={errors}
           />
-          <Field data-invalid={!!errors.notes} className="sm:col-span-2">
+          <TextField
+            name="miles"
+            label="Miles"
+            inputMode="numeric"
+            placeholder="e.g. 1,240"
+            hint="Used for per-mile pay."
+            errors={errors}
+            onChange={handleMilesInput}
+          />
+          <Field data-invalid={!!errors.notes} className="sm:col-span-3">
             <FieldLabel htmlFor="load-notes">Notes</FieldLabel>
             <Textarea
               id="load-notes"

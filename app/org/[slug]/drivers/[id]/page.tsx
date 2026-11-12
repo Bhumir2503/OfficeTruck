@@ -8,14 +8,21 @@ import {
   ExpiryDate,
 } from "@/components/drivers/driver-badges"
 import { DriverForm } from "@/components/drivers/driver-form"
+import { DriverLoads } from "@/components/drivers/driver-loads"
+import { DriverPhotos } from "@/components/drivers/driver-photos"
 import { DriverStatusButton } from "@/components/drivers/driver-status-button"
 import {
   SettingsCard,
   SettingsCardFooter,
 } from "@/components/settings/settings-card"
 import { buttonVariants } from "@/components/ui/button"
-import { today as getToday } from "@/lib/driver-format"
-import { getDriver } from "@/lib/drivers"
+import {
+  complianceItems,
+  formatDate,
+  formatPay,
+  today as getToday,
+} from "@/lib/driver-format"
+import { getDriver, getDriverLoads, getDriverPhotoUrls } from "@/lib/drivers"
 import { canManage, getOrganization } from "@/lib/organizations"
 import { formatPhone } from "@/lib/phone"
 
@@ -67,6 +74,11 @@ export default async function DriverPage({
   const today = getToday()
   const warn = driver.status === "active"
   const none = <span className="text-muted-foreground">Not set</span>
+  const items = complianceItems(driver, today)
+  const [loads, photoUrls] = await Promise.all([
+    getDriverLoads(organization.id, driver.id),
+    getDriverPhotoUrls(driver),
+  ])
 
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
@@ -108,21 +120,27 @@ export default async function DriverPage({
           }
         >
           <dl className="grid gap-5 sm:grid-cols-2">
-            <Detail label="CDL expires">
-              <ExpiryDate
-                date={driver.cdl_expires_on}
-                today={today}
-                label="CDL"
-                warn={warn}
-              />
-            </Detail>
-            <Detail label="Medical card expires">
-              <ExpiryDate
-                date={driver.medical_card_expires_on}
-                today={today}
-                label="Medical card"
-                warn={warn}
-              />
+            {items.map((item) => (
+              <Detail
+                key={item.key}
+                label={
+                  item.kind === "expires"
+                    ? `${item.label} expires`
+                    : `${item.label} due`
+                }
+              >
+                <ExpiryDate item={item} warn={warn} />
+                {item.kind === "due" && (
+                  <span className="mt-0.5 block font-normal text-muted-foreground">
+                    {item.last
+                      ? `Last done ${formatDate(item.last)}`
+                      : "Not done yet"}
+                  </span>
+                )}
+              </Detail>
+            ))}
+            <Detail label="Pay">
+              {formatPay(driver.pay_type, driver.pay_rate) ?? none}
             </Detail>
             {!manager && (
               <>
@@ -154,6 +172,30 @@ export default async function DriverPage({
             )}
           </dl>
         </SettingsCard>
+        <SettingsCard
+          title="CDL and medical card"
+          description={
+            manager
+              ? "Photos or PDFs, kept private to your organization."
+              : "Kept private to your organization."
+          }
+        >
+          <DriverPhotos
+            organizationId={organization.id}
+            driverId={driver.id}
+            urls={photoUrls}
+            paths={{
+              cdl: driver.cdl_photo_path,
+              medical_card: driver.medical_card_photo_path,
+            }}
+            canManage={manager}
+          />
+        </SettingsCard>
+        <DriverLoads
+          loads={loads}
+          driver={driver}
+          loadsBase={`/org/${organization.slug}/loads`}
+        />
         {manager && (
           <div className="mt-2">
             <DriverForm

@@ -93,7 +93,11 @@ export async function setDriverStatus(
 async function update(
   organizationId: string,
   driverId: string,
-  values: Partial<DriverValues> & { status?: DriverStatus }
+  values: Partial<DriverValues> & {
+    status?: DriverStatus
+    cdl_photo_path?: string | null
+    medical_card_photo_path?: string | null
+  }
 ): Promise<ActionResult> {
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -113,4 +117,68 @@ async function update(
 
   refresh()
   return { ok: true }
+}
+
+const PHOTO_COLUMNS = {
+  cdl: "cdl_photo_path",
+  medical_card: "medical_card_photo_path",
+} as const
+
+/**
+ * Points a driver's CDL or medical card photo at a file already uploaded to
+ * driver-documents (or clears it with null), then deletes the file it replaces.
+ */
+export async function setDriverPhoto(
+  organizationId: string,
+  driverId: string,
+  kind: keyof typeof PHOTO_COLUMNS,
+  path: string | null
+): Promise<ActionResult> {
+  if (!(await canManageDrivers(organizationId))) {
+    return { error: NOT_ALLOWED }
+  }
+  // Callers can send anything, so check the kind is one of ours.
+  const column = Object.hasOwn(PHOTO_COLUMNS, kind) ? PHOTO_COLUMNS[kind] : null
+  if (!column) {
+    return { error: "Choose a CDL or medical card photo." }
+  }
+  // Only files directly in this driver's own folder. Both ids are UUIDs, so
+  // they're safe to put in the pattern once checked.
+  if (!/^[0-9a-f-]{36}$/.test(driverId)) {
+    return { error: "That driver doesn't exist anymore." }
+  }
+  if (
+    path !== null &&
+    !new RegExp(
+      `^${organizationId}/${driverId}/[\\w-]+\\.(webp|png|jpe?g|pdf)$`
+    ).test(path)
+  ) {
+    return { error: "That file isn't in this driver's folder." }
+  }
+
+  const supabase = await createClient()
+  const { data: current, error: readError } = await supabase
+    .from("drivers")
+    .select(column)
+    .eq("organization_id", organizationId)
+    .eq("id", driverId)
+    .maybeSingle()
+  if (readError) {
+    return { error: readError.message }
+  }
+  if (!current) {
+    return { error: "That driver doesn't exist anymore." }
+  }
+
+  const result = await update(organizationId, driverId, { [column]: path })
+  if ("error" in result) {
+    return result
+  }
+
+  const previous = (current as Record<string, string | null>)[column]
+  if (previous && previous !== path) {
+    // Best effort: a leftover file is harmless, and the record is already right.
+    await supabase.storage.from("driver-documents").remove([previous])
+  }
+  return result
 }

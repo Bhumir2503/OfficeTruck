@@ -7,7 +7,6 @@ import { useMemo, useState } from "react"
 import {
   DriverStatusBadge,
   ExpiryBadge,
-  ExpiryDate,
 } from "@/components/drivers/driver-badges"
 import {
   SettingsCard,
@@ -26,7 +25,12 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import { expiry } from "@/lib/driver-format"
+import {
+  complianceItems,
+  formatPay,
+  needsAction,
+  type ComplianceItem,
+} from "@/lib/driver-format"
 import type { Driver } from "@/lib/drivers"
 import { initials } from "@/lib/initials"
 import { formatPhone } from "@/lib/phone"
@@ -38,19 +42,54 @@ import {
 
 type Filter = DriverStatus | "all"
 
-/** An active driver whose CDL or medical card has expired or expires soon. */
-function needsAttention(driver: Driver, today: string) {
-  return (
-    driver.status === "active" &&
-    [driver.cdl_expires_on, driver.medical_card_expires_on].some((date) => {
-      const state = expiry(date, today).state
-      return state === "expired" || state === "soon"
-    })
-  )
-}
-
 function plural(count: number, word: string) {
   return `${count} ${count === 1 ? word : `${word}s`}`
+}
+
+/** Items that are late or due within 60 days, most pressing first. */
+function flagged(items: ComplianceItem[]) {
+  return items
+    .filter((item) => needsAction(item.expiry.state))
+    .sort((a, b) => {
+      const days = (item: ComplianceItem) =>
+        item.expiry.state === "missing"
+          ? Infinity
+          : item.expiry.state === "expired"
+            ? -item.expiry.days
+            : item.expiry.days
+      return days(a) - days(b)
+    })
+}
+
+/** The warnings for a driver, or a quiet line when there's nothing to do. */
+function ComplianceSummary({
+  items,
+  status,
+}: {
+  items: ComplianceItem[]
+  status: DriverStatus
+}) {
+  if (status === "inactive") {
+    return <span className="text-muted-foreground">Not tracked</span>
+  }
+  const warnings = flagged(items)
+  if (warnings.length) {
+    return (
+      <div className="flex flex-wrap gap-1">
+        {warnings.map((item) => (
+          <ExpiryBadge key={item.key} item={item} showLabel />
+        ))}
+      </div>
+    )
+  }
+  const onFile = items.filter((item) => item.due).length
+  return (
+    <span className="text-muted-foreground">
+      {onFile === items.length
+        ? "All current"
+        : `${onFile} of ${items.length} dates on file`}
+    </span>
+  )
 }
 
 export function DriversTable({
@@ -69,6 +108,15 @@ export function DriversTable({
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState<Filter>("active")
 
+  const rows = useMemo(
+    () =>
+      drivers.map((driver) => ({
+        driver,
+        items: complianceItems(driver, today),
+      })),
+    [drivers, today]
+  )
+
   const counts = useMemo(() => {
     const byStatus = { active: 0, inactive: 0 }
     for (const driver of drivers) {
@@ -79,16 +127,20 @@ export function DriversTable({
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase()
-    return drivers.filter(
-      (driver) =>
+    return rows.filter(
+      ({ driver }) =>
         (filter === "all" || driver.status === filter) &&
         driver.full_name.toLowerCase().includes(query)
     )
-  }, [drivers, filter, search])
+  }, [rows, filter, search])
 
   const attention = useMemo(
-    () => drivers.filter((driver) => needsAttention(driver, today)).length,
-    [drivers, today]
+    () =>
+      rows.filter(
+        ({ driver, items }) =>
+          driver.status === "active" && flagged(items).length > 0
+      ).length,
+    [rows]
   )
 
   const addButton = (size: "sm" | "default") =>
@@ -104,7 +156,7 @@ export function DriversTable({
       <SettingsCard title="Drivers">
         <SettingsEmptyState icon={UserRoundPlus} title="No drivers yet">
           {canManage
-            ? "Add your drivers to keep their CDL and medical card dates in one place. You'll see a warning here before anything expires."
+            ? "Add your drivers to keep their CDL, medical card and yearly checks in one place. You'll see a warning here before anything is due."
             : "Owners and admins can add drivers. Once they do, you'll see them here."}
         </SettingsEmptyState>
         {canManage && (
@@ -132,8 +184,8 @@ export function DriversTable({
               <>
                 {count} ·{" "}
                 <span className="text-amber-700 dark:text-amber-300">
-                  {plural(attention, "active driver")} with a CDL or medical
-                  card expiring
+                  {plural(attention, "active driver")} with something due in the
+                  next 60 days
                 </span>
               </>
             ) : (
@@ -186,8 +238,8 @@ export function DriversTable({
           <TableRow>
             <TableHead>Driver</TableHead>
             <TableHead className="hidden lg:table-cell">CDL</TableHead>
-            <TableHead className="hidden sm:table-cell">CDL expires</TableHead>
-            <TableHead className="hidden md:table-cell">Medical card</TableHead>
+            <TableHead className="hidden md:table-cell">Pay</TableHead>
+            <TableHead className="hidden sm:table-cell">Compliance</TableHead>
             <TableHead className="w-24">Status</TableHead>
           </TableRow>
         </TableHeader>
@@ -204,8 +256,8 @@ export function DriversTable({
               </TableCell>
             </TableRow>
           )}
-          {filtered.map((driver) => {
-            const warn = driver.status === "active"
+          {filtered.map(({ driver, items }) => {
+            const warnings = driver.status === "active" ? flagged(items) : []
             return (
               <TableRow key={driver.id}>
                 <TableCell className="max-w-64 py-3">
@@ -227,21 +279,12 @@ export function DriversTable({
                           ? formatPhone(driver.phone)
                           : (driver.email ?? "No contact info")}
                       </div>
-                      {warn && (
-                        // The date columns are hidden on phones; keep the warnings.
-                        <div className="mt-1 flex flex-wrap gap-1 empty:hidden sm:hidden">
-                          <ExpiryBadge
-                            date={driver.cdl_expires_on}
-                            today={today}
-                            label="CDL"
-                            showLabel
-                          />
-                          <ExpiryBadge
-                            date={driver.medical_card_expires_on}
-                            today={today}
-                            label="Medical card"
-                            showLabel
-                          />
+                      {warnings.length > 0 && (
+                        // The compliance column is hidden on phones; keep the warnings.
+                        <div className="mt-1 flex flex-wrap gap-1 sm:hidden">
+                          {warnings.map((item) => (
+                            <ExpiryBadge key={item.key} item={item} showLabel />
+                          ))}
                         </div>
                       )}
                     </div>
@@ -259,21 +302,13 @@ export function DriversTable({
                     "Not set"
                   )}
                 </TableCell>
-                <TableCell className="hidden text-sm sm:table-cell">
-                  <ExpiryDate
-                    date={driver.cdl_expires_on}
-                    today={today}
-                    label="CDL"
-                    warn={warn}
-                  />
-                </TableCell>
                 <TableCell className="hidden text-sm md:table-cell">
-                  <ExpiryDate
-                    date={driver.medical_card_expires_on}
-                    today={today}
-                    label="Medical card"
-                    warn={warn}
-                  />
+                  {formatPay(driver.pay_type, driver.pay_rate) ?? (
+                    <span className="text-muted-foreground">Not set</span>
+                  )}
+                </TableCell>
+                <TableCell className="hidden max-w-80 text-sm whitespace-normal sm:table-cell">
+                  <ComplianceSummary items={items} status={driver.status} />
                 </TableCell>
                 <TableCell>
                   <DriverStatusBadge status={driver.status} />
