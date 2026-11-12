@@ -158,7 +158,7 @@ function StopSkeleton({ title }: { title: string }) {
 export function NewLoadSkeleton() {
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
-      <div className="mx-auto flex max-w-3xl flex-col gap-6">
+      <div className="mx-auto flex max-w-5xl flex-col gap-6">
         <SettingsCard
           title="Load"
           description="From the rate confirmation."
@@ -219,7 +219,7 @@ function DetailSkeleton({
 export function LoadDetailSkeleton() {
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
-      <div className="mx-auto flex max-w-3xl flex-col gap-4">
+      <div className="mx-auto flex max-w-5xl flex-col gap-4">
         {/* The "All loads" link: a small ghost button. */}
         <Skeleton className="h-8 w-24 rounded-md" />
         <section className="overflow-hidden rounded-xl border bg-card shadow-xs">

@@ -169,6 +169,17 @@ function DriverFormSkeleton({ editing = false }: { editing?: boolean }) {
           className="sm:col-span-3"
         />
       </SettingsCard>
+      {!editing && (
+        <SettingsCard
+          title="CDL and medical card"
+          description="Optional. Photos or PDFs, kept private to your organization."
+        >
+          <div className="grid gap-6 sm:grid-cols-2">
+            <PhotoSkeleton label="CDL" />
+            <PhotoSkeleton label="Medical card" />
+          </div>
+        </SettingsCard>
+      )}
       <SettingsCard title="Pay" description="Used to work out profit per load.">
         <Field>
           <FieldLabel>Paid</FieldLabel>
@@ -188,7 +199,7 @@ function DriverFormSkeleton({ editing = false }: { editing?: boolean }) {
             hint={
               editing
                 ? "Changes are saved for everyone in your organization."
-                : "New drivers start as active. Add photos after saving."
+                : "New drivers start as active."
             }
           >
             {!editing && (
@@ -207,7 +218,7 @@ function DriverFormSkeleton({ editing = false }: { editing?: boolean }) {
 export function NewDriverSkeleton() {
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto max-w-5xl">
         <DriverFormSkeleton />
       </div>
     </div>
@@ -257,7 +268,7 @@ function PhotoSkeleton({ label }: { label: string }) {
 export function DriverDetailSkeleton() {
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
-      <div className="mx-auto flex max-w-3xl flex-col gap-4">
+      <div className="mx-auto flex max-w-5xl flex-col gap-4">
         {/* The "All drivers" link: a small ghost button. */}
         <Skeleton className="h-8 w-28 rounded-md" />
         <section className="overflow-hidden rounded-xl border bg-card shadow-xs">

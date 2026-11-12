@@ -55,7 +55,7 @@ export default async function LoadPage({
 
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
-      <div className="mx-auto flex max-w-3xl flex-col gap-4">
+      <div className="mx-auto flex max-w-5xl flex-col gap-4">
         <Link
           href={base}
           className={buttonVariants({

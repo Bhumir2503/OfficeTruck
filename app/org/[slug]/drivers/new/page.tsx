@@ -22,7 +22,7 @@ export default async function NewDriverPage({
 
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto max-w-5xl">
         <DriverForm organizationId={organization.id} base={base} />
       </div>
     </div>

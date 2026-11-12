@@ -3,10 +3,15 @@
 import { CornerDownLeft } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { useState } from "react"
 import { toast } from "sonner"
 
 import { createDriver, updateDriver } from "@/app/org/[slug]/drivers/actions"
 import { DateField } from "@/components/drivers/date-field"
+import {
+  DriverPhotoPickers,
+  type PickedPhotos,
+} from "@/components/drivers/driver-photo-pickers"
 import { PayFields } from "@/components/drivers/pay-fields"
 import {
   SettingsCard,
@@ -22,6 +27,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { useZodForm } from "@/hooks/use-zod-form"
+import { PHOTO_LABELS, uploadDriverPhoto } from "@/lib/driver-photo-upload"
 import type { Driver } from "@/lib/drivers"
 import { formatPhone, handlePhoneInput, handlePhoneKeyDown } from "@/lib/phone"
 import { driverSchema, type DriverInput } from "@/lib/schemas/driver"
@@ -98,6 +104,7 @@ export function DriverForm({
   driver?: Driver
 }) {
   const router = useRouter()
+  const [photos, setPhotos] = useState<PickedPhotos>({})
   const { errors, formError, pending, formProps, revalidate } = useZodForm(
     driverSchema,
     async (values) => {
@@ -113,6 +120,32 @@ export function DriverForm({
       const result = await createDriver(organizationId, values)
       if ("error" in result) {
         return result.error
+      }
+
+      // The driver exists now, so their folder does too: upload the photos.
+      const failed: string[] = []
+      for (const kind of ["cdl", "medical_card"] as const) {
+        const file = photos[kind]?.file
+        if (file) {
+          const error = await uploadDriverPhoto(
+            organizationId,
+            result.id,
+            kind,
+            file
+          )
+          if (error) {
+            failed.push(PHOTO_LABELS[kind])
+          }
+        }
+      }
+
+      if (failed.length) {
+        // Open the driver, where the photos can be tried again.
+        toast.warning(
+          `${values.full_name} added, but the ${failed.join(" and ").toLowerCase().replace("cdl", "CDL")} ${failed.length === 1 ? "photo" : "photos"} didn't upload. Try again here.`
+        )
+        router.push(`${base}/${result.id}`)
+        return
       }
       toast.success(`${values.full_name} added.`)
       router.push(base)
@@ -224,6 +257,19 @@ export function DriverForm({
           />
         </SettingsCard>
 
+        {!driver && (
+          <SettingsCard
+            title="CDL and medical card"
+            description="Optional. Photos or PDFs, kept private to your organization."
+          >
+            <DriverPhotoPickers
+              photos={photos}
+              onChange={setPhotos}
+              disabled={pending}
+            />
+          </SettingsCard>
+        )}
+
         <SettingsCard
           title="Pay"
           description="Used to work out profit per load."
@@ -247,7 +293,7 @@ export function DriverForm({
                 ) : driver ? (
                   "Changes are saved for everyone in your organization."
                 ) : (
-                  "New drivers start as active. Add photos after saving."
+                  "New drivers start as active."
                 )
               }
             >
