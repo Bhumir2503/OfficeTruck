@@ -4,6 +4,7 @@ import { notFound } from "next/navigation"
 import { NewLoadForm } from "@/components/loads/new-load-form"
 import { getDriverOptions } from "@/lib/drivers"
 import { getOrganization } from "@/lib/organizations"
+import { getTruckOptions } from "@/lib/trucks"
 
 export const metadata: Metadata = { title: "New load" }
 
@@ -23,6 +24,8 @@ export default async function NewLoadPage({
           base={`/org/${organization.slug}/loads`}
           drivers={await getDriverOptions(organization.id)}
           driversHref={`/org/${organization.slug}/drivers`}
+          trucks={await getTruckOptions(organization.id)}
+          trucksHref={`/org/${organization.slug}/equipment`}
         />
       </div>
     </div>

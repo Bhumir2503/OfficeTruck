@@ -5,6 +5,7 @@ import Link from "next/link"
 import { toast } from "sonner"
 
 import { updateLoadAssignment } from "@/app/org/[slug]/loads/actions"
+import { TruckSelect } from "@/components/loads/truck-select"
 import {
   DriverSelect,
   formatMiles,
@@ -26,6 +27,7 @@ import { useZodForm } from "@/hooks/use-zod-form"
 import { formatRate } from "@/lib/load-format"
 import type { DriverOption } from "@/lib/drivers"
 import type { Load } from "@/lib/loads"
+import type { TruckOption } from "@/lib/trucks"
 import { driverPay, formatPay } from "@/lib/driver-format"
 import { loadAssignmentSchema } from "@/lib/schemas/load"
 
@@ -47,18 +49,58 @@ function payHint(load: Load) {
   return `Driver pay: ${formatRate(pay)} at ${rate}.`
 }
 
-/** The driver and miles on a load. Any member can change them. */
+function MilesField({
+  name,
+  label,
+  hint,
+  value,
+  errors,
+}: {
+  name: "miles" | "empty_miles"
+  label: string
+  hint: string
+  value: number | null
+  errors?: { message: string }[]
+}) {
+  const id = `load-${name.replace("_", "-")}`
+  return (
+    <Field data-invalid={!!errors}>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <Input
+        id={id}
+        name={name}
+        inputMode="numeric"
+        placeholder={name === "miles" ? "e.g. 1,240" : "e.g. 85"}
+        defaultValue={value === null ? undefined : formatMiles(String(value))}
+        aria-invalid={!!errors}
+        onChange={handleMilesInput}
+      />
+      {errors ? (
+        <FieldError errors={errors} />
+      ) : (
+        <FieldDescription>{hint}</FieldDescription>
+      )}
+    </Field>
+  )
+}
+
+/** The truck, driver and miles on a load. Any member can change them. */
 export function LoadAssignmentForm({
   organizationId,
   load,
   drivers,
   driversBase,
+  trucks,
+  trucksBase,
 }: {
   organizationId: string
   load: Load
   drivers: DriverOption[]
   /** /org/<slug>/drivers */
   driversBase: string
+  trucks: TruckOption[]
+  /** /org/<slug>/equipment */
+  trucksBase: string
 }) {
   const { errors, formError, pending, formProps, revalidate } = useZodForm(
     loadAssignmentSchema,
@@ -75,18 +117,33 @@ export function LoadAssignmentForm({
     <form {...formProps} autoComplete="off">
       <fieldset disabled={pending}>
         <SettingsCard
-          title="Driver and miles"
+          title="Truck, driver and miles"
           description={
-            load.driver ? (
+            load.driver || load.truck_link ? (
               <>
-                Driven by{" "}
-                <Link
-                  href={`${driversBase}/${load.driver.id}`}
-                  className="font-medium text-foreground hover:underline"
-                >
-                  {load.driver.full_name}
-                </Link>
-                .
+                {load.truck_link && (
+                  <>
+                    <Link
+                      href={`${trucksBase}/${load.truck_link.id}`}
+                      className="font-medium text-foreground hover:underline"
+                    >
+                      {load.truck_link.unit_number}
+                    </Link>
+                    {load.driver ? ", driven by " : "."}
+                  </>
+                )}
+                {load.driver && (
+                  <>
+                    {!load.truck_link && "Driven by "}
+                    <Link
+                      href={`${driversBase}/${load.driver.id}`}
+                      className="font-medium text-foreground hover:underline"
+                    >
+                      {load.driver.full_name}
+                    </Link>
+                    .
+                  </>
+                )}
               </>
             ) : (
               "Who's running this load, and how far."
@@ -109,6 +166,26 @@ export function LoadAssignmentForm({
             </SettingsCardFooter>
           }
         >
+          <Field data-invalid={!!errors.truck_id}>
+            <FieldLabel htmlFor="load-truck-id">Truck</FieldLabel>
+            <TruckSelect
+              id="load-truck-id"
+              trucks={trucks}
+              defaultValue={load.truck_id}
+              invalid={!!errors.truck_id}
+              onUpdate={revalidate}
+            />
+            {errors.truck_id ? (
+              <FieldError errors={errors.truck_id} />
+            ) : (
+              !load.truck_link &&
+              load.truck && (
+                <FieldDescription>
+                  Typed in as &ldquo;{load.truck}&rdquo;.
+                </FieldDescription>
+              )
+            )}
+          </Field>
           <Field data-invalid={!!errors.driver_id}>
             <FieldLabel htmlFor="load-driver-id">Driver</FieldLabel>
             <DriverSelect
@@ -120,27 +197,20 @@ export function LoadAssignmentForm({
             />
             <FieldError errors={errors.driver_id} />
           </Field>
-          <Field data-invalid={!!errors.miles}>
-            <FieldLabel htmlFor="load-miles">Miles</FieldLabel>
-            <Input
-              id="load-miles"
-              name="miles"
-              inputMode="numeric"
-              placeholder="e.g. 1,240"
-              defaultValue={
-                load.miles === null
-                  ? undefined
-                  : formatMiles(String(load.miles))
-              }
-              aria-invalid={!!errors.miles}
-              onChange={handleMilesInput}
-            />
-            {errors.miles ? (
-              <FieldError errors={errors.miles} />
-            ) : (
-              <FieldDescription>Used for per-mile pay.</FieldDescription>
-            )}
-          </Field>
+          <MilesField
+            name="miles"
+            label="Loaded miles"
+            hint="Pickup to delivery. Used for per-mile pay."
+            value={load.miles}
+            errors={errors.miles}
+          />
+          <MilesField
+            name="empty_miles"
+            label="Empty miles"
+            hint="Deadhead to the pickup. Counts toward cost per mile."
+            value={load.empty_miles}
+            errors={errors.empty_miles}
+          />
         </SettingsCard>
       </fieldset>
     </form>
