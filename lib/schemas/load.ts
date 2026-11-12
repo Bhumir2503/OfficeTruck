@@ -48,6 +48,38 @@ const optionalDateTime = z.preprocess(
   dateTime("Enter a valid date and time.").nullable()
 )
 
+// What the driver picker sends: a driver's id, or "" for no driver.
+const driverId = z.preprocess(
+  (value) => (typeof value === "string" && value !== "" ? value : null),
+  z.uuid("Choose a driver.").nullable()
+)
+
+// Whole miles, typed with or without commas ("1,240"); a number when the
+// server re-checks parsed values.
+const miles = z.preprocess(
+  (value) => {
+    if (typeof value === "number") return String(value)
+    if (typeof value !== "string") return null
+    const cleaned = value.replace(/[,\s]/g, "")
+    return cleaned === "" ? null : cleaned
+  },
+  z
+    .string()
+    .regex(/^\d{1,6}$/, "Enter whole miles, like 1,240.")
+    .transform(Number)
+    .refine((value) => value <= 100000, "Must be 100,000 miles or fewer.")
+    .nullable()
+)
+
+/** The driver and miles on a load, which can be changed after it's added. */
+export const loadAssignmentSchema = z.object({
+  driver_id: driverId,
+  miles: miles,
+})
+
+export type LoadAssignmentInput = z.input<typeof loadAssignmentSchema>
+export type LoadAssignmentValues = z.output<typeof loadAssignmentSchema>
+
 export const loadSchema = z
   .object({
     reference: required("a load number", 50),
@@ -72,7 +104,8 @@ export const loadSchema = z
           .regex(/^\d{1,8}(\.\d{0,2})?$/, "Enter an amount like 2,450.00.")
       )
       .transform(Number),
-    driver_name: optional(120),
+    driver_id: driverId,
+    miles: miles,
     truck: optional(50),
     notes: optional(2000),
   })

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import type { PayType } from "@/lib/schemas/driver"
 import type { LoadStatus } from "@/lib/schemas/load"
 
 export type Load = {
@@ -15,7 +16,16 @@ export type Load = {
   /** Postgres numeric comes back as a number for numeric(10, 2). */
   rate: number
   status: LoadStatus
+  /** Typed in before drivers existed; shown when there's no linked driver. */
   driver_name: string | null
+  driver_id: string | null
+  driver: {
+    id: string
+    full_name: string
+    pay_type: PayType | null
+    pay_rate: number | null
+  } | null
+  miles: number | null
   truck: string | null
   notes: string | null
   created_at: string
@@ -23,7 +33,7 @@ export type Load = {
 }
 
 const LOAD_COLUMNS =
-  "id, reference, broker_name, pickup_location, pickup_start, pickup_end, delivery_location, delivery_start, delivery_end, rate, status, driver_name, truck, notes, created_at, updated_at"
+  "id, reference, broker_name, pickup_location, pickup_start, pickup_end, delivery_location, delivery_start, delivery_end, rate, status, driver_name, driver_id, driver:drivers!loads_driver_fkey (id, full_name, pay_type, pay_rate), miles, truck, notes, created_at, updated_at"
 
 /** Every load in the organization, newest pickup first. */
 export async function getLoads(organizationId: string): Promise<Load[]> {
@@ -37,7 +47,7 @@ export async function getLoads(organizationId: string): Promise<Load[]> {
   if (error) {
     throw error
   }
-  return data as Load[]
+  return data as unknown as Load[]
 }
 
 /** One load, or null if it isn't in this organization. */
@@ -60,5 +70,5 @@ export async function getLoad(
     }
     throw error
   }
-  return data as Load | null
+  return data as unknown as Load | null
 }

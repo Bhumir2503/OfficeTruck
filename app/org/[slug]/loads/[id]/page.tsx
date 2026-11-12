@@ -3,10 +3,12 @@ import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 
+import { LoadAssignmentForm } from "@/components/loads/load-assignment-form"
 import { LoadStatusMenu } from "@/components/loads/load-status-menu"
 import { SettingsCard } from "@/components/settings/settings-card"
 import { buttonVariants } from "@/components/ui/button"
 import { formatRate, formatStopWindow } from "@/lib/load-format"
+import { getDriverOptions } from "@/lib/drivers"
 import { getLoad } from "@/lib/loads"
 import { getOrganization } from "@/lib/organizations"
 
@@ -48,11 +50,12 @@ export default async function LoadPage({
   }
 
   const base = `/org/${organization.slug}/loads`
+  const drivers = await getDriverOptions(organization.id)
   const none = <span className="text-muted-foreground">Not set</span>
 
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
-      <div className="mx-auto flex max-w-3xl flex-col gap-4">
+      <div className="mx-auto flex max-w-5xl flex-col gap-4">
         <Link
           href={base}
           className={buttonVariants({
@@ -89,13 +92,25 @@ export default async function LoadPage({
         <SettingsCard title="Details">
           <dl className="grid gap-5 sm:grid-cols-3">
             <Detail label="Rate">{formatRate(load.rate)}</Detail>
-            <Detail label="Driver">{load.driver_name ?? none}</Detail>
+            <Detail label="Rate per mile">
+              {load.miles ? (
+                `${formatRate(Number(load.rate) / load.miles)} / mile`
+              ) : (
+                <span className="text-muted-foreground">Add miles</span>
+              )}
+            </Detail>
             <Detail label="Truck">{load.truck ?? none}</Detail>
             <div className="sm:col-span-3">
               <Detail label="Notes">{load.notes ?? none}</Detail>
             </div>
           </dl>
         </SettingsCard>
+        <LoadAssignmentForm
+          organizationId={organization.id}
+          load={load}
+          drivers={drivers}
+          driversBase={`/org/${organization.slug}/drivers`}
+        />
       </div>
     </div>
   )
