@@ -10,6 +10,7 @@ import { buttonVariants } from "@/components/ui/button"
 import { formatRate, formatStopWindow } from "@/lib/load-format"
 import { getDriverOptions } from "@/lib/drivers"
 import { getLoad } from "@/lib/loads"
+import { getTruckOptions } from "@/lib/trucks"
 import { getOrganization } from "@/lib/organizations"
 
 async function loadFor(params: PageProps<"/org/[slug]/loads/[id]">["params"]) {
@@ -50,7 +51,10 @@ export default async function LoadPage({
   }
 
   const base = `/org/${organization.slug}/loads`
-  const drivers = await getDriverOptions(organization.id)
+  const [drivers, trucks] = await Promise.all([
+    getDriverOptions(organization.id),
+    getTruckOptions(organization.id),
+  ])
   const none = <span className="text-muted-foreground">Not set</span>
 
   return (
@@ -99,7 +103,13 @@ export default async function LoadPage({
                 <span className="text-muted-foreground">Add miles</span>
               )}
             </Detail>
-            <Detail label="Truck">{load.truck ?? none}</Detail>
+            <Detail label="Empty miles">
+              {load.empty_miles !== null ? (
+                `${load.empty_miles.toLocaleString("en-US")} mi`
+              ) : (
+                <span className="text-muted-foreground">Not set</span>
+              )}
+            </Detail>
             <div className="sm:col-span-3">
               <Detail label="Notes">{load.notes ?? none}</Detail>
             </div>
@@ -110,6 +120,8 @@ export default async function LoadPage({
           load={load}
           drivers={drivers}
           driversBase={`/org/${organization.slug}/drivers`}
+          trucks={trucks}
+          trucksBase={`/org/${organization.slug}/equipment`}
         />
       </div>
     </div>

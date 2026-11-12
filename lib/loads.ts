@@ -26,14 +26,19 @@ export type Load = {
     pay_rate: number | null
   } | null
   miles: number | null
+  /** Typed in before trucks existed; shown when there's no linked truck. */
   truck: string | null
+  truck_id: string | null
+  truck_link: { id: string; unit_number: string } | null
+  /** Deadhead miles to get to the pickup. */
+  empty_miles: number | null
   notes: string | null
   created_at: string
   updated_at: string
 }
 
 const LOAD_COLUMNS =
-  "id, reference, broker_name, pickup_location, pickup_start, pickup_end, delivery_location, delivery_start, delivery_end, rate, status, driver_name, driver_id, driver:drivers!loads_driver_fkey (id, full_name, pay_type, pay_rate), miles, truck, notes, created_at, updated_at"
+  "id, reference, broker_name, pickup_location, pickup_start, pickup_end, delivery_location, delivery_start, delivery_end, rate, status, driver_name, driver_id, driver:drivers!loads_driver_fkey (id, full_name, pay_type, pay_rate), miles, empty_miles, truck, truck_id, truck_link:trucks!loads_truck_fkey (id, unit_number), notes, created_at, updated_at"
 
 /** Every load in the organization, newest pickup first. */
 export async function getLoads(organizationId: string): Promise<Load[]> {

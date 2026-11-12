@@ -89,7 +89,8 @@ type ComplianceDates = {
 }
 
 export type ComplianceItem = {
-  key: "cdl" | "medical_card" | "annual_review" | "clearinghouse"
+  /** Unique among one record's items, e.g. "cdl" or "annual_inspection". */
+  key: string
   label: string
   /** "expires" for documents that run out, "due" for checks to redo. */
   kind: "expires" | "due"

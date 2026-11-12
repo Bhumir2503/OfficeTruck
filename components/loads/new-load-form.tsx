@@ -4,6 +4,7 @@ import { cn } from "cn"
 import { CornerDownLeft } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { useState } from "react"
 import { toast } from "sonner"
 
 import { createLoad } from "@/app/org/[slug]/loads/actions"
@@ -21,6 +22,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { DateTimeField } from "@/components/loads/date-time-field"
+import { TruckSelect } from "@/components/loads/truck-select"
 import {
   DriverSelect,
   handleMilesInput,
@@ -32,6 +34,7 @@ import {
   handleCurrencyKeyDown,
 } from "@/lib/currency"
 import type { DriverOption } from "@/lib/drivers"
+import type { TruckOption } from "@/lib/trucks"
 import { loadSchema, type LoadInput } from "@/lib/schemas/load"
 
 type Name = keyof LoadInput
@@ -134,6 +137,8 @@ export function NewLoadForm({
   base,
   drivers,
   driversHref,
+  trucks,
+  trucksHref,
 }: {
   organizationId: string
   /** /org/<slug>/loads */
@@ -141,8 +146,13 @@ export function NewLoadForm({
   drivers: DriverOption[]
   /** /org/<slug>/drivers */
   driversHref: string
+  trucks: TruckOption[]
+  /** /org/<slug>/equipment */
+  trucksHref: string
 }) {
   const router = useRouter()
+  const [driverId, setDriverId] = useState<string | null>(null)
+  const [driverPicked, setDriverPicked] = useState(false)
   const { errors, formError, pending, formProps, revalidate } = useZodForm(
     loadSchema,
     async (values) => {
@@ -203,7 +213,7 @@ export function NewLoadForm({
         <SettingsCard
           title="Assignment"
           description="Optional. You can fill these in later."
-          contentClassName="grid gap-5 sm:grid-cols-3"
+          contentClassName="grid gap-5 sm:grid-cols-2"
           footer={
             <SettingsCardFooter
               hint={
@@ -228,43 +238,80 @@ export function NewLoadForm({
             </SettingsCardFooter>
           }
         >
-          <Field data-invalid={!!errors.driver_id}>
-            <FieldLabel htmlFor="load-driver-id">Driver</FieldLabel>
-            <DriverSelect
-              id="load-driver-id"
-              drivers={drivers}
-              invalid={!!errors.driver_id}
+          <Field data-invalid={!!errors.truck_id}>
+            <FieldLabel htmlFor="load-truck-id">Truck</FieldLabel>
+            <TruckSelect
+              id="load-truck-id"
+              trucks={trucks}
+              invalid={!!errors.truck_id}
+              onPick={(truck) => {
+                // Prefill the truck's usual driver, unless one was picked by hand.
+                if (!driverPicked && truck?.default_driver_id) {
+                  setDriverId(truck.default_driver_id)
+                }
+              }}
               onUpdate={revalidate}
             />
-            {errors.driver_id ? (
-              <FieldError errors={errors.driver_id} />
+            {errors.truck_id ? (
+              <FieldError errors={errors.truck_id} />
             ) : (
-              drivers.length === 0 && (
+              trucks.length === 0 && (
                 <FieldDescription>
-                  <Link href={driversHref} className="underline">
-                    Add drivers
+                  <Link href={trucksHref} className="underline">
+                    Add trucks
                   </Link>{" "}
                   to pick them here.
                 </FieldDescription>
               )
             )}
           </Field>
-          <TextField
-            name="truck"
-            label="Truck"
-            placeholder="e.g. Unit 112"
-            errors={errors}
-          />
+          <Field data-invalid={!!errors.driver_id}>
+            <FieldLabel htmlFor="load-driver-id">Driver</FieldLabel>
+            <DriverSelect
+              id="load-driver-id"
+              drivers={drivers}
+              value={driverId}
+              onValueChange={(value) => {
+                setDriverId(value)
+                setDriverPicked(true)
+              }}
+              invalid={!!errors.driver_id}
+              onUpdate={revalidate}
+            />
+            {errors.driver_id ? (
+              <FieldError errors={errors.driver_id} />
+            ) : drivers.length === 0 ? (
+              <FieldDescription>
+                <Link href={driversHref} className="underline">
+                  Add drivers
+                </Link>{" "}
+                to pick them here.
+              </FieldDescription>
+            ) : (
+              <FieldDescription>
+                Filled in from the truck&apos;s default driver.
+              </FieldDescription>
+            )}
+          </Field>
           <TextField
             name="miles"
-            label="Miles"
+            label="Loaded miles"
             inputMode="numeric"
             placeholder="e.g. 1,240"
-            hint="Used for per-mile pay."
+            hint="Pickup to delivery. Used for per-mile pay."
             errors={errors}
             onChange={handleMilesInput}
           />
-          <Field data-invalid={!!errors.notes} className="sm:col-span-3">
+          <TextField
+            name="empty_miles"
+            label="Empty miles"
+            inputMode="numeric"
+            placeholder="e.g. 85"
+            hint="Deadhead to the pickup. Counts toward cost per mile."
+            errors={errors}
+            onChange={handleMilesInput}
+          />
+          <Field data-invalid={!!errors.notes} className="sm:col-span-2">
             <FieldLabel htmlFor="load-notes">Notes</FieldLabel>
             <Textarea
               id="load-notes"

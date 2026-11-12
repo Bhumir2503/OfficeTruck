@@ -21,18 +21,31 @@ const NONE = "none"
  */
 export function DriverSelect({
   id,
+  name = "driver_id",
   drivers,
   defaultValue,
+  value: controlled,
+  onValueChange,
   invalid,
   onUpdate,
 }: {
   id: string
+  /** The hidden input's name. */
+  name?: string
   drivers: DriverOption[]
   defaultValue?: string | null
+  /** Set to control the choice from outside, e.g. to prefill it. */
+  value?: string | null
+  onValueChange?: (value: string | null) => void
   invalid?: boolean
   onUpdate: (form: HTMLFormElement | null) => void
 }) {
-  const [value, setValue] = useState(defaultValue ?? NONE)
+  const [own, setOwn] = useState(defaultValue ?? NONE)
+  const value = controlled !== undefined ? (controlled ?? NONE) : own
+  const setValue = (next: string) => {
+    if (controlled === undefined) setOwn(next)
+    onValueChange?.(next === NONE ? null : next)
+  }
   const hiddenRef = useRef<HTMLInputElement>(null)
   const firstRender = useRef(true)
 
@@ -47,7 +60,10 @@ export function DriverSelect({
   }, [value])
 
   const options = drivers.filter(
-    (driver) => driver.status === "active" || driver.id === defaultValue
+    (driver) =>
+      driver.status === "active" ||
+      driver.id === defaultValue ||
+      driver.id === value
   )
   const items = [
     { value: NONE, label: "No driver" },
@@ -65,7 +81,7 @@ export function DriverSelect({
       <input
         ref={hiddenRef}
         type="hidden"
-        name="driver_id"
+        name={name}
         value={value === NONE ? "" : value}
       />
       <Select

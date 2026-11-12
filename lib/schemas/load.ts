@@ -71,10 +71,18 @@ const miles = z.preprocess(
     .nullable()
 )
 
-/** The driver and miles on a load, which can be changed after it's added. */
+// What the truck picker sends: a truck's id, or "" for no truck.
+const truckId = z.preprocess(
+  (value) => (typeof value === "string" && value !== "" ? value : null),
+  z.uuid("Choose a truck.").nullable()
+)
+
+/** The truck, driver and miles on a load, which can be changed after it's added. */
 export const loadAssignmentSchema = z.object({
+  truck_id: truckId,
   driver_id: driverId,
   miles: miles,
+  empty_miles: miles,
 })
 
 export type LoadAssignmentInput = z.input<typeof loadAssignmentSchema>
@@ -104,9 +112,10 @@ export const loadSchema = z
           .regex(/^\d{1,8}(\.\d{0,2})?$/, "Enter an amount like 2,450.00.")
       )
       .transform(Number),
+    truck_id: truckId,
     driver_id: driverId,
     miles: miles,
-    truck: optional(50),
+    empty_miles: miles,
     notes: optional(2000),
   })
   // The strings are zero-padded and the same length, so they compare as dates.

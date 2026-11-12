@@ -173,7 +173,7 @@ export function NewLoadSkeleton() {
         <SettingsCard
           title="Assignment"
           description="Optional. You can fill these in later."
-          contentClassName="grid gap-5 sm:grid-cols-3"
+          contentClassName="grid gap-5 sm:grid-cols-2"
           footer={
             <SettingsCardFooter hint="New loads start as booked.">
               <Skeleton className="h-8 w-16 rounded-md bg-foreground/10" />
@@ -181,12 +181,22 @@ export function NewLoadSkeleton() {
             </SettingsCardFooter>
           }
         >
-          <FieldSkeleton label="Driver" />
           <FieldSkeleton label="Truck" />
-          <FieldSkeleton label="Miles" hint="Used for per-mile pay." />
+          <FieldSkeleton
+            label="Driver"
+            hint="Filled in from the truck's default driver."
+          />
+          <FieldSkeleton
+            label="Loaded miles"
+            hint="Pickup to delivery. Used for per-mile pay."
+          />
+          <FieldSkeleton
+            label="Empty miles"
+            hint="Deadhead to the pickup. Counts toward cost per mile."
+          />
           <FieldSkeleton
             label="Notes"
-            className="sm:col-span-3"
+            className="sm:col-span-2"
             inputClassName="h-20"
           />
         </SettingsCard>
@@ -241,7 +251,7 @@ export function LoadDetailSkeleton() {
           <div className="grid gap-5 sm:grid-cols-3">
             <DetailSkeleton label="Rate" lines={["w-20"]} />
             <DetailSkeleton label="Rate per mile" lines={["w-24"]} />
-            <DetailSkeleton label="Truck" lines={["w-16"]} />
+            <DetailSkeleton label="Empty miles" lines={["w-16"]} />
             <DetailSkeleton
               label="Notes"
               className="sm:col-span-3"
@@ -250,7 +260,7 @@ export function LoadDetailSkeleton() {
           </div>
         </SettingsCard>
         <SettingsCard
-          title="Driver and miles"
+          title="Truck, driver and miles"
           description={
             // The description is a <p>, so an inline placeholder.
             <span className="inline-block h-4 w-48 animate-pulse rounded-md bg-muted align-middle" />
@@ -264,8 +274,16 @@ export function LoadDetailSkeleton() {
             </SettingsCardFooter>
           }
         >
+          <FieldSkeleton label="Truck" />
           <FieldSkeleton label="Driver" />
-          <FieldSkeleton label="Miles" hint="Used for per-mile pay." />
+          <FieldSkeleton
+            label="Loaded miles"
+            hint="Pickup to delivery. Used for per-mile pay."
+          />
+          <FieldSkeleton
+            label="Empty miles"
+            hint="Deadhead to the pickup. Counts toward cost per mile."
+          />
         </SettingsCard>
       </div>
     </div>
