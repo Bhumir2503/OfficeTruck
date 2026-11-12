@@ -3,6 +3,7 @@ import { notFound } from "next/navigation"
 
 import { CompanyProfileSection } from "@/components/settings/company-profile-form"
 import { DeleteOrganization } from "@/components/settings/delete-organization"
+import { LeaveOrganization } from "@/components/settings/leave-organization"
 import { OrganizationUrlForm } from "@/components/settings/organization-url-form"
 import { SettingsPage } from "@/components/settings/settings-card"
 import {
@@ -39,6 +40,11 @@ export default async function GeneralSettingsPage({
         organizationId={organization.id}
         slug={organization.slug}
         canEdit={canManage(organization)}
+      />
+      <LeaveOrganization
+        organizationId={organization.id}
+        name={organization.name}
+        isOwner={organization.role === "owner"}
       />
       <DeleteOrganization
         organizationId={organization.id}

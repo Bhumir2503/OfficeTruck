@@ -23,14 +23,22 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { useZodForm } from "@/hooks/use-zod-form"
+import { withParams } from "@/lib/safe-next"
 import { loginSchema } from "@/lib/schemas/auth"
 import { createClient } from "@/lib/supabase/client"
 
 export function LoginForm({
   className,
   linkError,
+  next = "/",
+  defaultEmail,
   ...props
-}: React.ComponentProps<"div"> & { linkError?: string }) {
+}: React.ComponentProps<"div"> & {
+  linkError?: string
+  /** Where to go after signing in, already checked with safeNext(). */
+  next?: string
+  defaultEmail?: string
+}) {
   const router = useRouter()
   const { errors, formError, pending, formProps } = useZodForm(
     loginSchema,
@@ -40,7 +48,7 @@ export function LoginForm({
       if (error) {
         return error.message
       }
-      router.replace("/")
+      router.replace(next)
       router.refresh()
     }
   )
@@ -64,6 +72,7 @@ export function LoginForm({
                   type="email"
                   autoComplete="email"
                   placeholder="m@example.com"
+                  defaultValue={defaultEmail}
                   required
                   aria-invalid={!!errors.email}
                 />
@@ -101,7 +110,9 @@ export function LoginForm({
               <Field>
                 <FieldDescription className="text-center">
                   Don&apos;t have an account?{" "}
-                  <Link href="/signup">Sign up</Link>
+                  <Link href={withParams("/signup", next, defaultEmail)}>
+                    Sign up
+                  </Link>
                 </FieldDescription>
               </Field>
             </FieldGroup>

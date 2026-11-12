@@ -22,13 +22,20 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { useZodForm } from "@/hooks/use-zod-form"
+import { withParams } from "@/lib/safe-next"
 import { signupSchema } from "@/lib/schemas/auth"
 import { authRedirectUrl, createClient } from "@/lib/supabase/client"
 
 export function SignupForm({
   className,
+  next = "/",
+  defaultEmail,
   ...props
-}: React.ComponentProps<"div">) {
+}: React.ComponentProps<"div"> & {
+  /** Where to go once signed up, already checked with safeNext(). */
+  next?: string
+  defaultEmail?: string
+}) {
   const router = useRouter()
   const [confirmationSent, setConfirmationSent] = useState(false)
   const { errors, formError, pending, formProps } = useZodForm(
@@ -40,7 +47,7 @@ export function SignupForm({
         password,
         options: {
           data: { full_name: name },
-          emailRedirectTo: authRedirectUrl(),
+          emailRedirectTo: authRedirectUrl(next),
         },
       })
       if (error) {
@@ -51,7 +58,7 @@ export function SignupForm({
         setConfirmationSent(true)
         return
       }
-      router.replace("/")
+      router.replace(next)
       router.refresh()
     }
   )
@@ -89,6 +96,7 @@ export function SignupForm({
                   type="email"
                   autoComplete="email"
                   placeholder="m@example.com"
+                  defaultValue={defaultEmail}
                   required
                   aria-invalid={!!errors.email}
                 />
@@ -142,7 +150,10 @@ export function SignupForm({
               </Field>
               <Field>
                 <FieldDescription className="text-center">
-                  Already have an account? <Link href="/login">Sign in</Link>
+                  Already have an account?{" "}
+                  <Link href={withParams("/login", next, defaultEmail)}>
+                    Sign in
+                  </Link>
                 </FieldDescription>
               </Field>
             </FieldGroup>
