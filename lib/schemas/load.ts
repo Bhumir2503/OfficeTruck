@@ -91,7 +91,18 @@ export type LoadAssignmentValues = z.output<typeof loadAssignmentSchema>
 export const loadSchema = z
   .object({
     reference: required("a load number", 50),
+    broker_id: z.preprocess(
+      (value) => (typeof value === "string" && value !== "" ? value : null),
+      z.uuid("Choose a broker.").nullable()
+    ),
     broker_name: required("the broker", 120),
+    rate_con_from: z.preprocess(
+      (value) =>
+        typeof value === "string" && value.trim() !== ""
+          ? value.trim().toLowerCase()
+          : null,
+      z.email("Enter the sender's full email address.").nullable()
+    ),
     pickup_location: required("the pickup location", 200),
     pickup_start: dateTime("Enter the pickup date and time."),
     pickup_end: optionalDateTime,

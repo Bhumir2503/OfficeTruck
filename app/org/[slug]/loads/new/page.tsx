@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
 import { NewLoadForm } from "@/components/loads/new-load-form"
+import { getBrokerOptions } from "@/lib/brokers"
 import { getDriverOptions } from "@/lib/drivers"
 import { getOrganization } from "@/lib/organizations"
 import { getTruckOptions } from "@/lib/trucks"
@@ -26,6 +27,8 @@ export default async function NewLoadPage({
           driversHref={`/org/${organization.slug}/drivers`}
           trucks={await getTruckOptions(organization.id)}
           trucksHref={`/org/${organization.slug}/equipment`}
+          brokers={await getBrokerOptions(organization.id)}
+          brokersHref={`/org/${organization.slug}/brokers`}
         />
       </div>
     </div>

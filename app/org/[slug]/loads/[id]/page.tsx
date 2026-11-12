@@ -3,10 +3,12 @@ import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 
+import { SenderWarning } from "@/components/brokers/sender-warning"
 import { LoadAssignmentForm } from "@/components/loads/load-assignment-form"
 import { LoadStatusMenu } from "@/components/loads/load-status-menu"
 import { SettingsCard } from "@/components/settings/settings-card"
 import { buttonVariants } from "@/components/ui/button"
+import { checkSender } from "@/lib/broker-format"
 import { formatRate, formatStopWindow } from "@/lib/load-format"
 import { getDriverOptions } from "@/lib/drivers"
 import { getLoad } from "@/lib/loads"
@@ -73,11 +75,33 @@ export default async function LoadPage({
         </Link>
         <SettingsCard
           title={`Load ${load.reference}`}
-          description={load.broker_name}
+          description={
+            load.broker ? (
+              <Link
+                href={`/org/${organization.slug}/brokers/${load.broker.id}`}
+                className="hover:underline"
+              >
+                {load.broker_name}
+              </Link>
+            ) : (
+              load.broker_name
+            )
+          }
           action={
             <LoadStatusMenu organizationId={organization.id} load={load} />
           }
         >
+          {load.rate_con_from && load.broker && (
+            <div className="mb-5">
+              <SenderWarning
+                check={checkSender(
+                  load.rate_con_from,
+                  load.broker.email_domains
+                )}
+                brokerName={load.broker_name}
+              />
+            </div>
+          )}
           <dl className="grid gap-5 sm:grid-cols-2">
             <Detail label="Pickup">
               {load.pickup_location}
