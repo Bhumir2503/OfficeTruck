@@ -12,6 +12,10 @@ type FieldErrors<Values> = Partial<Record<keyof Values, { message: string }[]>>
  *
  * `onValid` runs with the parsed values and may return a message to show as a
  * form-level error.
+ *
+ * Inputs a custom control fills in from state (a hidden input behind a date
+ * picker, say) don't fire change events; call `revalidate` with the form after
+ * they update.
  */
 export function useZodForm<Schema extends z.ZodType<Record<string, unknown>>>(
   schema: Schema,
@@ -42,10 +46,22 @@ export function useZodForm<Schema extends z.ZodType<Record<string, unknown>>>(
     return result
   }
 
+  function onChange(form: HTMLFormElement) {
+    setFormError(null)
+    if (attempted) {
+      validate(form)
+    }
+  }
+
   return {
     errors,
     formError,
     pending,
+    revalidate(form: HTMLFormElement | null) {
+      if (form) {
+        onChange(form)
+      }
+    },
     formProps: {
       noValidate: true,
       async onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -68,10 +84,7 @@ export function useZodForm<Schema extends z.ZodType<Record<string, unknown>>>(
         }
       },
       onChange(event: FormEvent<HTMLFormElement>) {
-        setFormError(null)
-        if (attempted) {
-          validate(event.currentTarget)
-        }
+        onChange(event.currentTarget)
       },
     },
   }
