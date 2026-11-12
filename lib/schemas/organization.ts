@@ -41,8 +41,9 @@ function optional(schema: z.ZodType<string>, clean = (value: string) => value) {
   )
 }
 
-// US states, DC and territories. Matches the check in the settings migration.
-const US_STATES = [
+// US states, DC and territories. Matches the checks in the settings and
+// drivers migrations.
+export const US_STATES = [
   "AL",
   "AK",
   "AZ",
