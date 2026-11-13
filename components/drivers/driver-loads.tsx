@@ -15,8 +15,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { driverPay } from "@/lib/driver-format"
-import type { Driver, DriverLoad } from "@/lib/drivers"
+import { loadDriverPay } from "@/lib/driver-format"
+import type { DriverLoad } from "@/lib/drivers"
 import { formatRate, formatStopDate } from "@/lib/load-format"
 
 const miles = new Intl.NumberFormat("en-US")
@@ -24,11 +24,9 @@ const miles = new Intl.NumberFormat("en-US")
 /** The loads a driver has run, with miles, revenue and their pay. */
 export function DriverLoads({
   loads,
-  driver,
   loadsBase,
 }: {
   loads: DriverLoad[]
-  driver: Pick<Driver, "pay_type" | "pay_rate">
   /** /org/<slug>/loads */
   loadsBase: string
 }) {
@@ -46,7 +44,7 @@ export function DriverLoads({
   const counted = loads.filter((load) => load.status !== "cancelled")
   const totalMiles = counted.reduce((sum, load) => sum + (load.miles ?? 0), 0)
   const revenue = counted.reduce((sum, load) => sum + Number(load.rate), 0)
-  const pays = counted.map((load) => driverPay(driver, load))
+  const pays = counted.map((load) => loadDriverPay(load))
   const totalPay = pays.reduce<number>((sum, pay) => sum + (pay ?? 0), 0)
   const unpriced = pays.filter((pay) => pay === null).length
 
@@ -54,7 +52,7 @@ export function DriverLoads({
     `${counted.length} ${counted.length === 1 ? "load" : "loads"}`,
     `${miles.format(totalMiles)} mi`,
     `${formatRate(revenue)} revenue`,
-    driver.pay_type
+    counted.some((load) => load.driver_pay_type)
       ? `${formatRate(totalPay)} driver pay${unpriced ? ` (${unpriced} without miles)` : ""}`
       : null,
   ]
@@ -64,7 +62,7 @@ export function DriverLoads({
   return (
     <SettingsCard
       title="Loads"
-      description="Driver pay uses their current rate."
+      description="Driver pay uses the rate locked on each load when they were assigned."
       contentClassName="px-0 pb-0"
       footer={<SettingsCardFooter hint={summary} />}
     >
@@ -82,7 +80,7 @@ export function DriverLoads({
         </TableHeader>
         <TableBody>
           {loads.map((load) => {
-            const pay = driverPay(driver, load)
+            const pay = loadDriverPay(load)
             const cancelled = load.status === "cancelled"
             return (
               <TableRow key={load.id}>

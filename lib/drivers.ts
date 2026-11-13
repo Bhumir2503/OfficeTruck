@@ -101,6 +101,9 @@ export type DriverLoad = {
   rate: number
   miles: number | null
   status: LoadStatus
+  /** The pay rate locked onto the load when this driver was assigned. */
+  driver_pay_type: PayType | null
+  driver_pay_rate: number | null
 }
 
 /** The loads a driver has been assigned, newest pickup first. */
@@ -112,7 +115,7 @@ export async function getDriverLoads(
   const { data, error } = await supabase
     .from("loads")
     .select(
-      "id, reference, pickup_location, delivery_location, pickup_start, rate, miles, status"
+      "id, reference, pickup_location, delivery_location, pickup_start, rate, miles, status, driver_pay_type, driver_pay_rate"
     )
     .eq("organization_id", organizationId)
     .eq("driver_id", driverId)

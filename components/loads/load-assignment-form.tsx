@@ -28,7 +28,7 @@ import { formatRate } from "@/lib/load-format"
 import type { DriverOption } from "@/lib/drivers"
 import type { Load } from "@/lib/loads"
 import type { TruckOption } from "@/lib/trucks"
-import { driverPay, formatPay } from "@/lib/driver-format"
+import { formatPay, loadDriverPay } from "@/lib/driver-format"
 import { loadAssignmentSchema } from "@/lib/schemas/load"
 
 /** Why there's no pay figure, or the figure itself. */
@@ -38,15 +38,20 @@ function payHint(load: Load) {
       ? `Typed in as "${load.driver_name}". Pick the driver to link the load to them.`
       : "Pick a driver to see their pay for this load."
   }
-  const rate = formatPay(load.driver.pay_type, load.driver.pay_rate)
-  if (!rate) {
-    return `${load.driver.full_name} has no pay rate yet.`
+  const locked = formatPay(load.driver_pay_type, load.driver_pay_rate)
+  if (!locked) {
+    return `${load.driver.full_name} has no pay rate yet. It's filled in when you save once they have one.`
   }
-  const pay = driverPay(load.driver, load)
-  if (pay === null) {
-    return `Add the miles to work out pay at ${rate}.`
-  }
-  return `Driver pay: ${formatRate(pay)} at ${rate}.`
+  const pay = loadDriverPay(load)
+  const amount =
+    pay === null
+      ? `Add the miles to work out pay at ${locked}`
+      : `Driver pay: ${formatRate(pay)} at ${locked}`
+  // The rate on the load stays as it was when the driver was assigned.
+  const current = formatPay(load.driver.pay_type, load.driver.pay_rate)
+  return current && current !== locked
+    ? `${amount}, locked when assigned. Their rate is now ${current}.`
+    : `${amount}, locked when assigned.`
 }
 
 function MilesField({

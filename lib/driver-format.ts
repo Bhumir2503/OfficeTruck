@@ -195,3 +195,23 @@ export function driverPay(
       return rate
   }
 }
+
+/** The pay rate locked onto a load when its driver was assigned. */
+export type LockedPay = {
+  driver_pay_type: PayType | null
+  driver_pay_rate: number | null
+}
+
+/**
+ * What the driver earns on a load, at the rate locked onto it when they were
+ * assigned (not their rate today). Null when there's no rate, or a per-mile
+ * rate on a load without miles.
+ */
+export function loadDriverPay(
+  load: LockedPay & { rate: number; miles: number | null }
+) {
+  return driverPay(
+    { pay_type: load.driver_pay_type, pay_rate: load.driver_pay_rate },
+    load
+  )
+}
