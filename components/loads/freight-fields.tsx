@@ -191,7 +191,6 @@ export function FreightFields({
         name="trailer_number"
         label="Trailer number"
         placeholder="e.g. 53104"
-        hint="Can wait until dispatch."
         defaultValue={defaults?.trailer_number ?? ""}
         errors={errors}
         className="sm:col-span-2"

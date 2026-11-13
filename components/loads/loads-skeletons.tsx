@@ -127,9 +127,17 @@ function FieldSkeleton({
 }
 
 /** A date button and a time input, side by side. */
-function DateTimeSkeleton({ label, hint }: { label: string; hint: string }) {
+function DateTimeSkeleton({
+  label,
+  hint,
+  className,
+}: {
+  label: string
+  hint: string
+  className?: string
+}) {
   return (
-    <Field>
+    <Field className={className}>
       <FieldLabel>{label}</FieldLabel>
       <div className="flex gap-2">
         <Skeleton className="h-9 flex-1" />
@@ -140,18 +148,103 @@ function DateTimeSkeleton({ label, hint }: { label: string; hint: string }) {
   )
 }
 
-function StopSkeleton({ title }: { title: string }) {
+/** One stop in the stops editor: a numbered header and its fields. */
+function StopRowSkeleton({
+  number,
+  kind,
+}: {
+  number: number
+  kind: "pickup" | "delivery"
+}) {
   return (
-    <SettingsCard title={title}>
-      <div className="grid gap-5 sm:grid-cols-2">
-        <FieldSkeleton label="Location" className="sm:col-span-2" />
-        <DateTimeSkeleton label="From" hint="Local time at the stop." />
+    <li className="flex flex-col gap-4 rounded-lg border p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span
+            className={cn(
+              "flex size-7 items-center justify-center rounded-full text-xs font-semibold",
+              kind === "pickup"
+                ? "bg-sky-500/10 text-sky-700 dark:text-sky-300"
+                : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+            )}
+          >
+            {number}
+          </span>
+          <Skeleton className="h-8 w-32 rounded-md" />
+        </div>
+        {/* Move up, move down, remove. */}
+        <div className="flex items-center gap-1">
+          <Skeleton className="size-8 rounded-md" />
+          <Skeleton className="size-8 rounded-md" />
+          <Skeleton className="size-8 rounded-md" />
+        </div>
+      </div>
+      <div className="grid gap-5 sm:grid-cols-6">
+        <FieldSkeleton label="Address" className="sm:col-span-4" />
+        <FieldSkeleton
+          label={kind === "pickup" ? "Pickup number" : "Delivery number"}
+          className="sm:col-span-2"
+        />
         <DateTimeSkeleton
-          label="To (optional)"
-          hint="Leave the date blank for a set appointment."
+          label="Appointment"
+          hint="Local time at the stop."
+          className="sm:col-span-3"
+        />
+        <DateTimeSkeleton
+          label="Window ends (optional)"
+          hint="Leave blank for a set appointment."
+          className="sm:col-span-3"
         />
       </div>
-    </SettingsCard>
+    </li>
+  )
+}
+
+/** One charge field; only the first row shows the column labels. */
+function ChargeCellSkeleton({
+  label,
+  showLabel,
+  className,
+}: {
+  label: string
+  showLabel: boolean
+  className: string
+}) {
+  return (
+    <Field className={className}>
+      {showLabel && <FieldLabel>{label}</FieldLabel>}
+      <Skeleton className="h-9 w-full" />
+    </Field>
+  )
+}
+
+/** One charge line; the first row carries the column labels. */
+function ChargeRowSkeleton({ labels = false }: { labels?: boolean }) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-12">
+      <ChargeCellSkeleton
+        label="Charge"
+        showLabel={labels}
+        className="sm:col-span-3"
+      />
+      <ChargeCellSkeleton
+        label="Note"
+        showLabel={labels}
+        className="sm:col-span-5"
+      />
+      <ChargeCellSkeleton
+        label="Amount"
+        showLabel={labels}
+        className="sm:col-span-3"
+      />
+      <div
+        className={
+          labels ? "flex items-end sm:col-span-1" : "flex sm:col-span-1"
+        }
+      >
+        <Skeleton className="size-9 rounded-md" />
+      </div>
+    </div>
   )
 }
 
@@ -161,33 +254,83 @@ export function NewLoadSkeleton() {
       <div className="mx-auto flex max-w-5xl flex-col gap-6">
         <SettingsCard
           title="Load"
-          description="From the rate confirmation."
+          description="Typed in from the rate con. Reading it from a photo, PDF or email is coming next."
           contentClassName="grid gap-5 sm:grid-cols-6"
         >
-          <FieldSkeleton label="Load number" className="sm:col-span-3" />
-          <FieldSkeleton label="Rate (USD)" className="sm:col-span-3" />
+          <FieldSkeleton label="Load number" className="sm:col-span-6" />
+          <FieldSkeleton
+            label="Reference numbers"
+            hint="PO, order or other numbers the shipper or receiver goes by."
+            className="sm:col-span-6"
+          />
+          <FieldSkeleton label="Equipment" className="sm:col-span-2" />
+          <FieldSkeleton label="Commodity" className="sm:col-span-2" />
+          <FieldSkeleton label="Weight (lbs)" className="sm:col-span-2" />
+          <FieldSkeleton label="Trailer number" className="sm:col-span-2" />
         </SettingsCard>
         <SettingsCard
           title="Broker"
           description="Who booked it, and who sent the rate con."
           contentClassName="grid gap-5 sm:grid-cols-6"
         >
-          <FieldSkeleton
-            label="Broker"
-            hint="Their FMCSA status and terms show below."
-            className="sm:col-span-3"
-          />
-          <FieldSkeleton
-            label="Rate con from"
-            hint="Checked against the broker's known email domains."
-            className="sm:col-span-3"
-          />
+          <FieldSkeleton label="Broker" className="sm:col-span-3" />
+          <FieldSkeleton label="Rate con from" className="sm:col-span-3" />
         </SettingsCard>
-        <StopSkeleton title="Pickup" />
-        <StopSkeleton title="Delivery" />
+        <SettingsCard
+          title="Stops"
+          description="Every pickup and delivery, with its appointment and number."
+        >
+          <div className="flex flex-col gap-4">
+            <ol className="flex flex-col gap-4">
+              <StopRowSkeleton number={1} kind="pickup" />
+              <StopRowSkeleton number={2} kind="delivery" />
+            </ol>
+            {/* Add pickup, add delivery. */}
+            <div className="flex flex-wrap items-center gap-2">
+              <Skeleton className="h-8 w-28 rounded-md" />
+              <Skeleton className="h-8 w-32 rounded-md" />
+            </div>
+            <FieldDescription>
+              In the order they&apos;re run: start with a pickup, end with a
+              delivery.
+            </FieldDescription>
+          </div>
+        </SettingsCard>
+        <SettingsCard
+          title="Charges"
+          description="From the rate con. Accessorials run up on the road are added to the load later."
+        >
+          <div className="flex flex-col gap-5">
+            <div className="flex flex-col gap-3">
+              <ChargeRowSkeleton labels />
+              <ChargeRowSkeleton />
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+                <Skeleton className="h-8 w-24 rounded-md" />
+                <p className="text-sm">
+                  <span className="text-muted-foreground">Total </span>
+                  <span className="inline-block h-4 w-14 animate-pulse rounded-md bg-muted align-middle" />
+                </p>
+              </div>
+              <FieldDescription>
+                Linehaul and fuel surcharge on their own lines. Blank lines are
+                skipped.
+              </FieldDescription>
+            </div>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <FieldSkeleton
+                label="Detention free hours"
+                hint="At each stop, from the rate con."
+              />
+              <FieldSkeleton
+                label="Detention per hour"
+                hint="After the free hours run out."
+              />
+            </div>
+          </div>
+        </SettingsCard>
         <SettingsCard
           title="Assignment"
-          description="Optional. You can fill these in later."
+          description="Truck and driver can stay empty until the load is dispatched."
           contentClassName="grid gap-5 sm:grid-cols-2"
           footer={
             <SettingsCardFooter hint="New loads start as booked.">
@@ -285,11 +428,7 @@ export function LoadDetailSkeleton() {
           }
         >
           <FieldSkeleton label="Broker" className="sm:col-span-3" />
-          <FieldSkeleton
-            label="Rate con from"
-            hint="Checked against the broker's known email domains."
-            className="sm:col-span-3"
-          />
+          <FieldSkeleton label="Rate con from" className="sm:col-span-3" />
         </SettingsCard>
         <SettingsCard
           title="Truck, driver and miles"
