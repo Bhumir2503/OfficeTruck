@@ -57,13 +57,11 @@ function payHint(load: Load) {
 function MilesField({
   name,
   label,
-  hint,
   value,
   errors,
 }: {
   name: "miles" | "empty_miles"
   label: string
-  hint: string
   value: number | null
   errors?: { message: string }[]
 }) {
@@ -80,11 +78,7 @@ function MilesField({
         aria-invalid={!!errors}
         onChange={handleMilesInput}
       />
-      {errors ? (
-        <FieldError errors={errors} />
-      ) : (
-        <FieldDescription>{hint}</FieldDescription>
-      )}
+      <FieldError errors={errors} />
     </Field>
   )
 }
@@ -205,14 +199,12 @@ export function LoadAssignmentForm({
           <MilesField
             name="miles"
             label="Loaded miles"
-            hint="Pickup to delivery. Used for per-mile pay."
             value={load.miles}
             errors={errors.miles}
           />
           <MilesField
             name="empty_miles"
             label="Empty miles"
-            hint="Deadhead to the pickup. Counts toward cost per mile."
             value={load.empty_miles}
             errors={errors.empty_miles}
           />

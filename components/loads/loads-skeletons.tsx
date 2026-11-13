@@ -254,15 +254,11 @@ export function NewLoadSkeleton() {
       <div className="mx-auto flex max-w-5xl flex-col gap-6">
         <SettingsCard
           title="Load"
-          description="Typed in from the rate con. Reading it from a photo, PDF or email is coming next."
+          description="From the rate con."
           contentClassName="grid gap-5 sm:grid-cols-6"
         >
           <FieldSkeleton label="Load number" className="sm:col-span-6" />
-          <FieldSkeleton
-            label="Reference numbers"
-            hint="PO, order or other numbers the shipper or receiver goes by."
-            className="sm:col-span-6"
-          />
+          <FieldSkeleton label="Reference numbers" className="sm:col-span-6" />
           <FieldSkeleton label="Equipment" className="sm:col-span-2" />
           <FieldSkeleton label="Commodity" className="sm:col-span-2" />
           <FieldSkeleton label="Weight (lbs)" className="sm:col-span-2" />
@@ -311,20 +307,10 @@ export function NewLoadSkeleton() {
                   <span className="inline-block h-4 w-14 animate-pulse rounded-md bg-muted align-middle" />
                 </p>
               </div>
-              <FieldDescription>
-                Linehaul and fuel surcharge on their own lines. Blank lines are
-                skipped.
-              </FieldDescription>
             </div>
             <div className="grid gap-5 sm:grid-cols-2">
-              <FieldSkeleton
-                label="Detention free hours"
-                hint="At each stop, from the rate con."
-              />
-              <FieldSkeleton
-                label="Detention per hour"
-                hint="After the free hours run out."
-              />
+              <FieldSkeleton label="Detention free hours" />
+              <FieldSkeleton label="Detention per hour" />
             </div>
           </div>
         </SettingsCard>
@@ -340,18 +326,9 @@ export function NewLoadSkeleton() {
           }
         >
           <FieldSkeleton label="Truck" />
-          <FieldSkeleton
-            label="Driver"
-            hint="Filled in from the truck's default driver."
-          />
-          <FieldSkeleton
-            label="Loaded miles"
-            hint="Pickup to delivery. Used for per-mile pay."
-          />
-          <FieldSkeleton
-            label="Empty miles"
-            hint="Deadhead to the pickup. Counts toward cost per mile."
-          />
+          <FieldSkeleton label="Driver" />
+          <FieldSkeleton label="Loaded miles" />
+          <FieldSkeleton label="Empty miles" />
           <FieldSkeleton
             label="Notes"
             className="sm:col-span-2"
@@ -447,14 +424,8 @@ export function LoadDetailSkeleton() {
         >
           <FieldSkeleton label="Truck" />
           <FieldSkeleton label="Driver" />
-          <FieldSkeleton
-            label="Loaded miles"
-            hint="Pickup to delivery. Used for per-mile pay."
-          />
-          <FieldSkeleton
-            label="Empty miles"
-            hint="Deadhead to the pickup. Counts toward cost per mile."
-          />
+          <FieldSkeleton label="Loaded miles" />
+          <FieldSkeleton label="Empty miles" />
         </SettingsCard>
       </div>
     </div>

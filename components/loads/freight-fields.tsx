@@ -124,7 +124,6 @@ export function FreightFields({
         name="reference_numbers"
         label="Reference numbers"
         placeholder="e.g. PO 88213, SO 4471"
-        hint="PO, order or other numbers the shipper or receiver goes by."
         defaultValue={defaults?.reference_numbers ?? ""}
         errors={errors}
         className="sm:col-span-6"

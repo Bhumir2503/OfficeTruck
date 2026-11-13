@@ -82,7 +82,7 @@ export function NewLoadForm({
       <fieldset disabled={pending} className="flex flex-col gap-6">
         <SettingsCard
           title="Load"
-          description="Typed in from the rate con. Reading it from a photo, PDF or email is coming next."
+          description="From the rate con."
           contentClassName="grid gap-5 sm:grid-cols-6"
         >
           <TextField
@@ -202,17 +202,15 @@ export function NewLoadForm({
             />
             {errors.driver_id ? (
               <FieldError errors={errors.driver_id} />
-            ) : drivers.length === 0 ? (
-              <FieldDescription>
-                <Link href={driversHref} className="underline">
-                  Add drivers
-                </Link>{" "}
-                to pick them here.
-              </FieldDescription>
             ) : (
-              <FieldDescription>
-                Filled in from the truck&apos;s default driver.
-              </FieldDescription>
+              drivers.length === 0 && (
+                <FieldDescription>
+                  <Link href={driversHref} className="underline">
+                    Add drivers
+                  </Link>{" "}
+                  to pick them here.
+                </FieldDescription>
+              )
             )}
           </Field>
           <TextField
@@ -220,7 +218,6 @@ export function NewLoadForm({
             label="Loaded miles"
             inputMode="numeric"
             placeholder="e.g. 1,240"
-            hint="Pickup to delivery. Used for per-mile pay."
             errors={errors}
             onChange={handleMilesInput}
           />
@@ -229,7 +226,6 @@ export function NewLoadForm({
             label="Empty miles"
             inputMode="numeric"
             placeholder="e.g. 85"
-            hint="Deadhead to the pickup. Counts toward cost per mile."
             errors={errors}
             onChange={handleMilesInput}
           />
