@@ -33,6 +33,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useZodForm } from "@/hooks/use-zod-form"
 import { fmcsaFlags } from "@/lib/broker-format"
 import type { Broker } from "@/lib/brokers"
+import { formatPhone, handlePhoneInput, handlePhoneKeyDown } from "@/lib/phone"
 import {
   describeSubmission,
   type FactoringCompany,
@@ -58,6 +59,7 @@ type Defaults = Partial<
     | "dba_name"
     | "mc_number"
     | "dot_number"
+    | "phone"
     | "address_line1"
     | "address_line2"
     | "city"
@@ -309,6 +311,9 @@ export function BrokerForm({
   const [factored, setFactored] = useState(broker?.factored ?? false)
   const [noa, setNoa] = useState(broker?.noa_on_file ?? false)
   const [contacts, setContacts] = useState<ContactValues[]>([])
+  // Only on Add Broker; the broker page has its own control for this.
+  const [doNotUse, setDoNotUse] = useState(false)
+  const [doNotUseReason, setDoNotUseReason] = useState("")
 
   const { errors, formError, pending, formProps, revalidate } = useZodForm(
     brokerSchema,
@@ -321,7 +326,10 @@ export function BrokerForm({
         toast.success(`${values.legal_name} saved.`)
         return
       }
-      const result = await createBroker(organizationId, values, contacts)
+      const result = await createBroker(organizationId, values, contacts, {
+        do_not_use: doNotUse,
+        do_not_use_reason: doNotUse ? doNotUseReason : null,
+      })
       if ("error" in result) {
         return result.error
       }
@@ -357,6 +365,7 @@ export function BrokerForm({
                 legal_name: record.legal_name ?? undefined,
                 dba_name: record.dba_name,
                 dot_number: record.dot_number,
+                phone: record.phone,
                 address_line1: record.street,
                 city: record.city,
                 state: record.state,
@@ -367,7 +376,9 @@ export function BrokerForm({
           }}
         />
       )}
-      <form {...formProps} autoComplete="off" key={version}>
+      {/* The key goes before the spread: after it, React treats the children
+          as a list and warns about missing keys. */}
+      <form key={version} {...formProps} autoComplete="off">
         <input
           ref={methodRef}
           type="hidden"
@@ -430,12 +441,26 @@ export function BrokerForm({
               onChange={digitsOnly(8)}
             />
             <TextField
+              name="phone"
+              label="Main phone"
+              type="tel"
+              placeholder="(555) 123-4567"
+              defaultValue={
+                defaults.phone ? formatPhone(defaults.phone) : undefined
+              }
+              errors={errors}
+              className="sm:col-span-2"
+              onChange={handlePhoneInput}
+              onKeyDown={handlePhoneKeyDown}
+              hint="The number you'd call to check a rate con is real."
+            />
+            <TextField
               name="email_domains"
               label="Email domains"
               placeholder="e.g. tql.com"
               defaultValue={broker?.email_domains.join(", ")}
               errors={errors}
-              className="sm:col-span-6"
+              className="sm:col-span-4"
               onChange={handleLowercase}
               hint="Domains their people email from, separated by commas. Rate cons from any other domain get a warning."
             />
@@ -644,6 +669,33 @@ export function BrokerForm({
               )}
             </div>
           </SettingsCard>
+
+          {!broker && (
+            <SettingsCard
+              title="Do not use"
+              description="For a broker you're adding only to keep on record, e.g. one who never paid."
+            >
+              <div className="flex flex-col gap-3">
+                <Label className="flex items-center gap-3 font-normal">
+                  <Checkbox
+                    checked={doNotUse}
+                    onCheckedChange={(checked) => setDoNotUse(checked === true)}
+                  />
+                  Don&apos;t book loads with this broker
+                </Label>
+                {doNotUse && (
+                  <Textarea
+                    aria-label="Why not to use this broker"
+                    rows={2}
+                    maxLength={500}
+                    placeholder="Why? e.g. paid 90 days late twice"
+                    value={doNotUseReason}
+                    onChange={(event) => setDoNotUseReason(event.target.value)}
+                  />
+                )}
+              </div>
+            </SettingsCard>
+          )}
 
           <SettingsCard
             title="Notes"

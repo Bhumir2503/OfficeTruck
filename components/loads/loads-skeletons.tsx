@@ -275,6 +275,23 @@ export function LoadDetailSkeleton() {
           </div>
         </SettingsCard>
         <SettingsCard
+          title="Broker"
+          description="Who booked it, and who sent the rate con."
+          contentClassName="grid gap-5 sm:grid-cols-6"
+          footer={
+            <SettingsCardFooter hint="Linking a broker re-checks them with FMCSA.">
+              <Skeleton className="h-8 w-16 rounded-md bg-foreground/10" />
+            </SettingsCardFooter>
+          }
+        >
+          <FieldSkeleton label="Broker" className="sm:col-span-3" />
+          <FieldSkeleton
+            label="Rate con from"
+            hint="Checked against the broker's known email domains."
+            className="sm:col-span-3"
+          />
+        </SettingsCard>
+        <SettingsCard
           title="Truck, driver and miles"
           description={
             // The description is a <p>, so an inline placeholder.

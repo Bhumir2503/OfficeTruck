@@ -7,7 +7,12 @@ export type Load = {
   reference: string
   broker_name: string
   broker_id: string | null
-  broker: { id: string; legal_name: string; email_domains: string[] } | null
+  broker: {
+    id: string
+    legal_name: string
+    email_domains: string[]
+    phone: string | null
+  } | null
   /** Who sent the rate con, for the impersonation check. */
   rate_con_from: string | null
   pickup_location: string
@@ -42,7 +47,7 @@ export type Load = {
 }
 
 const LOAD_COLUMNS =
-  "id, reference, broker_name, broker_id, broker:brokers!loads_broker_fkey (id, legal_name, email_domains), rate_con_from, pickup_location, pickup_start, pickup_end, delivery_location, delivery_start, delivery_end, rate, status, driver_name, driver_id, driver:drivers!loads_driver_fkey (id, full_name, pay_type, pay_rate), miles, empty_miles, truck, truck_id, truck_link:trucks!loads_truck_fkey (id, unit_number), notes, created_at, updated_at"
+  "id, reference, broker_name, broker_id, broker:brokers!loads_broker_fkey (id, legal_name, email_domains, phone), rate_con_from, pickup_location, pickup_start, pickup_end, delivery_location, delivery_start, delivery_end, rate, status, driver_name, driver_id, driver:drivers!loads_driver_fkey (id, full_name, pay_type, pay_rate), miles, empty_miles, truck, truck_id, truck_link:trucks!loads_truck_fkey (id, unit_number), notes, created_at, updated_at"
 
 /** Every load in the organization, newest pickup first. */
 export async function getLoads(organizationId: string): Promise<Load[]> {

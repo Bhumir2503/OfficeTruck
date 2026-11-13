@@ -104,6 +104,9 @@ export const brokerSchema = z
     dot_number: docketNumber("USDOT number", (value) =>
       value.replace(/^\s*(US)?DOT[-#\s]*/i, "")
     ),
+    phone: optional(
+      max(30).regex(/^[0-9+().\-\s]+$/, "Enter a valid phone number.")
+    ),
     address_line1: optional(max(200)),
     address_line2: optional(max(200)),
     city: optional(max(100)),

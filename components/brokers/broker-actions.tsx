@@ -1,6 +1,6 @@
 "use client"
 
-import { Ban, RefreshCw, Trash2, UserPlus } from "lucide-react"
+import { Ban, Pencil, RefreshCw, Trash2, UserPlus } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
 
@@ -9,6 +9,7 @@ import {
   removeContact,
   runFmcsaCheck,
   setDoNotUse,
+  updateContact,
 } from "@/app/org/[slug]/brokers/actions"
 import {
   SettingsCard,
@@ -158,6 +159,195 @@ export function DoNotUseControl({
   )
 }
 
+/** One contact, shown as text, or as fields while it's being edited. */
+function ContactRow({
+  organizationId,
+  contact,
+  removing,
+  onRemove,
+}: {
+  organizationId: string
+  contact: BrokerContact
+  removing: boolean
+  onRemove: () => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [role, setRole] = useState<ContactRole>(contact.role)
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [pending, setPending] = useState(false)
+  const idFor = (field: string) => `contact-${contact.id}-${field}`
+
+  async function save(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const data = new FormData(event.currentTarget)
+    const parsed = contactSchema.safeParse({
+      name: data.get("name"),
+      role,
+      email: data.get("email"),
+      phone: data.get("phone"),
+    })
+    if (!parsed.success) {
+      setErrors(
+        Object.fromEntries(
+          parsed.error.issues.map((issue) => [
+            String(issue.path[0]),
+            issue.message,
+          ])
+        )
+      )
+      return
+    }
+    setErrors({})
+    setPending(true)
+    const result = await updateContact(organizationId, contact.id, parsed.data)
+    setPending(false)
+    if ("error" in result) {
+      setErrors({ form: result.error })
+      return
+    }
+    setEditing(false)
+    toast.success(`${parsed.data.name} saved.`)
+  }
+
+  const error = (name: string) =>
+    errors[name] ? [{ message: errors[name] }] : undefined
+
+  if (editing) {
+    return (
+      <li className="px-4 py-3">
+        <form onSubmit={save} noValidate className="flex flex-col gap-3">
+          <fieldset disabled={pending} className="grid gap-3 sm:grid-cols-12">
+            <Field data-invalid={!!errors.name} className="sm:col-span-3">
+              <FieldLabel htmlFor={idFor("name")}>Name</FieldLabel>
+              <Input
+                id={idFor("name")}
+                name="name"
+                defaultValue={contact.name}
+                autoFocus
+              />
+              <FieldError errors={error("name")} />
+            </Field>
+            <Field className="sm:col-span-2">
+              <FieldLabel htmlFor={idFor("role")}>Role</FieldLabel>
+              <Select
+                value={role}
+                onValueChange={(value) => setRole(value as ContactRole)}
+                items={CONTACT_ROLES.map((value) => ({
+                  value,
+                  label: CONTACT_ROLE_LABELS[value],
+                }))}
+              >
+                <SelectTrigger id={idFor("role")} className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CONTACT_ROLES.map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {CONTACT_ROLE_LABELS[value]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field data-invalid={!!errors.email} className="sm:col-span-4">
+              <FieldLabel htmlFor={idFor("email")}>Email</FieldLabel>
+              <Input
+                id={idFor("email")}
+                name="email"
+                type="email"
+                defaultValue={contact.email ?? undefined}
+              />
+              <FieldError errors={error("email")} />
+            </Field>
+            <Field data-invalid={!!errors.phone} className="sm:col-span-3">
+              <FieldLabel htmlFor={idFor("phone")}>Phone</FieldLabel>
+              <Input
+                id={idFor("phone")}
+                name="phone"
+                type="tel"
+                defaultValue={
+                  contact.phone ? formatPhone(contact.phone) : undefined
+                }
+                onChange={handlePhoneInput}
+                onKeyDown={handlePhoneKeyDown}
+              />
+              <FieldError errors={error("phone")} />
+            </Field>
+          </fieldset>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-destructive" role="status">
+              {errors.form}
+            </p>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={pending}
+                onClick={() => {
+                  setEditing(false)
+                  setErrors({})
+                  setRole(contact.role)
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" size="sm" disabled={pending}>
+                {pending ? "Saving…" : "Save"}
+              </Button>
+            </div>
+          </div>
+        </form>
+      </li>
+    )
+  }
+
+  return (
+    <li className="flex items-center justify-between gap-3 px-4 py-3">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="truncate font-medium">{contact.name}</span>
+          <span className="rounded-4xl bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+            {CONTACT_ROLE_LABELS[contact.role]}
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-x-3 text-sm text-muted-foreground">
+          {contact.email && (
+            <a href={`mailto:${contact.email}`} className="hover:underline">
+              {contact.email}
+            </a>
+          )}
+          {contact.phone && (
+            <a href={`tel:${contact.phone}`} className="hover:underline">
+              {formatPhone(contact.phone)}
+            </a>
+          )}
+        </div>
+      </div>
+      <div className="flex shrink-0 gap-1">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`Edit ${contact.name}`}
+          disabled={removing}
+          onClick={() => setEditing(true)}
+        >
+          <Pencil />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`Remove ${contact.name}`}
+          disabled={removing}
+          onClick={onRemove}
+        >
+          <Trash2 />
+        </Button>
+      </div>
+    </li>
+  )
+}
+
 /** The broker's people: who to call for loads, who to ask about payment. */
 export function ContactsCard({
   organizationId,
@@ -234,46 +424,13 @@ export function ContactsCard({
       ) : (
         <ul className="divide-y rounded-lg border">
           {contacts.map((contact) => (
-            <li
+            <ContactRow
               key={contact.id}
-              className="flex items-center justify-between gap-3 px-4 py-3"
-            >
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="truncate font-medium">{contact.name}</span>
-                  <span className="rounded-4xl bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                    {CONTACT_ROLE_LABELS[contact.role]}
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-x-3 text-sm text-muted-foreground">
-                  {contact.email && (
-                    <a
-                      href={`mailto:${contact.email}`}
-                      className="hover:underline"
-                    >
-                      {contact.email}
-                    </a>
-                  )}
-                  {contact.phone && (
-                    <a
-                      href={`tel:${contact.phone}`}
-                      className="hover:underline"
-                    >
-                      {formatPhone(contact.phone)}
-                    </a>
-                  )}
-                </div>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`Remove ${contact.name}`}
-                disabled={removing === contact.id}
-                onClick={() => remove(contact)}
-              >
-                <Trash2 />
-              </Button>
-            </li>
+              organizationId={organizationId}
+              contact={contact}
+              removing={removing === contact.id}
+              onRemove={() => remove(contact)}
+            />
           ))}
         </ul>
       )}

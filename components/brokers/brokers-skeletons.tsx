@@ -143,11 +143,31 @@ function BrokerFormSkeleton({ editing = false }: { editing?: boolean }) {
         />
         <FieldSkeleton label="USDOT number" className="sm:col-span-3" />
         <FieldSkeleton
+          label="Main phone"
+          hint="The number you'd call to check a rate con is real."
+          className="sm:col-span-2"
+        />
+        <FieldSkeleton
           label="Email domains"
           hint="Domains their people email from, separated by commas. Rate cons from any other domain get a warning."
-          className="sm:col-span-6"
+          className="sm:col-span-4"
         />
       </SettingsCard>
+      {!editing && (
+        <SettingsCard
+          title="Contacts"
+          description="Optional. Dispatch for loads, billing and accounting for payment. Saved with the broker."
+          contentClassName="flex flex-col gap-5"
+        >
+          <div className="grid gap-3 sm:grid-cols-12">
+            <FieldSkeleton label="Name" className="sm:col-span-3" />
+            <FieldSkeleton label="Role" className="sm:col-span-2" />
+            <FieldSkeleton label="Email" className="sm:col-span-4" />
+            <FieldSkeleton label="Phone" className="sm:col-span-3" />
+          </div>
+          <Skeleton className="ml-auto h-8 w-28 rounded-md" />
+        </SettingsCard>
+      )}
       <SettingsCard
         title="Mailing address"
         description="Where paper invoices and checks go."
@@ -200,6 +220,14 @@ function BrokerFormSkeleton({ editing = false }: { editing?: boolean }) {
       >
         <Skeleton className="h-4 w-56" />
       </SettingsCard>
+      {!editing && (
+        <SettingsCard
+          title="Do not use"
+          description="For a broker you're adding only to keep on record, e.g. one who never paid."
+        >
+          <Skeleton className="h-4 w-56" />
+        </SettingsCard>
+      )}
       <SettingsCard
         title="Notes"
         footer={
@@ -267,6 +295,7 @@ export function BrokerDetailSkeleton() {
             <DetailSkeleton label="Terms" width="w-20" />
             <DetailSkeleton label="Invoices" width="w-44" />
             <DetailSkeleton label="Factoring" width="w-24" />
+            <DetailSkeleton label="Main phone" width="w-28" />
             <DetailSkeleton label="Email domains" width="w-24" />
             <DetailSkeleton label="Mailing address" width="w-40" />
           </div>

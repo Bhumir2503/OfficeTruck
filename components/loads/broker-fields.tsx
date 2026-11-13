@@ -131,6 +131,7 @@ export function BrokerFields({
   brokers,
   brokersHref,
   factoringName,
+  defaults,
   errors,
   onUpdate,
 }: {
@@ -139,6 +140,12 @@ export function BrokerFields({
   brokersHref: string
   /** Your factoring company, for factored brokers. */
   factoringName: string | null
+  /** What an existing load already has, when changing its broker. */
+  defaults?: {
+    brokerId: string | null
+    brokerName: string
+    sender: string | null
+  }
   errors: {
     broker_id?: FieldErrors
     broker_name?: FieldErrors
@@ -147,8 +154,15 @@ export function BrokerFields({
   onUpdate: (form: HTMLFormElement | null) => void
 }) {
   // With no brokers yet, start on "type a name" so the field isn't empty.
-  const [choice, setChoice] = useState(brokers.length ? NONE : OTHER)
-  const [sender, setSender] = useState("")
+  const [choice, setChoice] = useState(() => {
+    if (defaults?.brokerId && brokers.some((b) => b.id === defaults.brokerId)) {
+      return defaults.brokerId
+    }
+    // A load booked with only a typed name keeps it, ready to swap for a broker.
+    if (defaults?.brokerName) return OTHER
+    return brokers.length ? NONE : OTHER
+  })
+  const [sender, setSender] = useState(defaults?.sender ?? "")
   const hiddenRef = useRef<HTMLInputElement>(null)
   const firstRender = useRef(true)
 
@@ -220,10 +234,11 @@ export function BrokerFields({
           <Input
             id={brokers.length ? "load-broker-name" : "load-broker-id"}
             name="broker_name"
+            defaultValue={defaults?.brokerId ? undefined : defaults?.brokerName}
             placeholder="e.g. TQL"
             aria-label={brokers.length ? "Broker name" : undefined}
             aria-invalid={!!nameErrors}
-            autoFocus={brokers.length > 0}
+            autoFocus={brokers.length > 0 && !defaults}
           />
         )}
         {nameErrors ? (
@@ -268,6 +283,7 @@ export function BrokerFields({
             <SenderWarning
               check={checkSender(sender, broker.email_domains)}
               brokerName={broker.dba_name ?? broker.legal_name}
+              phone={broker.phone}
             />
           )}
           {broker && (

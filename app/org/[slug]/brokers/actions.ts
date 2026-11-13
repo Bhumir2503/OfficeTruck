@@ -105,7 +105,11 @@ export async function lookupMc(
 export async function createBroker(
   organizationId: string,
   input: BrokerValues,
-  contactsInput: ContactValues[] = []
+  contactsInput: ContactValues[] = [],
+  doNotUseInput: { do_not_use: boolean; do_not_use_reason: string | null } = {
+    do_not_use: false,
+    do_not_use_reason: null,
+  }
 ): Promise<CreateBrokerResult> {
   if (!(await isMember(organizationId))) {
     return { error: NOT_MEMBER }
@@ -121,11 +125,22 @@ export async function createBroker(
     }
   }
   const contacts = contactsParsed.data
+  const doNotUse = doNotUseSchema.safeParse(doNotUseInput)
+  if (!doNotUse.success) {
+    return { error: doNotUse.error.issues[0]?.message ?? "Check the reason." }
+  }
 
   const supabase = await createClient()
   const { data, error } = await supabase
     .from("brokers")
-    .insert({ ...parsed.data, organization_id: organizationId })
+    .insert({
+      ...parsed.data,
+      do_not_use: doNotUse.data.do_not_use,
+      do_not_use_reason: doNotUse.data.do_not_use
+        ? doNotUse.data.do_not_use_reason
+        : null,
+      organization_id: organizationId,
+    })
     .select("id")
     .single()
 
@@ -299,6 +314,35 @@ export async function removeContact(
   }
   if (!data.length) {
     return { error: "That contact was already removed." }
+  }
+  refresh()
+  return { ok: true }
+}
+
+export async function updateContact(
+  organizationId: string,
+  contactId: string,
+  input: ContactValues
+): Promise<ActionResult> {
+  if (!(await isMember(organizationId))) {
+    return { error: NOT_MEMBER }
+  }
+  const parsed = contactSchema.safeParse(input)
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Check the contact." }
+  }
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("broker_contacts")
+    .update(parsed.data)
+    .eq("organization_id", organizationId)
+    .eq("id", contactId)
+    .select("id")
+  if (error) {
+    return { error: error.message }
+  }
+  if (!data.length) {
+    return { error: "That contact was removed." }
   }
   refresh()
   return { ok: true }

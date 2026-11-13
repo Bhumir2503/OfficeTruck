@@ -9,6 +9,8 @@ export type Broker = {
   dba_name: string | null
   mc_number: string | null
   dot_number: string | null
+  /** The main number, as you know it. */
+  phone: string | null
   address_line1: string | null
   address_line2: string | null
   city: string | null
@@ -33,7 +35,7 @@ export type Broker = {
 export type BrokerWithFmcsa = Broker & { fmcsa: FmcsaRecord | null }
 
 const BROKER_COLUMNS =
-  "id, legal_name, dba_name, mc_number, dot_number, address_line1, address_line2, city, state, postal_code, email_domains, invoice_method, billing_emails, portal_url, payment_terms_days, quick_pay_fee_percent, factored, noa_on_file, do_not_use, do_not_use_reason, notes, created_at, updated_at"
+  "id, legal_name, dba_name, mc_number, dot_number, phone, address_line1, address_line2, city, state, postal_code, email_domains, invoice_method, billing_emails, portal_url, payment_terms_days, quick_pay_fee_percent, factored, noa_on_file, do_not_use, do_not_use_reason, notes, created_at, updated_at"
 
 /**
  * FMCSA records for these MC numbers, by MC number. The shared table has no
@@ -162,6 +164,7 @@ export type BrokerOption = Pick<
   | "legal_name"
   | "dba_name"
   | "mc_number"
+  | "phone"
   | "email_domains"
   | "payment_terms_days"
   | "quick_pay_fee_percent"
@@ -181,6 +184,7 @@ export async function getBrokerOptions(
     legal_name: broker.legal_name,
     dba_name: broker.dba_name,
     mc_number: broker.mc_number,
+    phone: broker.phone,
     email_domains: broker.email_domains,
     payment_terms_days: broker.payment_terms_days,
     quick_pay_fee_percent: broker.quick_pay_fee_percent,

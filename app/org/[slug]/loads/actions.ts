@@ -7,6 +7,8 @@ import { checkFmcsa, FMCSA_COLUMNS, type FmcsaRecord } from "@/lib/fmcsa"
 import { getMyOrganizations, getUser } from "@/lib/organizations"
 import {
   loadAssignmentSchema,
+  loadBrokerSchema,
+  type LoadBrokerValues,
   loadSchema,
   loadStatusSchema,
   type LoadAssignmentValues,
@@ -162,6 +164,48 @@ export async function updateLoadAssignment(
     return { error: "That load doesn't exist anymore." }
   }
 
+  refresh()
+  return { ok: true }
+}
+
+/** Changes the broker on a load (or links a typed name to a broker), and who sent the rate con. */
+export async function updateLoadBroker(
+  organizationId: string,
+  loadId: string,
+  input: LoadBrokerValues
+): Promise<ActionResult> {
+  if (!(await isMember(organizationId))) {
+    return { error: "You aren't a member of this organization." }
+  }
+
+  const parsed = loadBrokerSchema.safeParse(input)
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Check the form." }
+  }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("loads")
+    .update(parsed.data)
+    .eq("organization_id", organizationId)
+    .eq("id", loadId)
+    .select("id")
+
+  if (error) {
+    return {
+      error:
+        error.code === "23503"
+          ? "That broker isn't in this organization anymore."
+          : error.message,
+    }
+  }
+  if (!data.length) {
+    return { error: "That load doesn't exist anymore." }
+  }
+
+  if (parsed.data.broker_id) {
+    await recheckBroker(organizationId, parsed.data.broker_id).catch(() => {})
+  }
   refresh()
   return { ok: true }
 }

@@ -3,14 +3,15 @@ import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 
-import { SenderWarning } from "@/components/brokers/sender-warning"
+import { LoadBrokerForm } from "@/components/loads/load-broker-form"
 import { LoadAssignmentForm } from "@/components/loads/load-assignment-form"
 import { LoadStatusMenu } from "@/components/loads/load-status-menu"
 import { SettingsCard } from "@/components/settings/settings-card"
 import { buttonVariants } from "@/components/ui/button"
-import { checkSender } from "@/lib/broker-format"
 import { formatRate, formatStopWindow } from "@/lib/load-format"
+import { getBrokerOptions } from "@/lib/brokers"
 import { getDriverOptions } from "@/lib/drivers"
+import { getFactoringCompany } from "@/lib/factoring"
 import { getLoad } from "@/lib/loads"
 import { getTruckOptions } from "@/lib/trucks"
 import { getOrganization } from "@/lib/organizations"
@@ -53,9 +54,11 @@ export default async function LoadPage({
   }
 
   const base = `/org/${organization.slug}/loads`
-  const [drivers, trucks] = await Promise.all([
+  const [drivers, trucks, brokers, factoring] = await Promise.all([
     getDriverOptions(organization.id),
     getTruckOptions(organization.id),
+    getBrokerOptions(organization.id),
+    getFactoringCompany(organization.id),
   ])
   const none = <span className="text-muted-foreground">Not set</span>
 
@@ -91,17 +94,6 @@ export default async function LoadPage({
             <LoadStatusMenu organizationId={organization.id} load={load} />
           }
         >
-          {load.rate_con_from && load.broker && (
-            <div className="mb-5">
-              <SenderWarning
-                check={checkSender(
-                  load.rate_con_from,
-                  load.broker.email_domains
-                )}
-                brokerName={load.broker_name}
-              />
-            </div>
-          )}
           <dl className="grid gap-5 sm:grid-cols-2">
             <Detail label="Pickup">
               {load.pickup_location}
@@ -139,6 +131,13 @@ export default async function LoadPage({
             </div>
           </dl>
         </SettingsCard>
+        <LoadBrokerForm
+          organizationId={organization.id}
+          load={load}
+          brokers={brokers}
+          brokersHref={`/org/${organization.slug}/brokers`}
+          factoringName={factoring?.name ?? null}
+        />
         <LoadAssignmentForm
           organizationId={organization.id}
           load={load}

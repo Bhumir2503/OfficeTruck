@@ -238,6 +238,15 @@ export default async function BrokerPage({
                 "Not factored"
               )}
             </Detail>
+            <Detail label="Main phone">
+              {broker.phone ? (
+                <a href={`tel:${broker.phone}`} className="hover:underline">
+                  {formatPhone(broker.phone)}
+                </a>
+              ) : (
+                none
+              )}
+            </Detail>
             <Detail label="Email domains">
               {broker.email_domains.length ? (
                 broker.email_domains.join(", ")

@@ -2,6 +2,7 @@ import { cn } from "cn"
 import { CircleHelp, ShieldAlert, ShieldCheck } from "lucide-react"
 
 import type { SenderCheck } from "@/lib/broker-format"
+import { formatPhone } from "@/lib/phone"
 
 /**
  * The impersonation check on a rate con sender: their email domain against
@@ -12,12 +13,15 @@ export function SenderWarning({
   check,
   email,
   brokerName,
+  phone,
   compact = false,
 }: {
   check: SenderCheck
   email?: string
   /** For the full message: "isn't one of TQL's domains". */
   brokerName?: string
+  /** The broker's main number, to call back on when the sender looks wrong. */
+  phone?: string | null
   /** A one-line version for tables. */
   compact?: boolean
 }) {
@@ -94,8 +98,18 @@ export function SenderWarning({
         {check.state === "mismatch" && (
           <>
             <span className="font-medium">{check.domain}</span> isn&apos;t one
-            of {whose} known domains. Someone may be posing as this broker: call
-            them on a number you already have before hauling.
+            of {whose} known domains. Someone may be posing as this broker:{" "}
+            {phone ? (
+              <>
+                call them on{" "}
+                <a href={`tel:${phone}`} className="font-medium underline">
+                  {formatPhone(phone)}
+                </a>
+              </>
+            ) : (
+              "call them on a number you already have"
+            )}{" "}
+            before hauling.
           </>
         )}
         {check.state === "unknown" && (

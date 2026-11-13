@@ -88,21 +88,31 @@ export const loadAssignmentSchema = z.object({
 export type LoadAssignmentInput = z.input<typeof loadAssignmentSchema>
 export type LoadAssignmentValues = z.output<typeof loadAssignmentSchema>
 
+// The broker on a load: one of yours (broker_id), or just a name, plus who
+// sent the rate con. Shared by New Load and the load page.
+const brokerFields = {
+  broker_id: z.preprocess(
+    (value) => (typeof value === "string" && value !== "" ? value : null),
+    z.uuid("Choose a broker.").nullable()
+  ),
+  broker_name: required("the broker", 120),
+  rate_con_from: z.preprocess(
+    (value) =>
+      typeof value === "string" && value.trim() !== ""
+        ? value.trim().toLowerCase()
+        : null,
+    z.email("Enter the sender's full email address.").nullable()
+  ),
+}
+
+/** The broker on a load, which can be changed after it's booked. */
+export const loadBrokerSchema = z.object(brokerFields)
+export type LoadBrokerValues = z.output<typeof loadBrokerSchema>
+
 export const loadSchema = z
   .object({
     reference: required("a load number", 50),
-    broker_id: z.preprocess(
-      (value) => (typeof value === "string" && value !== "" ? value : null),
-      z.uuid("Choose a broker.").nullable()
-    ),
-    broker_name: required("the broker", 120),
-    rate_con_from: z.preprocess(
-      (value) =>
-        typeof value === "string" && value.trim() !== ""
-          ? value.trim().toLowerCase()
-          : null,
-      z.email("Enter the sender's full email address.").nullable()
-    ),
+    ...brokerFields,
     pickup_location: required("the pickup location", 200),
     pickup_start: dateTime("Enter the pickup date and time."),
     pickup_end: optionalDateTime,
