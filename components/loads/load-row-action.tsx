@@ -1,6 +1,7 @@
 "use client"
 
 import {
+  AlertTriangle,
   Clock,
   MapPin,
   PackageCheck,
@@ -31,6 +32,7 @@ import {
 } from "@/components/ui/dialog"
 import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { useZodForm } from "@/hooks/use-zod-form"
+import { SCHEDULED_STATUSES, overlapping } from "@/lib/dispatch-format"
 import type { DriverOption } from "@/lib/drivers"
 import { formatStopDate, formatStopWindow } from "@/lib/load-format"
 import { LOAD_VIEW_LABELS, viewOf, type PaymentDue } from "@/lib/load-views"
@@ -46,6 +48,21 @@ export type RowActionContext = {
   shareRate: boolean
   /** /org/<slug> */
   orgBase: string
+  /** Every load, to spot a driver already on the road at the same time. */
+  loads: Load[]
+}
+
+/** The driver's other scheduled loads at the same time as this one. */
+function clashesFor(load: Load, driverId: string | null, loads: Load[]) {
+  if (!driverId) return []
+  return overlapping(
+    load,
+    loads.filter(
+      (other) =>
+        other.driver_id === driverId &&
+        (SCHEDULED_STATUSES as readonly string[]).includes(other.status)
+    )
+  )
 }
 
 type Action = "assign" | "send" | "loaded" | "delivered"
@@ -87,6 +104,7 @@ function AssignForm({
 }) {
   const [driverId, setDriverId] = useState<string | null>(load.driver_id)
   const [driverPicked, setDriverPicked] = useState(!!load.driver_id)
+  const clashes = clashesFor(load, driverId, context.loads)
   const { errors, formError, pending, formProps, revalidate } = useZodForm(
     loadAssignmentSchema,
     async (values) => {
@@ -105,7 +123,8 @@ function AssignForm({
       toast.success(
         `${driver?.full_name ?? "The driver"} is on load ${load.reference}. Send it when you're ready.`
       )
-      if (result.warning) {
+      // Already shown above the Assign button.
+      if (result.warning && clashes.length === 0) {
         toast.warning(result.warning)
       }
       onDone()
@@ -151,6 +170,37 @@ function AssignForm({
           />
           <FieldError errors={errors.driver_id} />
         </Field>
+        {clashes.length > 0 && (
+          <div
+            role="alert"
+            className="flex items-start gap-2 rounded-lg bg-amber-500/15 px-3 py-2 text-amber-800 dark:text-amber-200"
+          >
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+            <span>
+              {context.drivers.find((d) => d.id === driverId)?.full_name ??
+                "This driver"}{" "}
+              is already on{" "}
+              {clashes.map((other, index) => (
+                <span key={other.id}>
+                  {index > 0 && ", "}
+                  <Link
+                    href={`${context.orgBase}/loads/${other.id}`}
+                    className="font-medium underline"
+                  >
+                    {other.reference}
+                  </Link>{" "}
+                  ({formatStopDate(other.pickup_start)}
+                  {formatStopDate(other.pickup_start) !==
+                  formatStopDate(other.delivery_end ?? other.delivery_start)
+                    ? `–${formatStopDate(other.delivery_end ?? other.delivery_start)}`
+                    : ""}
+                  )
+                </span>
+              ))}{" "}
+              at the same time. You can still assign them.
+            </span>
+          </div>
+        )}
         {(context.trucks.length === 0 || context.drivers.length === 0) && (
           <p className="text-muted-foreground">
             Add{" "}

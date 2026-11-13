@@ -44,6 +44,7 @@ export default async function LoadsPage({
             trucks,
             shareRate: org?.share_rate_with_drivers ?? false,
             orgBase: `/org/${organization.slug}`,
+            loads,
           }}
           base={base}
         />
