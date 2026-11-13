@@ -85,7 +85,7 @@ export default async function DriverPage({
   const staleLoads = loads
     .filter(
       (load) =>
-        load.status === "booked" &&
+        (load.status === "booked" || load.status === "dispatched") &&
         currentRate !== null &&
         formatPay(load.driver_pay_type, load.driver_pay_rate) !== currentRate
     )

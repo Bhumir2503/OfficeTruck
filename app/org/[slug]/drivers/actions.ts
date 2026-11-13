@@ -186,7 +186,7 @@ export async function setDriverPhoto(
 export type ApplyRateResult = { error: string } | { ok: true; changed: number }
 
 /**
- * Moves a driver's booked loads onto their current pay rate. Loads in
+ * Moves a driver's booked and dispatched loads onto their current pay rate. Loads in
  * transit, delivered or invoiced keep the rate they were locked at.
  */
 export async function applyRateToUpcomingLoads(

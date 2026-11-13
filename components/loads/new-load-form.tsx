@@ -19,120 +19,23 @@ import {
   FieldError,
   FieldLabel,
 } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { BrokerFields } from "@/components/loads/broker-fields"
-import { DateTimeField } from "@/components/loads/date-time-field"
+import { ChargesEditor } from "@/components/loads/charges-editor"
+import { FreightFields, LoadTextField } from "@/components/loads/freight-fields"
+import { StopsEditor } from "@/components/loads/stops-editor"
 import { TruckSelect } from "@/components/loads/truck-select"
 import {
   DriverSelect,
   handleMilesInput,
 } from "@/components/loads/driver-select"
 import { useZodForm } from "@/hooks/use-zod-form"
-import {
-  handleCurrencyBlur,
-  handleCurrencyInput,
-  handleCurrencyKeyDown,
-} from "@/lib/currency"
 import type { BrokerOption } from "@/lib/brokers"
 import type { DriverOption } from "@/lib/drivers"
 import type { TruckOption } from "@/lib/trucks"
-import { loadSchema, type LoadInput } from "@/lib/schemas/load"
+import { loadSchema } from "@/lib/schemas/load"
 
-type Name = keyof LoadInput
-type Errors = Partial<Record<Name, { message: string }[]>>
-
-function TextField({
-  name,
-  label,
-  errors,
-  hint,
-  className,
-  prefix,
-  ...input
-}: {
-  name: Name
-  label: string
-  errors: Errors
-  hint?: string
-  className?: string
-  /** Shown inside the input, before the value, e.g. "$". */
-  prefix?: string
-} & Omit<React.ComponentProps<"input">, "name" | "className" | "prefix">) {
-  const id = `load-${name.replaceAll("_", "-")}`
-  const fieldErrors = errors[name]
-  return (
-    <Field data-invalid={!!fieldErrors} className={className}>
-      <FieldLabel htmlFor={id}>{label}</FieldLabel>
-      {prefix ? (
-        <div className="relative">
-          <span className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-sm text-muted-foreground">
-            {prefix}
-          </span>
-          <Input
-            id={id}
-            name={name}
-            aria-invalid={!!fieldErrors}
-            className="pl-6"
-            {...input}
-          />
-        </div>
-      ) : (
-        <Input id={id} name={name} aria-invalid={!!fieldErrors} {...input} />
-      )}
-      {fieldErrors ? (
-        <FieldError errors={fieldErrors} />
-      ) : (
-        hint && <FieldDescription>{hint}</FieldDescription>
-      )}
-    </Field>
-  )
-}
-
-function StopFields({
-  stop,
-  errors,
-  revalidate,
-}: {
-  stop: "pickup" | "delivery"
-  errors: Errors
-  revalidate: (form: HTMLFormElement | null) => void
-}) {
-  const stopLabel = stop === "pickup" ? "Pickup" : "Delivery"
-  return (
-    <div className="grid gap-5 sm:grid-cols-2">
-      <TextField
-        name={`${stop}_location`}
-        label="Location"
-        placeholder={
-          stop === "pickup"
-            ? "e.g. Walmart DC 6094, Bentonville, AR"
-            : "e.g. Kroger, Dallas, TX"
-        }
-        errors={errors}
-        className="sm:col-span-2"
-      />
-      <DateTimeField
-        name={`${stop}_start`}
-        label="From"
-        stopLabel={stopLabel}
-        hint="Local time at the stop."
-        defaultTime="08:00"
-        errors={errors[`${stop}_start`]}
-        onUpdate={revalidate}
-      />
-      <DateTimeField
-        name={`${stop}_end`}
-        label="To (optional)"
-        stopLabel={stopLabel}
-        hint="Leave the date blank for a set appointment."
-        defaultTime="17:00"
-        errors={errors[`${stop}_end`]}
-        onUpdate={revalidate}
-      />
-    </div>
-  )
-}
+const TextField = LoadTextField
 
 export function NewLoadForm({
   organizationId,
@@ -179,7 +82,7 @@ export function NewLoadForm({
       <fieldset disabled={pending} className="flex flex-col gap-6">
         <SettingsCard
           title="Load"
-          description="From the rate confirmation."
+          description="Typed in from the rate con. Reading it from a photo, PDF or email is coming next."
           contentClassName="grid gap-5 sm:grid-cols-6"
         >
           <TextField
@@ -187,21 +90,10 @@ export function NewLoadForm({
             label="Load number"
             placeholder="e.g. 4471023"
             errors={errors}
-            className="sm:col-span-3"
+            className="sm:col-span-6"
             autoFocus
           />
-          <TextField
-            name="rate"
-            label="Rate (USD)"
-            prefix="$"
-            inputMode="decimal"
-            placeholder="2,450.00"
-            errors={errors}
-            className="sm:col-span-3"
-            onChange={handleCurrencyInput}
-            onKeyDown={handleCurrencyKeyDown}
-            onBlur={handleCurrencyBlur}
-          />
+          <FreightFields errors={errors} onUpdate={revalidate} />
         </SettingsCard>
 
         <SettingsCard
@@ -218,17 +110,31 @@ export function NewLoadForm({
           />
         </SettingsCard>
 
-        <SettingsCard title="Pickup">
-          <StopFields stop="pickup" errors={errors} revalidate={revalidate} />
+        <SettingsCard
+          title="Stops"
+          description="Every pickup and delivery, with its appointment and number."
+        >
+          <StopsEditor
+            defaultStops={[{ kind: "pickup" }, { kind: "delivery" }]}
+            errors={errors}
+            onUpdate={revalidate}
+          />
         </SettingsCard>
 
-        <SettingsCard title="Delivery">
-          <StopFields stop="delivery" errors={errors} revalidate={revalidate} />
+        <SettingsCard
+          title="Charges"
+          description="From the rate con. Accessorials run up on the road are added to the load later."
+        >
+          <ChargesEditor
+            defaultCharges={[{ kind: "linehaul" }, { kind: "fuel_surcharge" }]}
+            errors={errors}
+            onUpdate={revalidate}
+          />
         </SettingsCard>
 
         <SettingsCard
           title="Assignment"
-          description="Optional. You can fill these in later."
+          description="Truck and driver can stay empty until the load is dispatched."
           contentClassName="grid gap-5 sm:grid-cols-2"
           footer={
             <SettingsCardFooter
@@ -333,7 +239,7 @@ export function NewLoadForm({
               id="load-notes"
               name="notes"
               rows={3}
-              placeholder="Commodity, weight, lumper, special instructions…"
+              placeholder="Special instructions, gate codes…"
               aria-invalid={!!errors.notes}
             />
             <FieldError errors={errors.notes} />

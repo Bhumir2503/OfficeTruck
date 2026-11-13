@@ -13,11 +13,14 @@ import {
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { STATUS_STYLES } from "@/lib/load-format"
 import {
-  LOAD_STATUSES,
+  isFallenThrough,
+  LOAD_ENDINGS,
+  LOAD_FLOW,
   LOAD_STATUS_LABELS,
   type LoadStatus,
 } from "@/lib/schemas/load"
@@ -34,7 +37,7 @@ export function LoadStatusBadge({
       className={cn(
         "inline-flex h-6 w-fit shrink-0 items-center gap-1 rounded-4xl px-2.5 text-xs font-medium whitespace-nowrap",
         STATUS_STYLES[status],
-        status === "cancelled" && "line-through",
+        isFallenThrough(status) && "line-through",
         className
       )}
     >
@@ -79,7 +82,7 @@ export function LoadStatusMenu({
           STATUS_STYLES[load.status]
         )}
       >
-        <span className={cn(load.status === "cancelled" && "line-through")}>
+        <span className={cn(isFallenThrough(load.status) && "line-through")}>
           {LOAD_STATUS_LABELS[load.status]}
         </span>
         <ChevronDownIcon className="size-3 opacity-70" />
@@ -91,7 +94,13 @@ export function LoadStatusMenu({
             value={load.status}
             onValueChange={(value) => change(value as LoadStatus)}
           >
-            {LOAD_STATUSES.map((status) => (
+            {LOAD_FLOW.map((status) => (
+              <DropdownMenuRadioItem key={status} value={status}>
+                {LOAD_STATUS_LABELS[status]}
+              </DropdownMenuRadioItem>
+            ))}
+            <DropdownMenuSeparator />
+            {LOAD_ENDINGS.map((status) => (
               <DropdownMenuRadioItem key={status} value={status}>
                 {LOAD_STATUS_LABELS[status]}
               </DropdownMenuRadioItem>
