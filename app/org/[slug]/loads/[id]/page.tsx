@@ -3,31 +3,34 @@ import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 
-import { LoadBrokerForm } from "@/components/loads/load-broker-form"
 import { LoadAssignmentForm } from "@/components/loads/load-assignment-form"
+import { LoadBrokerForm } from "@/components/loads/load-broker-form"
+import { LoadChargesCard } from "@/components/loads/load-charges-card"
+import { LoadDetailsCard } from "@/components/loads/load-details-card"
 import { LoadStatusMenu } from "@/components/loads/load-status-menu"
+import { LoadStopsCard } from "@/components/loads/load-stops-card"
 import { SettingsCard } from "@/components/settings/settings-card"
 import { buttonVariants } from "@/components/ui/button"
-import { formatRate, formatStopWindow } from "@/lib/load-format"
 import { getBrokerOptions } from "@/lib/brokers"
 import { getDriverOptions } from "@/lib/drivers"
 import { getFactoringCompany } from "@/lib/factoring"
-import { getLoad } from "@/lib/loads"
-import { getTruckOptions } from "@/lib/trucks"
+import { formatRate } from "@/lib/load-format"
+import { getLoadDetail } from "@/lib/loads"
 import { getOrganization } from "@/lib/organizations"
+import { getTruckOptions } from "@/lib/trucks"
 
 async function loadFor(params: PageProps<"/org/[slug]/loads/[id]">["params"]) {
   const { slug, id } = await params
   const organization = await getOrganization(slug)
-  const load = organization ? await getLoad(organization.id, id) : null
-  return { organization, load }
+  const detail = organization ? await getLoadDetail(organization.id, id) : null
+  return { organization, detail }
 }
 
 export async function generateMetadata({
   params,
 }: PageProps<"/org/[slug]/loads/[id]">): Promise<Metadata> {
-  const { load } = await loadFor(params)
-  return { title: load ? `Load ${load.reference}` : "Load not found" }
+  const { detail } = await loadFor(params)
+  return { title: detail ? `Load ${detail.load.reference}` : "Load not found" }
 }
 
 function Detail({
@@ -48,10 +51,11 @@ function Detail({
 export default async function LoadPage({
   params,
 }: PageProps<"/org/[slug]/loads/[id]">) {
-  const { organization, load } = await loadFor(params)
-  if (!organization || !load) {
+  const { organization, detail } = await loadFor(params)
+  if (!organization || !detail) {
     notFound()
   }
+  const { load, stops, charges, versions } = detail
 
   const base = `/org/${organization.slug}/loads`
   const [drivers, trucks, brokers, factoring] = await Promise.all([
@@ -94,43 +98,40 @@ export default async function LoadPage({
             <LoadStatusMenu organizationId={organization.id} load={load} />
           }
         >
-          <dl className="grid gap-5 sm:grid-cols-2">
-            <Detail label="Pickup">
-              {load.pickup_location}
-              <span className="block font-normal text-muted-foreground">
-                {formatStopWindow(load.pickup_start, load.pickup_end)}
-              </span>
-            </Detail>
-            <Detail label="Delivery">
-              {load.delivery_location}
-              <span className="block font-normal text-muted-foreground">
-                {formatStopWindow(load.delivery_start, load.delivery_end)}
-              </span>
-            </Detail>
-          </dl>
-        </SettingsCard>
-        <SettingsCard title="Details">
           <dl className="grid gap-5 sm:grid-cols-3">
-            <Detail label="Rate">{formatRate(load.rate)}</Detail>
-            <Detail label="Rate per mile">
+            <Detail label="Total">{formatRate(load.rate)}</Detail>
+            <Detail label="Rate per loaded mile">
               {load.miles ? (
                 `${formatRate(Number(load.rate) / load.miles)} / mile`
               ) : (
                 <span className="text-muted-foreground">Add miles</span>
               )}
             </Detail>
-            <Detail label="Empty miles">
-              {load.empty_miles !== null ? (
-                `${load.empty_miles.toLocaleString("en-US")} mi`
-              ) : (
-                <span className="text-muted-foreground">Not set</span>
-              )}
+            <Detail label="Miles">
+              {load.miles !== null
+                ? `${load.miles.toLocaleString("en-US")} loaded · ${(load.empty_miles ?? 0).toLocaleString("en-US")} empty`
+                : none}
             </Detail>
-            <div className="sm:col-span-3">
-              <Detail label="Notes">{load.notes ?? none}</Detail>
-            </div>
           </dl>
         </SettingsCard>
+        <LoadStopsCard
+          organizationId={organization.id}
+          load={load}
+          stops={stops}
+          billedNotes={charges
+            .filter(
+              (charge) =>
+                charge.kind === "detention" && charge.description !== null
+            )
+            .map((charge) => charge.description as string)}
+        />
+        <LoadChargesCard
+          organizationId={organization.id}
+          load={load}
+          charges={charges}
+          versions={versions}
+        />
+        <LoadDetailsCard organizationId={organization.id} load={load} />
         <LoadBrokerForm
           organizationId={organization.id}
           load={load}

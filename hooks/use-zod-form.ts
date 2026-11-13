@@ -3,7 +3,13 @@
 import { useState, type FormEvent } from "react"
 import type { z } from "zod"
 
-type FieldErrors<Values> = Partial<Record<keyof Values, { message: string }[]>>
+/**
+ * Errors by field name. Nested fields are keyed by their full path, the same
+ * as their input's `name`: "stops.0.location".
+ */
+type FieldErrors<Values> = Partial<
+  Record<keyof Values | (string & {}), { message: string }[]>
+>
 
 /**
  * Validates an uncontrolled form against a Zod schema on submit, then
@@ -34,7 +40,7 @@ export function useZodForm<Schema extends z.ZodType<Record<string, unknown>>>(
 
     if (!result.success) {
       for (const issue of result.error.issues) {
-        const field = String(issue.path[0])
+        const field = issue.path.map(String).join(".")
         nextErrors[field] = [
           ...(nextErrors[field] ?? []),
           { message: issue.message },

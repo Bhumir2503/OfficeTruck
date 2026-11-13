@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button"
 
 /**
- * Shown when some of a driver's booked loads are still locked at an older
+ * Shown when some of a driver's upcoming (booked or dispatched) loads are still locked at an older
  * rate, e.g. after a raise. Applying moves just those loads onto the current
  * rate; loads already driven keep theirs.
  */
@@ -53,7 +53,7 @@ export function DriverRateNotice({
   return (
     <SettingsCard
       title="Upcoming loads on an older rate"
-      description={`${driverName} is now paid ${currentRate}, but ${count} booked ${count === 1 ? "load is" : "loads are"} still locked at ${rates.join(" or ")}.`}
+      description={`${driverName} is now paid ${currentRate}, but ${count} upcoming ${count === 1 ? "load is" : "loads are"} still locked at ${rates.join(" or ")}.`}
       footer={
         <SettingsCardFooter hint="Loads in transit, delivered or invoiced keep the rate they were locked at.">
           <Button size="sm" disabled={pending} onClick={apply}>

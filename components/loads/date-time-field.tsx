@@ -35,6 +35,7 @@ export function DateTimeField({
   stopLabel,
   hint,
   defaultTime = "",
+  defaultValue,
   errors,
   onUpdate,
   className,
@@ -46,13 +47,21 @@ export function DateTimeField({
   hint?: string
   /** "HH:mm" to start the time input at. */
   defaultTime?: string
+  /** A saved value, "YYYY-MM-DDTHH:mm[:ss]", to start from. */
+  defaultValue?: string | null
   errors?: { message: string }[]
   onUpdate: (form: HTMLFormElement | null) => void
   className?: string
 }) {
   const [open, setOpen] = useState(false)
-  const [date, setDate] = useState<Date | undefined>()
-  const [time, setTime] = useState(defaultTime)
+  const [date, setDate] = useState<Date | undefined>(() => {
+    if (!defaultValue) return undefined
+    const [year, month, day] = defaultValue.slice(0, 10).split("-").map(Number)
+    return new Date(year, month - 1, day)
+  })
+  const [time, setTime] = useState(
+    defaultValue ? defaultValue.slice(11, 16) : defaultTime
+  )
   const hiddenRef = useRef<HTMLInputElement>(null)
   const firstRender = useRef(true)
 
