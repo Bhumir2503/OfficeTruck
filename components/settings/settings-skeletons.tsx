@@ -165,3 +165,88 @@ export function MembersSettingsSkeleton() {
     </SettingsPage>
   )
 }
+
+function FieldSkeleton({
+  label,
+  hint,
+  className,
+  inputClassName,
+}: {
+  label: string
+  hint?: string
+  className?: string
+  inputClassName?: string
+}) {
+  return (
+    <Field className={className}>
+      <FieldLabel>{label}</FieldLabel>
+      <Skeleton className={cn("h-9 w-full", inputClassName)} />
+      {hint && <FieldDescription>{hint}</FieldDescription>}
+    </Field>
+  )
+}
+
+/** Keep in step with FactoringForm. */
+export function FactoringSettingsSkeleton() {
+  return (
+    <SettingsPage
+      title="Factoring"
+      description="The company you sell invoices to. Brokers you mark as factored send their packets and payments here."
+    >
+      <SettingsCard
+        title="Company"
+        description="Who you sell your invoices to."
+        contentClassName="grid gap-5 sm:grid-cols-6"
+      >
+        <FieldSkeleton label="Name" className="sm:col-span-3" />
+        <FieldSkeleton label="Phone" className="sm:col-span-3" />
+      </SettingsCard>
+      <SettingsCard
+        title="Invoice packets"
+        description="Where packets for factored loads go, instead of to the broker."
+        contentClassName="grid gap-5 sm:grid-cols-6"
+      >
+        <Field className="sm:col-span-6">
+          <FieldLabel>How they take them</FieldLabel>
+          <div className="flex flex-wrap gap-1">
+            <Skeleton className="h-8 w-16 rounded-md" />
+            <Skeleton className="h-8 w-48 rounded-md" />
+          </div>
+          <FieldDescription>
+            Packets are emailed to the addresses below.
+          </FieldDescription>
+        </Field>
+        <FieldSkeleton
+          label="Submission emails"
+          hint="One per line, or separated by commas."
+          className="sm:col-span-6"
+          inputClassName="h-16"
+        />
+      </SettingsCard>
+      <SettingsCard
+        title="Remit-to address"
+        description="Where brokers send payment for factored loads. It goes on the invoice and the notice of assignment."
+        contentClassName="grid gap-5 sm:grid-cols-6"
+      >
+        <FieldSkeleton
+          label="Street address or PO box"
+          className="sm:col-span-6"
+        />
+        <FieldSkeleton label="Suite or department" className="sm:col-span-6" />
+        <FieldSkeleton label="City" className="sm:col-span-3" />
+        <FieldSkeleton label="State" className="sm:col-span-1" />
+        <FieldSkeleton label="ZIP code" className="sm:col-span-2" />
+      </SettingsCard>
+      <SettingsCard
+        title="Notes"
+        footer={
+          <SettingsCardFooter hint="Used on every broker you mark as factored.">
+            <ButtonSkeleton />
+          </SettingsCardFooter>
+        }
+      >
+        <Skeleton className="h-16 w-full" />
+      </SettingsCard>
+    </SettingsPage>
+  )
+}

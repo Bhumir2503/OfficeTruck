@@ -37,9 +37,11 @@ type FieldErrors = { message: string }[] | undefined
 function BrokerSummary({
   broker,
   brokersHref,
+  factoringName,
 }: {
   broker: BrokerOption
   brokersHref: string
+  factoringName: string | null
 }) {
   const flags = fmcsaFlags(broker.fmcsa)
   return (
@@ -107,9 +109,7 @@ function BrokerSummary({
             }
           >
             {broker.factored
-              ? broker.noa_on_file
-                ? "Factored, NOA on file"
-                : "Factored, no NOA yet"
+              ? `${factoringName ? `Factored through ${factoringName}` : "Factored"}${broker.noa_on_file ? "" : ", no NOA yet"}`
               : "Not factored"}
           </dd>
         </div>
@@ -130,12 +130,15 @@ function BrokerSummary({
 export function BrokerFields({
   brokers,
   brokersHref,
+  factoringName,
   errors,
   onUpdate,
 }: {
   brokers: BrokerOption[]
   /** /org/<slug>/brokers */
   brokersHref: string
+  /** Your factoring company, for factored brokers. */
+  factoringName: string | null
   errors: {
     broker_id?: FieldErrors
     broker_name?: FieldErrors
@@ -268,7 +271,11 @@ export function BrokerFields({
             />
           )}
           {broker && (
-            <BrokerSummary broker={broker} brokersHref={brokersHref} />
+            <BrokerSummary
+              broker={broker}
+              brokersHref={brokersHref}
+              factoringName={factoringName}
+            />
           )}
         </div>
       )}

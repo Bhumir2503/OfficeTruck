@@ -34,6 +34,7 @@ import {
 } from "@/lib/broker-format"
 import { getBroker, getBrokerContacts, getBrokerLoads } from "@/lib/brokers"
 import { formatDate } from "@/lib/driver-format"
+import { getFactoringCompany } from "@/lib/factoring"
 import { formatRate, formatStopDate } from "@/lib/load-format"
 import { getOrganization } from "@/lib/organizations"
 import { formatPhone } from "@/lib/phone"
@@ -101,9 +102,11 @@ export default async function BrokerPage({
 
   const base = `/org/${organization.slug}/brokers`
   const none = <span className="text-muted-foreground">Not set</span>
-  const [contacts, loads] = await Promise.all([
+  const factoringHref = `/org/${organization.slug}/settings/factoring`
+  const [contacts, loads, factoring] = await Promise.all([
     getBrokerContacts(organization.id, broker.id),
     getBrokerLoads(organization.id, broker.id),
+    getFactoringCompany(organization.id),
   ])
   const fmcsa = broker.fmcsa
   const flags = fmcsaFlags(fmcsa)
@@ -208,13 +211,29 @@ export default async function BrokerPage({
             </Detail>
             <Detail label="Factoring">
               {broker.factored ? (
-                broker.noa_on_file ? (
-                  "Factored, NOA on file"
-                ) : (
-                  <span className="text-amber-700 dark:text-amber-300">
-                    Factored, no NOA on file yet
+                <>
+                  {factoring ? `Through ${factoring.name}` : "Factored"}
+                  <span
+                    className={
+                      broker.noa_on_file && factoring
+                        ? "block font-normal text-muted-foreground"
+                        : "block font-normal text-amber-700 dark:text-amber-300"
+                    }
+                  >
+                    {!factoring ? (
+                      <>
+                        Factoring company not set up.{" "}
+                        <Link href={factoringHref} className="underline">
+                          Set it up
+                        </Link>
+                      </>
+                    ) : broker.noa_on_file ? (
+                      "NOA on file"
+                    ) : (
+                      "No NOA on file yet"
+                    )}
                   </span>
-                )
+                </>
               ) : (
                 "Not factored"
               )}
@@ -405,6 +424,8 @@ export default async function BrokerPage({
             organizationId={organization.id}
             base={base}
             broker={broker}
+            factoring={factoring}
+            factoringHref={factoringHref}
           />
         </div>
       </div>

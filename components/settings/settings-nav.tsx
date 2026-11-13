@@ -1,13 +1,19 @@
 "use client"
 
 import { cn } from "cn"
-import { Building2Icon, CreditCardIcon, UsersIcon } from "lucide-react"
+import {
+  Building2Icon,
+  CreditCardIcon,
+  HandCoinsIcon,
+  UsersIcon,
+} from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
 export const SETTINGS_TABS = [
   { title: "General", path: "", icon: Building2Icon },
   { title: "Members", path: "members", icon: UsersIcon },
+  { title: "Factoring", path: "factoring", icon: HandCoinsIcon },
   { title: "Billing", path: "billing", icon: CreditCardIcon },
 ]
 

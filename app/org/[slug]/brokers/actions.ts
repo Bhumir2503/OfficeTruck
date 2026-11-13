@@ -18,7 +18,8 @@ import { createClient } from "@/lib/supabase/server"
 
 export type ActionResult = { error: string } | { ok: true }
 export type CreateBrokerResult =
-  { error: string } | { ok: true; id: string; fmcsaError?: string }
+  | { error: string }
+  | { ok: true; id: string; fmcsaError?: string; contactsError?: string }
 
 async function isMember(organizationId: string) {
   return (await getMyOrganizations()).some((org) => org.id === organizationId)
@@ -103,7 +104,8 @@ export async function lookupMc(
 /** Adds a broker, then checks them with FMCSA if there's an MC number. */
 export async function createBroker(
   organizationId: string,
-  input: BrokerValues
+  input: BrokerValues,
+  contactsInput: ContactValues[] = []
 ): Promise<CreateBrokerResult> {
   if (!(await isMember(organizationId))) {
     return { error: NOT_MEMBER }
@@ -112,6 +114,13 @@ export async function createBroker(
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Check the form." }
   }
+  const contactsParsed = contactSchema.array().max(20).safeParse(contactsInput)
+  if (!contactsParsed.success) {
+    return {
+      error: contactsParsed.error.issues[0]?.message ?? "Check the contacts.",
+    }
+  }
+  const contacts = contactsParsed.data
 
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -124,9 +133,26 @@ export async function createBroker(
     return { error: message(error) }
   }
 
+  // Contacts listed on the Add Broker form, saved now the broker exists.
+  let contactsError: string | undefined
+  if (contacts.length) {
+    const { error: insertError } = await supabase
+      .from("broker_contacts")
+      .insert(
+        contacts.map((contact) => ({
+          ...contact,
+          organization_id: organizationId,
+          broker_id: data.id,
+        }))
+      )
+    if (insertError) {
+      contactsError = insertError.message
+    }
+  }
+
   const fmcsaError = await refreshFmcsa(parsed.data.mc_number)
   refresh()
-  return { ok: true, id: data.id, fmcsaError }
+  return { ok: true, id: data.id, fmcsaError, contactsError }
 }
 
 export async function updateBroker(

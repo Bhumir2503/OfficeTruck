@@ -194,3 +194,56 @@ export const doNotUseSchema = z.object({
   do_not_use: z.boolean(),
   do_not_use_reason: optional(max(500)),
 })
+
+// Keep these rules in step with the checks on public.factoring_companies.
+export const factoringCompanySchema = z
+  .object({
+    name: z
+      .string()
+      .trim()
+      .min(1, "Enter the factoring company's name.")
+      .max(200, "Must be 200 characters or fewer."),
+    submission_method: z.enum(
+      INVOICE_METHODS,
+      "Choose how they take invoices."
+    ),
+    submission_emails: list(z.email("Enter valid email addresses."), 10),
+    portal_url: optional(
+      z
+        .string()
+        .max(500, "Must be 500 characters or fewer.")
+        .regex(
+          /^https?:\/\/\S+$/i,
+          "Enter the full address, starting https://."
+        )
+    ),
+    phone: optional(
+      max(30).regex(/^[0-9+().\-\s]+$/, "Enter a valid phone number.")
+    ),
+    remit_line1: optional(max(200)),
+    remit_line2: optional(max(200)),
+    remit_city: optional(max(100)),
+    remit_state: optional(
+      z.enum(US_STATES, "Use a 2-letter US state code, e.g. TX."),
+      (value) => value.toUpperCase()
+    ),
+    remit_postal_code: optional(
+      z.string().regex(/^[0-9]{5}(-[0-9]{4})?$/, "Enter a 5-digit ZIP code.")
+    ),
+    notes: optional(max(2000)),
+  })
+  .superRefine((company, context) => {
+    if (
+      company.submission_method === "email" &&
+      company.submission_emails.length === 0
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["submission_emails"],
+        message: "Add the email address invoice packets go to.",
+      })
+    }
+  })
+
+export type FactoringCompanyInput = z.input<typeof factoringCompanySchema>
+export type FactoringCompanyValues = z.output<typeof factoringCompanySchema>

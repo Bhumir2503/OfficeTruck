@@ -13,6 +13,7 @@ import {
   type McLookup,
 } from "@/app/org/[slug]/brokers/actions"
 import { FlagBadge } from "@/components/brokers/broker-badges"
+import { ContactsDraft } from "@/components/brokers/contacts-draft"
 import {
   SettingsCard,
   SettingsCardFooter,
@@ -32,12 +33,17 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useZodForm } from "@/hooks/use-zod-form"
 import { fmcsaFlags } from "@/lib/broker-format"
 import type { Broker } from "@/lib/brokers"
+import {
+  describeSubmission,
+  type FactoringCompany,
+} from "@/lib/factoring-format"
 import type { FmcsaRecord } from "@/lib/fmcsa"
 import {
   brokerSchema,
   INVOICE_METHODS,
   INVOICE_METHOD_LABELS,
   type BrokerInput,
+  type ContactValues,
   type InvoiceMethod,
 } from "@/lib/schemas/broker"
 
@@ -281,11 +287,17 @@ export function BrokerForm({
   organizationId,
   base,
   broker,
+  factoring,
+  factoringHref,
 }: {
   organizationId: string
   /** /org/<slug>/brokers */
   base: string
   broker?: Broker
+  /** Your factoring company, if it's set up. */
+  factoring: FactoringCompany | null
+  /** /org/<slug>/settings/factoring */
+  factoringHref: string
 }) {
   const router = useRouter()
   const [defaults, setDefaults] = useState<Defaults>(broker ?? {})
@@ -296,6 +308,7 @@ export function BrokerForm({
   )
   const [factored, setFactored] = useState(broker?.factored ?? false)
   const [noa, setNoa] = useState(broker?.noa_on_file ?? false)
+  const [contacts, setContacts] = useState<ContactValues[]>([])
 
   const { errors, formError, pending, formProps, revalidate } = useZodForm(
     brokerSchema,
@@ -308,11 +321,15 @@ export function BrokerForm({
         toast.success(`${values.legal_name} saved.`)
         return
       }
-      const result = await createBroker(organizationId, values)
+      const result = await createBroker(organizationId, values, contacts)
       if ("error" in result) {
         return result.error
       }
-      if (result.fmcsaError) {
+      if (result.contactsError) {
+        toast.warning(
+          `${values.legal_name} added, but the contacts didn't save: ${result.contactsError} Add them on the broker page.`
+        )
+      } else if (result.fmcsaError) {
         toast.warning(
           `${values.legal_name} added, but the FMCSA check didn't run: ${result.fmcsaError}`
         )
@@ -423,6 +440,14 @@ export function BrokerForm({
               hint="Domains their people email from, separated by commas. Rate cons from any other domain get a warning."
             />
           </SettingsCard>
+
+          {!broker && (
+            <ContactsDraft
+              contacts={contacts}
+              onChange={setContacts}
+              disabled={pending}
+            />
+          )}
 
           <SettingsCard
             title="Mailing address"
@@ -592,6 +617,30 @@ export function BrokerForm({
                   />
                   The notice of assignment (NOA) is on file with the broker
                 </Label>
+              )}
+              {factored && (
+                <p className="text-sm text-muted-foreground">
+                  {factoring ? (
+                    <>
+                      Packets go to{" "}
+                      <span className="font-medium text-foreground">
+                        {factoring.name}
+                      </span>
+                      , {describeSubmission(factoring)}.{" "}
+                      <Link href={factoringHref} className="underline">
+                        Change
+                      </Link>
+                    </>
+                  ) : (
+                    <span className="text-amber-700 dark:text-amber-300">
+                      Your factoring company isn&apos;t set up yet, so the app
+                      doesn&apos;t know where packets go.{" "}
+                      <Link href={factoringHref} className="underline">
+                        Set it up
+                      </Link>
+                    </span>
+                  )}
+                </p>
               )}
             </div>
           </SettingsCard>

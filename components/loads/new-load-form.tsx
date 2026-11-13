@@ -143,6 +143,7 @@ export function NewLoadForm({
   trucksHref,
   brokers,
   brokersHref,
+  factoringName,
 }: {
   organizationId: string
   /** /org/<slug>/loads */
@@ -156,6 +157,7 @@ export function NewLoadForm({
   brokers: BrokerOption[]
   /** /org/<slug>/brokers */
   brokersHref: string
+  factoringName: string | null
 }) {
   const router = useRouter()
   const [driverId, setDriverId] = useState<string | null>(null)
@@ -210,6 +212,7 @@ export function NewLoadForm({
           <BrokerFields
             brokers={brokers}
             brokersHref={brokersHref}
+            factoringName={factoringName}
             errors={errors}
             onUpdate={revalidate}
           />

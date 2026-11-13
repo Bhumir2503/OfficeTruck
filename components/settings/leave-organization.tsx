@@ -83,8 +83,8 @@ export function LeaveOrganization({
                 </div>
                 <DialogTitle>Leave {name}?</DialogTitle>
                 <DialogDescription>
-                  You&apos;ll lose access to {name} right away. To come back,
-                  an owner or admin will need to invite you again.
+                  You&apos;ll lose access to {name} right away. To come back, an
+                  owner or admin will need to invite you again.
                 </DialogDescription>
               </DialogHeader>
               {error && (
