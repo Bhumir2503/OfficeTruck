@@ -74,6 +74,7 @@ export type DriverOption = {
   id: string
   full_name: string
   status: DriverStatus
+  email: string | null
 }
 
 export async function getDriverOptions(
@@ -82,7 +83,7 @@ export async function getDriverOptions(
   const supabase = await createClient()
   const { data, error } = await supabase
     .from("drivers")
-    .select("id, full_name, status")
+    .select("id, full_name, status, email")
     .eq("organization_id", organizationId)
     .order("full_name")
 
@@ -98,6 +99,8 @@ export type DriverLoad = {
   pickup_location: string
   delivery_location: string
   pickup_start: string
+  delivery_start: string
+  delivery_end: string | null
   rate: number
   miles: number | null
   status: LoadStatus
@@ -115,7 +118,7 @@ export async function getDriverLoads(
   const { data, error } = await supabase
     .from("loads")
     .select(
-      "id, reference, pickup_location, delivery_location, pickup_start, rate, miles, status, driver_pay_type, driver_pay_rate"
+      "id, reference, pickup_location, delivery_location, pickup_start, delivery_start, delivery_end, rate, miles, status, driver_pay_type, driver_pay_rate"
     )
     .eq("organization_id", organizationId)
     .eq("driver_id", driverId)

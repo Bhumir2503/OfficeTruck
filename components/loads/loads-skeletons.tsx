@@ -32,13 +32,24 @@ function Line({ className }: { className?: string }) {
 }
 
 // All, Booked, In transit, Delivered, Invoiced, Cancelled.
-const FILTER_WIDTHS = ["w-14", "w-20", "w-24", "w-24", "w-22", "w-24"]
+const FILTER_WIDTHS = [
+  "w-14",
+  "w-21",
+  "w-28",
+  "w-21",
+  "w-25",
+  "w-23",
+  "w-16",
+  "w-24",
+  "w-25",
+  "w-19",
+]
 
 const LOAD_ROWS = [
-  { ref: "w-20", broker: "w-16", from: "w-36", to: "w-28" },
-  { ref: "w-24", broker: "w-24", from: "w-28", to: "w-32" },
-  { ref: "w-16", broker: "w-20", from: "w-32", to: "w-24" },
-  { ref: "w-20", broker: "w-28", from: "w-24", to: "w-36" },
+  { ref: "w-20", broker: "w-16", from: "w-36", to: "w-28", next: "w-30" },
+  { ref: "w-24", broker: "w-24", from: "w-28", to: "w-32", next: "w-28" },
+  { ref: "w-16", broker: "w-20", from: "w-32", to: "w-24", next: "w-28" },
+  { ref: "w-20", broker: "w-28", from: "w-24", to: "w-36", next: "w-26" },
 ]
 
 export function LoadsListSkeleton() {
@@ -49,7 +60,7 @@ export function LoadsListSkeleton() {
           title="All loads"
           description="Search by load number or broker, or filter by status."
           action={<Skeleton className="h-8 w-26 rounded-md" />}
-          contentClassName="px-0 pb-0"
+          contentClassName="@container px-0 pb-0"
           footer={
             <SettingsCardFooter
               hint={<Skeleton className="h-4 w-16 bg-foreground/10" />}
@@ -67,11 +78,18 @@ export function LoadsListSkeleton() {
           <Table className="[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6">
             <TableHeader className="bg-muted/40">
               <TableRow>
-                <TableHead>Load</TableHead>
-                <TableHead className="hidden md:table-cell">Route</TableHead>
-                <TableHead className="hidden sm:table-cell">Pickup</TableHead>
-                <TableHead className="text-right">Rate</TableHead>
-                <TableHead className="w-32">Status</TableHead>
+                <TableHead className="w-full @4xl:w-px">Load</TableHead>
+                <TableHead className="hidden w-full @4xl:table-cell">
+                  Route
+                </TableHead>
+                <TableHead className="hidden w-px @2xl:table-cell">
+                  Pickup
+                </TableHead>
+                <TableHead className="w-px text-right">Rate</TableHead>
+                <TableHead className="w-px @max-xl:pr-6">Status</TableHead>
+                <TableHead className="hidden w-px text-right @xl:table-cell">
+                  Action
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -81,20 +99,25 @@ export function LoadsListSkeleton() {
                     <Line className={row.ref} />
                     <Line className={cn("h-3.5", row.broker)} />
                   </TableCell>
-                  <TableCell className="hidden md:table-cell">
+                  <TableCell className="hidden @4xl:table-cell">
                     <div className="flex items-center gap-1.5">
                       <Skeleton className={cn("h-4", row.from)} />
                       <Skeleton className={cn("h-4", row.to)} />
                     </div>
                   </TableCell>
-                  <TableCell className="hidden sm:table-cell">
+                  <TableCell className="hidden @2xl:table-cell">
                     <Skeleton className="h-4 w-12" />
                   </TableCell>
                   <TableCell>
                     <Skeleton className="ml-auto h-4 w-16" />
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="@max-xl:pr-6">
                     <Skeleton className="h-6 w-20 rounded-full" />
+                  </TableCell>
+                  <TableCell className="hidden @xl:table-cell">
+                    <Skeleton
+                      className={cn("ml-auto h-8 rounded-md", row.next)}
+                    />
                   </TableCell>
                 </TableRow>
               ))}
@@ -373,25 +396,55 @@ export function LoadDetailSkeleton() {
               <div className="flex h-6 items-center">
                 <Skeleton className="h-4 w-32" />
               </div>
-              <Line className="h-3.5 w-20" />
+              <Line className="h-3.5 w-24" />
             </div>
             <Skeleton className="h-6 w-20 rounded-full" />
           </div>
-          <div className="grid gap-5 px-6 pt-5 pb-6 sm:grid-cols-2">
-            <DetailSkeleton label="Pickup" lines={["w-48", "w-56"]} />
-            <DetailSkeleton label="Delivery" lines={["w-36", "w-56"]} />
+          <div className="grid gap-5 px-6 pt-5 pb-6 sm:grid-cols-3">
+            <DetailSkeleton label="Total" lines={["w-20"]} />
+            <DetailSkeleton label="Rate per loaded mile" lines={["w-24"]} />
+            <DetailSkeleton label="Miles" lines={["w-32"]} />
           </div>
         </section>
-        <SettingsCard title="Details">
-          <div className="grid gap-5 sm:grid-cols-3">
-            <DetailSkeleton label="Rate" lines={["w-20"]} />
-            <DetailSkeleton label="Rate per mile" lines={["w-24"]} />
-            <DetailSkeleton label="Empty miles" lines={["w-16"]} />
-            <DetailSkeleton
-              label="Notes"
-              className="sm:col-span-3"
-              lines={["w-64"]}
-            />
+        <SettingsCard
+          title="Stops"
+          description={
+            // The description is a <p>, so an inline placeholder.
+            <span className="inline-block h-4 w-44 animate-pulse rounded-md bg-muted align-middle" />
+          }
+          contentClassName="flex flex-col gap-4"
+        >
+          {[0, 1].map((index) => (
+            <div key={index} className="flex items-start gap-3">
+              <Skeleton className="size-7 shrink-0 rounded-full" />
+              <div className="flex-1">
+                <Line className="w-32" />
+                <Line className="w-64" />
+                <Line className="h-3.5 w-40" />
+              </div>
+            </div>
+          ))}
+        </SettingsCard>
+        <SettingsCard
+          title="Charges"
+          description={
+            <span className="inline-block h-4 w-52 animate-pulse rounded-md bg-muted align-middle" />
+          }
+          contentClassName="flex flex-col gap-2"
+        >
+          <Skeleton className="h-5 w-full" />
+          <Skeleton className="h-5 w-full" />
+          <Skeleton className="h-5 w-2/3" />
+        </SettingsCard>
+        <SettingsCard
+          title="Freight"
+          description="What's being hauled, from the rate con."
+        >
+          <div className="grid gap-5 sm:grid-cols-4">
+            <DetailSkeleton label="Equipment" lines={["w-16"]} />
+            <DetailSkeleton label="Commodity" lines={["w-24"]} />
+            <DetailSkeleton label="Weight" lines={["w-20"]} />
+            <DetailSkeleton label="Trailer" lines={["w-12"]} />
           </div>
         </SettingsCard>
         <SettingsCard
@@ -410,7 +463,6 @@ export function LoadDetailSkeleton() {
         <SettingsCard
           title="Truck, driver and miles"
           description={
-            // The description is a <p>, so an inline placeholder.
             <span className="inline-block h-4 w-48 animate-pulse rounded-md bg-muted align-middle" />
           }
           contentClassName="grid gap-5 sm:grid-cols-2"
@@ -426,6 +478,32 @@ export function LoadDetailSkeleton() {
           <FieldSkeleton label="Driver" />
           <FieldSkeleton label="Loaded miles" />
           <FieldSkeleton label="Empty miles" />
+        </SettingsCard>
+        <SettingsCard
+          title="Dispatch"
+          description={
+            <span className="inline-block h-4 w-72 max-w-full animate-pulse rounded-md bg-muted align-middle" />
+          }
+          footer={
+            <SettingsCardFooter
+              hint={<Skeleton className="h-4 w-48 bg-foreground/10" />}
+            >
+              <Skeleton className="h-8 w-32 rounded-md bg-foreground/10" />
+            </SettingsCardFooter>
+          }
+        >
+          <Line className="w-40" />
+        </SettingsCard>
+        <SettingsCard title="History" contentClassName="flex flex-col gap-3">
+          {[0, 1].map((index) => (
+            <div key={index} className="flex items-start gap-3">
+              <Skeleton className="size-6 shrink-0 rounded-full" />
+              <div className="flex-1">
+                <Line className="w-48" />
+                <Line className="h-3.5 w-32" />
+              </div>
+            </div>
+          ))}
         </SettingsCard>
       </div>
     </div>

@@ -109,6 +109,9 @@ export function LoadAssignmentForm({
         return result.error
       }
       toast.success(`Load ${load.reference} saved.`)
+      if (result.warning) {
+        toast.warning(result.warning)
+      }
     }
   )
 

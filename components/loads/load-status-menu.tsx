@@ -5,11 +5,12 @@ import { ChevronDownIcon } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
 
-import { updateLoadStatus } from "@/app/org/[slug]/loads/actions"
+import { reopenLoad, updateLoadStatus } from "@/app/org/[slug]/loads/actions"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -56,6 +57,26 @@ export function LoadStatusMenu({
 }) {
   const [pending, setPending] = useState(false)
 
+  // Statuses only move forward, or off the flow to canceled or TONU. Going
+  // back is an unassign (on the Dispatch card) or a reopen (here).
+  const at = LOAD_FLOW.indexOf(load.status as (typeof LOAD_FLOW)[number])
+  const ended = isFallenThrough(load.status)
+  const canMoveTo = (status: LoadStatus) =>
+    !ended &&
+    status !== "dispatched" &&
+    LOAD_FLOW.indexOf(status as (typeof LOAD_FLOW)[number]) > at
+
+  async function reopen() {
+    setPending(true)
+    const result = await reopenLoad(organizationId, load.id)
+    setPending(false)
+    if ("error" in result) {
+      toast.error(result.error)
+    } else {
+      toast.success(`Load ${load.reference} reopened. It's back to booked.`)
+    }
+  }
+
   async function change(next: LoadStatus) {
     if (next === load.status) {
       return
@@ -95,17 +116,40 @@ export function LoadStatusMenu({
             onValueChange={(value) => change(value as LoadStatus)}
           >
             {LOAD_FLOW.map((status) => (
-              <DropdownMenuRadioItem key={status} value={status}>
-                {LOAD_STATUS_LABELS[status]}
+              <DropdownMenuRadioItem
+                key={status}
+                value={status}
+                disabled={status !== load.status && !canMoveTo(status)}
+              >
+                <span className="flex flex-col">
+                  <span>{LOAD_STATUS_LABELS[status]}</span>
+                  {status === "dispatched" && load.status === "booked" && (
+                    <span className="text-xs text-muted-foreground">
+                      Use Send to driver
+                    </span>
+                  )}
+                </span>
               </DropdownMenuRadioItem>
             ))}
             <DropdownMenuSeparator />
             {LOAD_ENDINGS.map((status) => (
-              <DropdownMenuRadioItem key={status} value={status}>
+              <DropdownMenuRadioItem
+                key={status}
+                value={status}
+                disabled={status !== load.status && ended}
+              >
                 {LOAD_STATUS_LABELS[status]}
               </DropdownMenuRadioItem>
             ))}
           </DropdownMenuRadioGroup>
+          {ended && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={reopen}>
+                Reopen as booked
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>

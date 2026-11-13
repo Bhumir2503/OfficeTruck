@@ -3,6 +3,13 @@
 import { refresh } from "next/cache"
 
 import { isStale } from "@/lib/broker-format"
+import { findDriverOverlaps } from "@/lib/dispatch"
+import { appUrl } from "@/lib/app-url"
+import {
+  sendDispatchEmail,
+  sendUnassignedEmail,
+} from "@/lib/email/dispatch-email"
+import { formatStopWindow } from "@/lib/load-format"
 import { checkFmcsa, FMCSA_COLUMNS, type FmcsaRecord } from "@/lib/fmcsa"
 import { getMyOrganizations, getUser } from "@/lib/organizations"
 import {
@@ -50,7 +57,38 @@ async function recheckBroker(organizationId: string, brokerId: string) {
 
 const DRIVER_NOT_FOUND = "That driver isn't in this organization anymore."
 
-export type CreateLoadResult = { error: string } | { ok: true; id: string }
+export type CreateLoadResult =
+  { error: string } | { ok: true; id: string; warning?: string }
+export type AssignmentResult =
+  { error: string } | { ok: true; warning?: string }
+
+/**
+ * A warning when the load's driver has another scheduled load at the same
+ * time. Driving two loads at once is sometimes fine (a team, a short hop),
+ * so it warns rather than refusing.
+ */
+async function overlapWarning(organizationId: string, loadId: string) {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from("loads")
+    .select("driver_id, driver:drivers!loads_driver_fkey (full_name)")
+    .eq("organization_id", organizationId)
+    .eq("id", loadId)
+    .maybeSingle()
+  if (!data?.driver_id) return undefined
+  const overlaps = await findDriverOverlaps(
+    organizationId,
+    data.driver_id,
+    loadId
+  )
+  if (!overlaps.length) return undefined
+  const name =
+    (data.driver as unknown as { full_name: string } | null)?.full_name ??
+    "This driver"
+  return `${name} also has ${overlaps.length === 1 ? "load" : "loads"} ${overlaps
+    .map((load) => load.reference)
+    .join(", ")} at the same time.`
+}
 
 async function isMember(organizationId: string) {
   const user = await getUser()
@@ -122,7 +160,8 @@ export async function createLoad(
   }
 
   refresh()
-  return { ok: true, id: data as string }
+  const id = data as string
+  return { ok: true, id, warning: await overlapWarning(organizationId, id) }
 }
 
 export async function updateLoadStatus(
@@ -381,7 +420,7 @@ export async function updateLoadAssignment(
   organizationId: string,
   loadId: string,
   input: LoadAssignmentValues
-): Promise<ActionResult> {
+): Promise<AssignmentResult> {
   if (!(await isMember(organizationId))) {
     return { error: "You aren't a member of this organization." }
   }
@@ -408,7 +447,7 @@ export async function updateLoadAssignment(
   }
 
   refresh()
-  return { ok: true }
+  return { ok: true, warning: await overlapWarning(organizationId, loadId) }
 }
 
 /** Changes the broker on a load (or links a typed name to a broker), and who sent the rate con. */
@@ -448,6 +487,158 @@ export async function updateLoadBroker(
 
   if (parsed.data.broker_id) {
     await recheckBroker(organizationId, parsed.data.broker_id).catch(() => {})
+  }
+  refresh()
+  return { ok: true }
+}
+
+// ------------------------------------------------------------ Dispatch --
+
+export type DispatchResult =
+  | { error: string }
+  | {
+      ok: true
+      /** The driver's private link, to copy or text if the email didn't go. */
+      link: string
+      /** Why the email wasn't sent, if it wasn't. */
+      emailError?: string
+      resent: boolean
+      warning?: string
+    }
+
+/**
+ * Sends a load to its driver: records exactly what was sent, moves it to
+ * Dispatched (sending again keeps it there and replaces the old link), and
+ * emails the driver a private link to it.
+ */
+export async function sendToDriver(
+  organizationId: string,
+  loadId: string
+): Promise<DispatchResult> {
+  const organization = (await getMyOrganizations()).find(
+    (org) => org.id === organizationId
+  )
+  if (!organization) {
+    return { error: "You aren't a member of this organization." }
+  }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .rpc("dispatch_load", { target_load: loadId })
+    .single<{
+      token: string
+      email_to: string | null
+      driver_name: string
+      resent: boolean
+    }>()
+  if (error) {
+    return { error: rpcError(error) }
+  }
+
+  const link = `${await appUrl()}/dispatch/${data.token}`
+  let emailError: string | undefined
+  if (!data.email_to) {
+    emailError = `${data.driver_name} has no email address. Send them the link another way.`
+  } else {
+    const [{ data: load }, { data: stops }] = await Promise.all([
+      supabase.from("loads").select("reference").eq("id", loadId).single(),
+      supabase
+        .from("load_stops")
+        .select("kind, location, appointment_start, appointment_end")
+        .eq("load_id", loadId)
+        .order("position"),
+    ])
+    const problem = await sendDispatchEmail({
+      to: data.email_to,
+      driverName: data.driver_name,
+      organizationName: organization.name,
+      reference: load?.reference ?? "",
+      stops: (stops ?? []).map((stop) => ({
+        kind: stop.kind as "pickup" | "delivery",
+        location: stop.location,
+        when: formatStopWindow(stop.appointment_start, stop.appointment_end),
+      })),
+      link,
+      resent: data.resent,
+    })
+    if (problem) {
+      emailError = `The email to ${data.email_to} didn't send: ${problem}`
+    }
+  }
+
+  refresh()
+  return {
+    ok: true,
+    link,
+    emailError,
+    resent: data.resent,
+    warning: await overlapWarning(organizationId, loadId),
+  }
+}
+
+export type UnassignResult =
+  { error: string } | { ok: true; emailError?: string }
+
+/**
+ * Takes the truck and driver off a dispatched load and sends it back to
+ * Booked, which is logged. The driver's link stops working and they're
+ * emailed that the load is off their schedule.
+ */
+export async function unassignLoad(
+  organizationId: string,
+  loadId: string
+): Promise<UnassignResult> {
+  const organization = (await getMyOrganizations()).find(
+    (org) => org.id === organizationId
+  )
+  if (!organization) {
+    return { error: "You aren't a member of this organization." }
+  }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .rpc("unassign_load", { target_load: loadId })
+    .single<{ email_to: string | null; driver_name: string | null }>()
+  if (error) {
+    return { error: rpcError(error) }
+  }
+
+  let emailError: string | undefined
+  if (data.email_to && data.driver_name) {
+    const { data: load } = await supabase
+      .from("loads")
+      .select("reference")
+      .eq("id", loadId)
+      .single()
+    const problem = await sendUnassignedEmail({
+      to: data.email_to,
+      driverName: data.driver_name,
+      organizationName: organization.name,
+      reference: load?.reference ?? "",
+    })
+    if (problem) {
+      emailError = `The email to ${data.email_to} didn't send: ${problem}`
+    }
+  } else if (data.driver_name) {
+    emailError = `${data.driver_name} has no email address, so let them know yourself.`
+  }
+
+  refresh()
+  return { ok: true, emailError }
+}
+
+/** Puts a canceled or TONU load back to Booked, when it was a mistake. Logged. */
+export async function reopenLoad(
+  organizationId: string,
+  loadId: string
+): Promise<ActionResult> {
+  if (!(await isMember(organizationId))) {
+    return { error: "You aren't a member of this organization." }
+  }
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("reopen_load", { target_load: loadId })
+  if (error) {
+    return { error: rpcError(error) }
   }
   refresh()
   return { ok: true }

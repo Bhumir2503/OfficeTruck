@@ -1,3 +1,4 @@
+import { paymentDue, type PaymentDue } from "@/lib/load-views"
 import { createClient } from "@/lib/supabase/server"
 import type { PayType } from "@/lib/schemas/driver"
 import type {
@@ -17,6 +18,7 @@ export type Load = {
     legal_name: string
     email_domains: string[]
     phone: string | null
+    payment_terms_days: number
   } | null
   /** Who sent the rate con, for the impersonation check. */
   rate_con_from: string | null
@@ -64,7 +66,7 @@ export type Load = {
 }
 
 const LOAD_COLUMNS =
-  "id, reference, broker_name, broker_id, broker:brokers!loads_broker_fkey (id, legal_name, email_domains, phone), rate_con_from, pickup_location, pickup_start, pickup_end, delivery_location, delivery_start, delivery_end, rate, status, driver_name, driver_id, driver:drivers!loads_driver_fkey (id, full_name, pay_type, pay_rate), miles, driver_pay_type, driver_pay_rate, empty_miles, truck, truck_id, truck_link:trucks!loads_truck_fkey (id, unit_number), reference_numbers, equipment, commodity, weight_lbs, trailer_number, detention_free_hours, detention_rate, notes, created_at, updated_at"
+  "id, reference, broker_name, broker_id, broker:brokers!loads_broker_fkey (id, legal_name, email_domains, phone, payment_terms_days), rate_con_from, pickup_location, pickup_start, pickup_end, delivery_location, delivery_start, delivery_end, rate, status, driver_name, driver_id, driver:drivers!loads_driver_fkey (id, full_name, pay_type, pay_rate), miles, driver_pay_type, driver_pay_rate, empty_miles, truck, truck_id, truck_link:trucks!loads_truck_fkey (id, unit_number), reference_numbers, equipment, commodity, weight_lbs, trailer_number, detention_free_hours, detention_rate, notes, created_at, updated_at"
 
 /** Every load in the organization, newest pickup first. */
 export async function getLoads(organizationId: string): Promise<Load[]> {
@@ -79,6 +81,58 @@ export async function getLoads(organizationId: string): Promise<Load[]> {
     throw error
   }
   return data as unknown as Load[]
+}
+
+/** Payment terms when a load has no linked broker. */
+const DEFAULT_TERMS_DAYS = 30
+
+/**
+ * When each invoiced or factored load is due to be paid, by load id.
+ * Computed here so the table doesn't need today's date to render.
+ */
+export async function getPaymentsDue(
+  organizationId: string,
+  loads: Load[]
+): Promise<Record<string, PaymentDue>> {
+  const waiting = loads.filter(
+    (load) => load.status === "invoiced" || load.status === "factored"
+  )
+  if (waiting.length === 0) {
+    return {}
+  }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("load_events")
+    .select("load_id, created_at")
+    .eq("organization_id", organizationId)
+    .eq("to_status", "invoiced")
+    .in(
+      "load_id",
+      waiting.map((load) => load.id)
+    )
+    .order("created_at")
+  if (error) {
+    throw error
+  }
+  // The latest time each load was invoiced.
+  const invoicedOn = new Map<string, string>()
+  for (const event of data) {
+    invoicedOn.set(event.load_id, event.created_at.slice(0, 10))
+  }
+
+  const today = new Date()
+  return Object.fromEntries(
+    waiting.map((load) => [
+      load.id,
+      paymentDue(
+        invoicedOn.get(load.id) ??
+          (load.delivery_end ?? load.delivery_start).slice(0, 10),
+        load.broker?.payment_terms_days ?? DEFAULT_TERMS_DAYS,
+        today
+      ),
+    ])
+  )
 }
 
 /** One load, or null if it isn't in this organization. */

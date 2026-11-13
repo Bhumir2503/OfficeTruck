@@ -73,6 +73,9 @@ export function NewLoadForm({
         return result.error
       }
       toast.success(`Load ${values.reference} added.`)
+      if (result.warning) {
+        toast.warning(result.warning)
+      }
       router.push(base)
     }
   )
