@@ -11,10 +11,13 @@ import {
 } from "@/lib/email/dispatch-email"
 import { formatStopWindow } from "@/lib/load-format"
 import { checkFmcsa, FMCSA_COLUMNS, type FmcsaRecord } from "@/lib/fmcsa"
+import { DOCUMENT_KINDS, type DocumentKind } from "@/lib/load-document-format"
 import { getMyOrganizations, getUser } from "@/lib/organizations"
 import {
   accessorialSchema,
   type AccessorialValues,
+  cancelLoadSchema,
+  type CancelLoadValues,
   loadAssignmentSchema,
   loadBrokerSchema,
   type LoadBrokerValues,
@@ -177,6 +180,10 @@ export async function updateLoadStatus(
   if (!parsed.success) {
     return { error: "Choose a valid status." }
   }
+  // Canceling takes a reason, so it goes through cancelLoad.
+  if (parsed.data === "cancelled") {
+    return { error: "Give a reason for canceling the load." }
+  }
 
   const supabase = await createClient()
 
@@ -206,6 +213,39 @@ export async function updateLoadStatus(
     return { error: error.message }
   }
   // Row-level security skips the update, rather than failing.
+  if (!data.length) {
+    return { error: "That load doesn't exist anymore." }
+  }
+
+  refresh()
+  return { ok: true }
+}
+
+/** Cancels a load, with the reason it fell through. */
+export async function cancelLoad(
+  organizationId: string,
+  loadId: string,
+  input: CancelLoadValues
+): Promise<ActionResult> {
+  if (!(await isMember(organizationId))) {
+    return { error: "You aren't a member of this organization." }
+  }
+  const parsed = cancelLoadSchema.safeParse(input)
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Give a reason." }
+  }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("loads")
+    .update({ status: "cancelled", cancel_reason: parsed.data.reason })
+    .eq("organization_id", organizationId)
+    .eq("id", loadId)
+    .select("id")
+
+  if (error) {
+    return { error: rpcError(error) }
+  }
   if (!data.length) {
     return { error: "That load doesn't exist anymore." }
   }
@@ -640,6 +680,79 @@ export async function reopenLoad(
   if (error) {
     return { error: rpcError(error) }
   }
+  refresh()
+  return { ok: true }
+}
+
+/** Records a file already uploaded to the load's folder as one of its documents. */
+export async function addLoadDocument(
+  organizationId: string,
+  loadId: string,
+  input: {
+    kind: DocumentKind
+    path: string
+    file_name: string
+    content_type: string
+    size_bytes: number
+  }
+): Promise<ActionResult> {
+  if (!(await isMember(organizationId))) {
+    return { error: "You aren't a member of this organization." }
+  }
+  if (!DOCUMENT_KINDS.includes(input.kind)) {
+    return { error: "Choose what kind of document it is." }
+  }
+
+  const supabase = await createClient()
+  const { error } = await supabase.from("load_documents").insert({
+    organization_id: organizationId,
+    load_id: loadId,
+    kind: input.kind,
+    path: input.path,
+    file_name: input.file_name.trim() || "Document",
+    content_type: input.content_type,
+    size_bytes: input.size_bytes,
+  })
+  if (error) {
+    return {
+      error:
+        error.code === "23503"
+          ? "That load doesn't exist anymore."
+          : error.code === "23514"
+            ? "That file couldn't be added to this load."
+            : error.message,
+    }
+  }
+  refresh()
+  return { ok: true }
+}
+
+/** Removes a document and its file. */
+export async function removeLoadDocument(
+  organizationId: string,
+  documentId: string
+): Promise<ActionResult> {
+  if (!(await isMember(organizationId))) {
+    return { error: "You aren't a member of this organization." }
+  }
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("load_documents")
+    .delete()
+    .eq("organization_id", organizationId)
+    .eq("id", documentId)
+    .select("path")
+  if (error) {
+    return { error: error.message }
+  }
+  if (!data.length) {
+    return { error: "That document doesn't exist anymore." }
+  }
+  // The row is what counts; a file left behind is only clutter.
+  await supabase.storage
+    .from("load-documents")
+    .remove(data.map((row) => row.path))
+    .catch(() => {})
   refresh()
   return { ok: true }
 }

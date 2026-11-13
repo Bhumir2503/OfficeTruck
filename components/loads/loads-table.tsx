@@ -156,6 +156,9 @@ export function LoadsTable({
             <TableHead className="hidden w-px @2xl:table-cell">
               Pickup
             </TableHead>
+            <TableHead className="hidden w-px @4xl:table-cell">
+              Driver
+            </TableHead>
             <TableHead className="w-px text-right">Rate</TableHead>
             <TableHead className="w-px @max-xl:pr-6">Status</TableHead>
             <TableHead className="hidden w-px text-right @xl:table-cell">
@@ -167,7 +170,7 @@ export function LoadsTable({
           {filtered.length === 0 && (
             <TableRow>
               <TableCell
-                colSpan={6}
+                colSpan={7}
                 className="h-24 text-center text-muted-foreground"
               >
                 No loads match your search.
@@ -196,6 +199,13 @@ export function LoadsTable({
               </TableCell>
               <TableCell className="hidden text-muted-foreground @2xl:table-cell">
                 {formatStopDate(load.pickup_start)}
+              </TableCell>
+              <TableCell className="hidden @4xl:table-cell">
+                <div className="max-w-40 truncate text-sm">
+                  {load.driver?.full_name ?? load.driver_name ?? (
+                    <span className="text-muted-foreground">Unassigned</span>
+                  )}
+                </div>
               </TableCell>
               <TableCell className="text-right tabular-nums">
                 {formatRate(load.rate)}

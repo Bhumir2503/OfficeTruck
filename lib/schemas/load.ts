@@ -45,6 +45,16 @@ export const isFallenThrough = (status: LoadStatus) =>
 
 export const loadStatusSchema = z.enum(LOAD_STATUSES, "Choose a status.")
 
+/** Why a load was canceled. Required to cancel one. */
+export const cancelLoadSchema = z.object({
+  reason: z
+    .string("Give a reason for canceling.")
+    .trim()
+    .min(1, "Give a reason for canceling.")
+    .max(500, "Must be 500 characters or fewer."),
+})
+export type CancelLoadValues = z.output<typeof cancelLoadSchema>
+
 export const EQUIPMENT_TYPES = [
   "dry_van",
   "reefer",

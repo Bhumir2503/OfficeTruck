@@ -1,10 +1,14 @@
-import { ArrowLeft, Ban, History, RotateCcw, Send } from "lucide-react"
+import {
+  ArrowLeft,
+  Ban,
+  ChevronDown,
+  History,
+  RotateCcw,
+  Send,
+} from "lucide-react"
 
 import { LocalTime } from "@/components/loads/local-time"
-import {
-  SettingsCard,
-  SettingsEmptyState,
-} from "@/components/settings/settings-card"
+import { SettingsEmptyState } from "@/components/settings/settings-card"
 import type { LoadEvent } from "@/lib/dispatch"
 import { LOAD_STATUS_LABELS, type LoadStatus } from "@/lib/schemas/load"
 
@@ -22,7 +26,7 @@ function describe(event: LoadEvent) {
     case "reopened":
       return `Reopened from ${label(event.from_status).toLowerCase()}, back to booked`
     default:
-      return `${label(event.from_status)} → ${label(event.to_status)}`
+      return `${label(event.from_status)} → ${label(event.to_status)}${event.detail ? `: ${event.detail}` : ""}`
   }
 }
 
@@ -34,46 +38,60 @@ const ICONS = {
   status: History,
 }
 
-/** Every status change on the load, newest first, with who made it. */
+/**
+ * Every status change on the load, newest first, with who made it. Folded
+ * away by default: it's the record, not what people open a load for.
+ */
 export function LoadHistoryCard({ events }: { events: LoadEvent[] }) {
   return (
-    <SettingsCard title="History">
-      {events.length === 0 ? (
-        <SettingsEmptyState icon={History} title="No changes yet">
-          Status changes, sends to the driver and unassigns show up here.
-        </SettingsEmptyState>
-      ) : (
-        <ol className="flex flex-col gap-3">
-          {events.map((event) => {
-            const Icon =
-              event.to_status === "cancelled" || event.to_status === "tonu"
-                ? Ban
-                : ICONS[event.kind]
-            const backward =
-              event.kind === "unassigned" || event.kind === "reopened"
-            return (
-              <li key={event.id} className="flex items-start gap-3 text-sm">
-                <span
-                  className={
-                    backward
-                      ? "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300"
-                      : "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground"
-                  }
-                >
-                  <Icon className="size-3.5" />
-                </span>
-                <div className="min-w-0">
-                  <p className="font-medium">{describe(event)}</p>
-                  <p className="text-muted-foreground">
-                    {event.actor_name ?? "Automatically"} ·{" "}
-                    <LocalTime value={event.created_at} />
-                  </p>
-                </div>
-              </li>
-            )
-          })}
-        </ol>
-      )}
-    </SettingsCard>
+    <details className="group overflow-hidden rounded-xl border bg-card text-card-foreground shadow-xs">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
+        <span className="font-semibold">History</span>
+        <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          {events.length === 0
+            ? "No changes yet"
+            : `${events.length} ${events.length === 1 ? "change" : "changes"}`}
+          <ChevronDown className="size-4 transition-transform group-open:rotate-180" />
+        </span>
+      </summary>
+      <div className="border-t px-5 py-4">
+        {events.length === 0 ? (
+          <SettingsEmptyState icon={History} title="No changes yet">
+            Status changes, sends to the driver and unassigns show up here.
+          </SettingsEmptyState>
+        ) : (
+          <ol className="flex flex-col gap-3">
+            {events.map((event) => {
+              const Icon =
+                event.to_status === "cancelled" || event.to_status === "tonu"
+                  ? Ban
+                  : ICONS[event.kind]
+              const backward =
+                event.kind === "unassigned" || event.kind === "reopened"
+              return (
+                <li key={event.id} className="flex items-start gap-3 text-sm">
+                  <span
+                    className={
+                      backward
+                        ? "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                        : "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground"
+                    }
+                  >
+                    <Icon className="size-3.5" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="font-medium">{describe(event)}</p>
+                    <p className="text-muted-foreground">
+                      {event.actor_name ?? "Automatically"} ·{" "}
+                      <LocalTime value={event.created_at} />
+                    </p>
+                  </div>
+                </li>
+              )
+            })}
+          </ol>
+        )}
+      </div>
+    </details>
   )
 }
