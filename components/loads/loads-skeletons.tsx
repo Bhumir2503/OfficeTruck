@@ -164,9 +164,24 @@ export function NewLoadSkeleton() {
           description="From the rate confirmation."
           contentClassName="grid gap-5 sm:grid-cols-6"
         >
-          <FieldSkeleton label="Load number" className="sm:col-span-2" />
-          <FieldSkeleton label="Broker" className="sm:col-span-2" />
-          <FieldSkeleton label="Rate (USD)" className="sm:col-span-2" />
+          <FieldSkeleton label="Load number" className="sm:col-span-3" />
+          <FieldSkeleton label="Rate (USD)" className="sm:col-span-3" />
+        </SettingsCard>
+        <SettingsCard
+          title="Broker"
+          description="Who booked it, and who sent the rate con."
+          contentClassName="grid gap-5 sm:grid-cols-6"
+        >
+          <FieldSkeleton
+            label="Broker"
+            hint="Their FMCSA status and terms show below."
+            className="sm:col-span-3"
+          />
+          <FieldSkeleton
+            label="Rate con from"
+            hint="Checked against the broker's known email domains."
+            className="sm:col-span-3"
+          />
         </SettingsCard>
         <StopSkeleton title="Pickup" />
         <StopSkeleton title="Delivery" />
@@ -258,6 +273,23 @@ export function LoadDetailSkeleton() {
               lines={["w-64"]}
             />
           </div>
+        </SettingsCard>
+        <SettingsCard
+          title="Broker"
+          description="Who booked it, and who sent the rate con."
+          contentClassName="grid gap-5 sm:grid-cols-6"
+          footer={
+            <SettingsCardFooter hint="Linking a broker re-checks them with FMCSA.">
+              <Skeleton className="h-8 w-16 rounded-md bg-foreground/10" />
+            </SettingsCardFooter>
+          }
+        >
+          <FieldSkeleton label="Broker" className="sm:col-span-3" />
+          <FieldSkeleton
+            label="Rate con from"
+            hint="Checked against the broker's known email domains."
+            className="sm:col-span-3"
+          />
         </SettingsCard>
         <SettingsCard
           title="Truck, driver and miles"

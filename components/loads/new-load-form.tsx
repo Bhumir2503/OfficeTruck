@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { BrokerFields } from "@/components/loads/broker-fields"
 import { DateTimeField } from "@/components/loads/date-time-field"
 import { TruckSelect } from "@/components/loads/truck-select"
 import {
@@ -33,6 +34,7 @@ import {
   handleCurrencyInput,
   handleCurrencyKeyDown,
 } from "@/lib/currency"
+import type { BrokerOption } from "@/lib/brokers"
 import type { DriverOption } from "@/lib/drivers"
 import type { TruckOption } from "@/lib/trucks"
 import { loadSchema, type LoadInput } from "@/lib/schemas/load"
@@ -139,6 +141,9 @@ export function NewLoadForm({
   driversHref,
   trucks,
   trucksHref,
+  brokers,
+  brokersHref,
+  factoringName,
 }: {
   organizationId: string
   /** /org/<slug>/loads */
@@ -149,6 +154,10 @@ export function NewLoadForm({
   trucks: TruckOption[]
   /** /org/<slug>/equipment */
   trucksHref: string
+  brokers: BrokerOption[]
+  /** /org/<slug>/brokers */
+  brokersHref: string
+  factoringName: string | null
 }) {
   const router = useRouter()
   const [driverId, setDriverId] = useState<string | null>(null)
@@ -178,15 +187,8 @@ export function NewLoadForm({
             label="Load number"
             placeholder="e.g. 4471023"
             errors={errors}
-            className="sm:col-span-2"
+            className="sm:col-span-3"
             autoFocus
-          />
-          <TextField
-            name="broker_name"
-            label="Broker"
-            placeholder="e.g. TQL"
-            errors={errors}
-            className="sm:col-span-2"
           />
           <TextField
             name="rate"
@@ -195,10 +197,24 @@ export function NewLoadForm({
             inputMode="decimal"
             placeholder="2,450.00"
             errors={errors}
-            className="sm:col-span-2"
+            className="sm:col-span-3"
             onChange={handleCurrencyInput}
             onKeyDown={handleCurrencyKeyDown}
             onBlur={handleCurrencyBlur}
+          />
+        </SettingsCard>
+
+        <SettingsCard
+          title="Broker"
+          description="Who booked it, and who sent the rate con."
+          contentClassName="grid gap-5 sm:grid-cols-6"
+        >
+          <BrokerFields
+            brokers={brokers}
+            brokersHref={brokersHref}
+            factoringName={factoringName}
+            errors={errors}
+            onUpdate={revalidate}
           />
         </SettingsCard>
 

@@ -3,8 +3,8 @@ import {
   sectionMetadata,
 } from "@/components/section-placeholder"
 
-export const metadata = sectionMetadata("documents")
+export const metadata = sectionMetadata("trailers")
 
 export default function Page() {
-  return <SectionPlaceholder path="documents" />
+  return <SectionPlaceholder path="trailers" />
 }
