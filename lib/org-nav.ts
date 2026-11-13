@@ -1,7 +1,7 @@
 import {
   ChartColumnIcon,
   CircleUserRoundIcon,
-  FileTextIcon,
+  ContainerIcon,
   HandshakeIcon,
   IdCardIcon,
   LayoutDashboardIcon,
@@ -22,11 +22,12 @@ export type OrgSection = {
   description: string
 }
 
-// The sidebar follows an owner's day: what needs attention, then loads, then
-// money, then compliance. Add new items to the group they belong to.
+// The sidebar follows an owner's day: what needs attention, the loads and
+// the money they bring in, then the fleet, then compliance. Add new items to
+// the group they belong to.
 export const ORG_NAV: { label?: string; items: OrgSection[] }[] = [
   {
-    label: "Work",
+    label: "Overview",
     items: [
       {
         title: "Dashboard",
@@ -42,30 +43,18 @@ export const ORG_NAV: { label?: string; items: OrgSection[] }[] = [
           "Every load from rate confirmation to paid, filtered by booked, in transit, delivered, invoiced and paid. Uploading a rate confirmation starts a new load here.",
       },
       {
-        title: "Documents",
-        path: "documents",
-        icon: FileTextIcon,
+        title: "Brokers",
+        path: "brokers",
+        icon: HandshakeIcon,
         description:
-          "BOLs, PODs and receipts, including an inbox of files drivers uploaded that haven't been matched to a load yet.",
+          "Each broker's contact details, FMCSA authority check, payment history and average days to pay.",
       },
-    ],
-  },
-  {
-    label: "Money",
-    items: [
       {
         title: "Invoices",
         path: "invoices",
         icon: ReceiptTextIcon,
         description:
           "Drafts, sent, overdue and paid invoices, plus factoring submissions.",
-      },
-      {
-        title: "Brokers",
-        path: "brokers",
-        icon: HandshakeIcon,
-        description:
-          "Each broker's contact details, FMCSA authority check, payment history and average days to pay.",
       },
       {
         title: "Reports",
@@ -91,6 +80,13 @@ export const ORG_NAV: { label?: string; items: OrgSection[] }[] = [
         path: "equipment",
         icon: TruckIcon,
         description: "Equipment records, registration and inspections.",
+      },
+      {
+        title: "Trailers",
+        path: "trailers",
+        icon: ContainerIcon,
+        description:
+          "Each trailer's type, plate, registration and inspections, and which truck is pulling it.",
       },
     ],
   },
