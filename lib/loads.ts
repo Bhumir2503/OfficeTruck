@@ -35,6 +35,9 @@ export type Load = {
     pay_rate: number | null
   } | null
   miles: number | null
+  /** The driver's pay rate, locked onto the load when they were assigned. */
+  driver_pay_type: PayType | null
+  driver_pay_rate: number | null
   /** Typed in before trucks existed; shown when there's no linked truck. */
   truck: string | null
   truck_id: string | null
@@ -47,7 +50,7 @@ export type Load = {
 }
 
 const LOAD_COLUMNS =
-  "id, reference, broker_name, broker_id, broker:brokers!loads_broker_fkey (id, legal_name, email_domains, phone), rate_con_from, pickup_location, pickup_start, pickup_end, delivery_location, delivery_start, delivery_end, rate, status, driver_name, driver_id, driver:drivers!loads_driver_fkey (id, full_name, pay_type, pay_rate), miles, empty_miles, truck, truck_id, truck_link:trucks!loads_truck_fkey (id, unit_number), notes, created_at, updated_at"
+  "id, reference, broker_name, broker_id, broker:brokers!loads_broker_fkey (id, legal_name, email_domains, phone), rate_con_from, pickup_location, pickup_start, pickup_end, delivery_location, delivery_start, delivery_end, rate, status, driver_name, driver_id, driver:drivers!loads_driver_fkey (id, full_name, pay_type, pay_rate), miles, driver_pay_type, driver_pay_rate, empty_miles, truck, truck_id, truck_link:trucks!loads_truck_fkey (id, unit_number), notes, created_at, updated_at"
 
 /** Every load in the organization, newest pickup first. */
 export async function getLoads(organizationId: string): Promise<Load[]> {

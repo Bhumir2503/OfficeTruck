@@ -1,7 +1,7 @@
 import {
   addYear,
-  driverPay,
   expiry,
+  loadDriverPay,
   type ComplianceItem,
 } from "@/lib/driver-format"
 import type { TaxFiling, Truck, TruckLoad } from "@/lib/trucks"
@@ -177,7 +177,7 @@ export function loadProfits(
       result.set(load.id, { driverPay: null, fixedCost: null, profit: null })
       continue
     }
-    const pay = load.driver ? driverPay(load.driver, load) : null
+    const pay = loadDriverPay(load)
     const monthMiles = milesByMonth.get(load.pickup_start.slice(0, 7)) ?? 0
     const fixedCost =
       monthly === 0
@@ -225,9 +225,7 @@ export function weekSummary(
   })
   const miles = week.reduce((sum, load) => sum + totalMiles(load), 0)
   const revenue = week.reduce((sum, load) => sum + Number(load.rate), 0)
-  const pays = week.map((load) =>
-    load.driver ? driverPay(load.driver, load) : null
-  )
+  const pays = week.map((load) => loadDriverPay(load))
   const pay = pays.reduce<number>((sum, value) => sum + (value ?? 0), 0)
   const fixedCost = (monthlyFixedCosts(truck) * 12) / 52
   return {

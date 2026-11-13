@@ -182,3 +182,37 @@ export async function setDriverPhoto(
   }
   return result
 }
+
+export type ApplyRateResult = { error: string } | { ok: true; changed: number }
+
+/**
+ * Moves a driver's booked loads onto their current pay rate. Loads in
+ * transit, delivered or invoiced keep the rate they were locked at.
+ */
+export async function applyRateToUpcomingLoads(
+  organizationId: string,
+  driverId: string
+): Promise<ApplyRateResult> {
+  if (!(await canManageDrivers(organizationId))) {
+    return { error: NOT_ALLOWED }
+  }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc(
+    "apply_driver_rate_to_upcoming_loads",
+    { target_driver: driverId }
+  )
+  if (error) {
+    return {
+      error:
+        error.hint === "not_found"
+          ? "That driver doesn't exist anymore."
+          : error.hint === "not_allowed"
+            ? NOT_ALLOWED
+            : error.message,
+    }
+  }
+
+  refresh()
+  return { ok: true, changed: Number(data) }
+}

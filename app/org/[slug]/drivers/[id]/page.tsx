@@ -10,6 +10,7 @@ import {
 import { DriverForm } from "@/components/drivers/driver-form"
 import { DriverLoads } from "@/components/drivers/driver-loads"
 import { DriverPhotos } from "@/components/drivers/driver-photos"
+import { DriverRateNotice } from "@/components/drivers/driver-rate-notice"
 import { DriverStatusButton } from "@/components/drivers/driver-status-button"
 import {
   SettingsCard,
@@ -75,10 +76,24 @@ export default async function DriverPage({
   const warn = driver.status === "active"
   const none = <span className="text-muted-foreground">Not set</span>
   const items = complianceItems(driver, today)
+  const currentRate = formatPay(driver.pay_type, driver.pay_rate)
   const [loads, photoUrls] = await Promise.all([
     getDriverLoads(organization.id, driver.id),
     getDriverPhotoUrls(driver),
   ])
+  // Booked loads still locked at a rate other than the driver's current one.
+  const staleLoads = loads
+    .filter(
+      (load) =>
+        load.status === "booked" &&
+        currentRate !== null &&
+        formatPay(load.driver_pay_type, load.driver_pay_rate) !== currentRate
+    )
+    .map((load) => ({
+      reference: load.reference,
+      locked:
+        formatPay(load.driver_pay_type, load.driver_pay_rate) ?? "no rate",
+    }))
 
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
@@ -172,6 +187,15 @@ export default async function DriverPage({
             )}
           </dl>
         </SettingsCard>
+        {manager && staleLoads.length > 0 && currentRate && (
+          <DriverRateNotice
+            organizationId={organization.id}
+            driverId={driver.id}
+            driverName={driver.full_name}
+            currentRate={currentRate}
+            stale={staleLoads}
+          />
+        )}
         <SettingsCard
           title="CDL and medical card"
           description={
@@ -193,7 +217,6 @@ export default async function DriverPage({
         </SettingsCard>
         <DriverLoads
           loads={loads}
-          driver={driver}
           loadsBase={`/org/${organization.slug}/loads`}
         />
         {manager && (
