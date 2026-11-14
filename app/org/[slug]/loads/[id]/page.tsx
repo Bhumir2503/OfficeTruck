@@ -106,7 +106,7 @@ export default async function LoadPage({
               notice={
                 load.status === "cancelled" && load.cancel_reason ? (
                   <p className="mb-5 rounded-lg bg-muted px-4 py-3 text-sm">
-                    <span className="font-medium">Canceled:</span>{" "}
+                    <span className="font-medium">Cancelled:</span>{" "}
                     {load.cancel_reason}
                   </p>
                 ) : null

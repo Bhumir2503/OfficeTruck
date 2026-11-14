@@ -9,6 +9,7 @@ import {
   cancelLoad,
   markLoadComplete,
   reopenLoad,
+  unmarkLoadComplete,
   updateLoadStatus,
 } from "@/app/org/[slug]/loads/actions"
 import { Button } from "@/components/ui/button"
@@ -150,6 +151,7 @@ function CancelForm({
 /** An action in the status menu: what it does to the load. */
 type StatusAction =
   | { kind: "complete" }
+  | { kind: "uncomplete" }
   | { kind: "status"; to: LoadStatus; label: string }
   | { kind: "cancel" }
   | { kind: "reopen" }
@@ -160,10 +162,10 @@ type StatusAction =
  * POD and check-ins. Invoiced and Paid are manual until invoicing and
  * payments are built.
  */
-function actionsFor(status: LoadStatus): StatusAction[][] {
+function actionsFor(status: LoadStatus, manual: boolean): StatusAction[][] {
   const end: StatusAction[] = [
     { kind: "cancel" },
-    { kind: "status", to: "tonu", label: "Truck ordered, not used (TONU)" },
+    { kind: "status", to: "tonu", label: "TONU" },
   ]
   switch (status) {
     case "booked":
@@ -172,7 +174,13 @@ function actionsFor(status: LoadStatus): StatusAction[][] {
     case "loaded":
       return [[{ kind: "complete" }], end]
     case "delivered":
-      return [[{ kind: "status", to: "invoiced", label: "Mark invoiced" }], end]
+      return [
+        [
+          ...(manual ? [{ kind: "uncomplete" } as const] : []),
+          { kind: "status", to: "invoiced", label: "Mark invoiced" },
+        ],
+        end,
+      ]
     case "invoiced":
       return [
         [
@@ -209,11 +217,11 @@ export function LoadStatusMenu({
   const [pending, setPending] = useState(false)
   const [canceling, setCanceling] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const groups = actionsFor(load.status)
   // Marked complete by hand and still waiting on proof: "Completed" instead
   // of "Delivered". Past delivered (invoiced, paid) the usual name shows.
   const manual = !!load.completed_manually && load.status === "delivered"
   const statusLabel = manual ? "Completed" : LOAD_STATUS_LABELS[load.status]
+  const groups = actionsFor(load.status, manual)
 
   async function run(action: StatusAction) {
     if (action.kind === "cancel") {
@@ -224,6 +232,18 @@ export function LoadStatusMenu({
       return
     }
     setPending(true)
+    if (action.kind === "uncomplete") {
+      const undone = await unmarkLoadComplete(organizationId, load.id)
+      setPending(false)
+      if ("error" in undone) {
+        toast.error(undone.error)
+      } else {
+        toast.success(
+          `Completion undone. Load ${load.reference} is back to ${LOAD_STATUS_LABELS[undone.status].toLowerCase()}.`
+        )
+      }
+      return
+    }
     const result =
       action.kind === "reopen"
         ? await reopenLoad(organizationId, load.id)
@@ -247,11 +267,13 @@ export function LoadStatusMenu({
   const label = (action: StatusAction) =>
     action.kind === "complete"
       ? "Mark complete"
-      : action.kind === "cancel"
-        ? "Cancel load…"
-        : action.kind === "reopen"
-          ? "Reopen as booked"
-          : action.label
+      : action.kind === "uncomplete"
+        ? "Undo complete"
+        : action.kind === "cancel"
+          ? "Cancelled"
+          : action.kind === "reopen"
+            ? "Reopen as booked"
+            : action.label
 
   return (
     <>

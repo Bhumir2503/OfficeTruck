@@ -145,7 +145,7 @@ function nextStep(
     case "cancelled":
     case "tonu":
       return {
-        title: load.status === "tonu" ? "Truck ordered, not used" : "Canceled",
+        title: load.status === "tonu" ? "TONU" : "Cancelled",
         detail: "Reopen it from the status menu to book it again.",
         action: null,
       }

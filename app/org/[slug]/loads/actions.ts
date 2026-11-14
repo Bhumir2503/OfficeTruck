@@ -291,6 +291,29 @@ export async function markLoadComplete(
   return { ok: true }
 }
 
+/**
+ * Takes back a Mark complete: the load goes back to booked if it was
+ * completed from booked, otherwise to wherever its BOL, POD and check-ins
+ * put it. Returns the status it's now in. Logged.
+ */
+export async function unmarkLoadComplete(
+  organizationId: string,
+  loadId: string
+): Promise<{ error: string } | { ok: true; status: LoadStatus }> {
+  if (!(await isMember(organizationId))) {
+    return { error: "You aren't a member of this organization." }
+  }
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc("unmark_load_complete", {
+    target_load: loadId,
+  })
+  if (error) {
+    return { error: rpcError(error) }
+  }
+  refresh()
+  return { ok: true, status: data as LoadStatus }
+}
+
 /** Changes the load number and what's being hauled. */
 export async function updateLoadDetails(
   organizationId: string,

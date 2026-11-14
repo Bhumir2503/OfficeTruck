@@ -29,7 +29,7 @@ export const LOAD_STATUS_LABELS: Record<LoadStatus, string> = {
   invoiced: "Invoiced",
   paid: "Paid",
   factored: "Factored",
-  cancelled: "Canceled",
+  cancelled: "Cancelled",
   tonu: "TONU",
 }
 
