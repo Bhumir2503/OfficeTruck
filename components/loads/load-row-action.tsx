@@ -6,7 +6,6 @@ import {
   MapPin,
   PackageCheck,
   Send,
-  Truck,
   UserPlus,
 } from "lucide-react"
 import Link from "next/link"
@@ -16,7 +15,7 @@ import { toast } from "sonner"
 import {
   sendToDriver,
   updateLoadAssignment,
-  updateLoadStatus,
+  markLoadComplete,
 } from "@/app/org/[slug]/loads/actions"
 import { DriverSelect } from "@/components/loads/driver-select"
 import { TruckSelect } from "@/components/loads/truck-select"
@@ -65,7 +64,7 @@ function clashesFor(load: Load, driverId: string | null, loads: Load[]) {
   )
 }
 
-type Action = "assign" | "send" | "loaded" | "delivered"
+type Action = "assign" | "send" | "complete"
 
 /** The first pickup to the last delivery, as a line in a dialog. */
 function Route({ load }: { load: Load }) {
@@ -313,34 +312,28 @@ function SendForm({
   )
 }
 
-function StatusForm({
+/** Marks a load on the road delivered by hand, when the POD or check-in won't come. */
+function CompleteForm({
   load,
-  status,
   context,
   onDone,
 }: {
   load: Load
-  status: "loaded" | "delivered"
   context: RowActionContext
   onDone: () => void
 }) {
   const [pending, setPending] = useState(false)
-  const label = status === "loaded" ? "Mark in transit" : "Mark delivered"
 
   async function save() {
     setPending(true)
-    const result = await updateLoadStatus(
-      context.organizationId,
-      load.id,
-      status
-    )
+    const result = await markLoadComplete(context.organizationId, load.id)
     setPending(false)
     if ("error" in result) {
       toast.error(result.error)
       return
     }
     toast.success(
-      `Load ${load.reference} is ${status === "loaded" ? "in transit" : "delivered"}.`
+      `Load ${load.reference} marked complete. It shows as delivered by hand until the POD comes in.`
     )
     onDone()
   }
@@ -350,18 +343,16 @@ function StatusForm({
       <div className="grid gap-4">
         <Route load={load} />
         <p className="text-muted-foreground">
-          {load.driver?.full_name ?? "The driver"}
-          {load.truck_link ? ` in ${load.truck_link.unit_number}` : ""}{" "}
-          {status === "loaded"
-            ? "picked up the freight."
-            : "dropped off the freight. It moves to Needs billing."}
+          The status moves on its own when the BOL and POD are uploaded or the
+          driver checks in. Mark it complete only if those won&apos;t come; it
+          shows as &ldquo;Delivered · Manual&rdquo; and moves to Needs billing.
         </p>
       </div>
       <DialogFooter>
         <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
         <Button disabled={pending} onClick={save}>
-          {status === "loaded" ? <Truck /> : <PackageCheck />}
-          {pending ? "Saving…" : label}
+          <PackageCheck />
+          {pending ? "Saving…" : "Mark complete"}
         </Button>
       </DialogFooter>
     </div>
@@ -371,15 +362,13 @@ function StatusForm({
 const TITLES: Record<Action, (load: Load) => string> = {
   assign: (load) => `Assign load ${load.reference}`,
   send: (load) => `Send load ${load.reference}`,
-  loaded: (load) => `Mark ${load.reference} in transit`,
-  delivered: (load) => `Mark ${load.reference} delivered`,
+  complete: (load) => `Mark ${load.reference} complete`,
 }
 
 const DESCRIPTIONS: Record<Action, string> = {
   assign: "Pick who runs it. It stays booked until you send it.",
   send: "Your driver gets a private link to the load.",
-  loaded: "Once the freight is on the truck.",
-  delivered: "Once the freight is dropped off.",
+  complete: "Delivered, marked by hand.",
 }
 
 /** Which action a load's row offers, if any we can do from the table. */
@@ -390,7 +379,7 @@ function actionFor(load: Load): Action | null {
     case "ready_to_send":
       return "send"
     case "on_the_road":
-      return load.status === "dispatched" ? "loaded" : "delivered"
+      return "complete"
     default:
       return null
   }
@@ -439,8 +428,7 @@ export function LoadRowAction({
       icon: <Send />,
       label: `Send to ${load.driver?.full_name.split(" ")[0] ?? "driver"}`,
     },
-    loaded: { icon: <Truck />, label: "Mark in transit" },
-    delivered: { icon: <PackageCheck />, label: "Mark delivered" },
+    complete: { icon: <PackageCheck />, label: "Mark complete" },
   }[action]
 
   const close = () => setOpen(false)
@@ -467,13 +455,8 @@ export function LoadRowAction({
         {action === "send" && (
           <SendForm load={load} context={context} onDone={close} />
         )}
-        {(action === "loaded" || action === "delivered") && (
-          <StatusForm
-            load={load}
-            status={action}
-            context={context}
-            onDone={close}
-          />
+        {action === "complete" && (
+          <CompleteForm load={load} context={context} onDone={close} />
         )}
       </DialogContent>
     </Dialog>

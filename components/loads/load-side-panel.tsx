@@ -15,6 +15,7 @@ import { useRef, useState } from "react"
 import { toast } from "sonner"
 
 import {
+  markLoadComplete,
   removeLoadDocument,
   sendToDriver,
   updateLoadStatus,
@@ -52,7 +53,7 @@ type Step = {
     | { type: "status"; to: LoadStatus; label: string }
     | null
   /** A second, quieter choice, e.g. factored instead of paid. */
-  alternative?: { to: LoadStatus; label: string }
+  alternative?: { to: LoadStatus | "complete"; label: string }
 }
 
 const firstName = (name: string | null | undefined) => name?.split(" ")[0]
@@ -85,31 +86,29 @@ function nextStep(
             action: { type: "assign" },
           }
     case "dispatched":
-      if (!has("bol")) {
-        return upload(
-          "bol",
-          dispatch?.seen_at
-            ? `${firstName(load.driver?.full_name) ?? "The driver"} has the load. Add the signed BOL once it's loaded.`
-            : "Add the signed BOL once it's loaded."
-        )
+    case "loaded": {
+      // The status moves on its own from the BOL, POD and check-ins; Mark
+      // complete is for when they won't come.
+      const complete = { to: "complete" as const, label: "Mark complete" }
+      if (!has("bol") && load.status === "dispatched") {
+        return {
+          ...upload(
+            "bol",
+            dispatch?.seen_at
+              ? `${firstName(load.driver?.full_name) ?? "The driver"} has the load. The signed BOL moves it to in transit.`
+              : "The signed BOL moves the load to in transit."
+          ),
+          alternative: complete,
+        }
       }
       return {
-        title: "Mark it in transit",
-        detail: "The BOL is in, so the freight is on the truck.",
-        action: { type: "status", to: "loaded", label: "Mark in transit" },
+        ...upload(
+          "pod",
+          "The signed proof of delivery moves the load to delivered."
+        ),
+        alternative: complete,
       }
-    case "loaded":
-      if (!has("bol")) {
-        return upload("bol", "The signed bill of lading from the pickup.")
-      }
-      if (!has("pod")) {
-        return upload("pod", "The signed proof of delivery from the receiver.")
-      }
-      return {
-        title: "Mark it delivered",
-        detail: "The POD is in.",
-        action: { type: "status", to: "delivered", label: "Mark delivered" },
-      }
+    }
     case "delivered": {
       const first = missing[0]
       if (first) {
@@ -339,6 +338,19 @@ export function LoadSidePanel({
     }
   }
 
+  async function complete() {
+    setBusy("status:complete")
+    const result = await markLoadComplete(organizationId, load.id)
+    setBusy(null)
+    if ("error" in result) {
+      toast.error(result.error)
+    } else {
+      toast.success(
+        `Load ${load.reference} marked complete. It shows as delivered by hand until the POD comes in.`
+      )
+    }
+  }
+
   async function move(to: LoadStatus) {
     setBusy(`status:${to}`)
     const result = await updateLoadStatus(organizationId, load.id, to)
@@ -423,7 +435,10 @@ export function LoadSidePanel({
                   variant="ghost"
                   size="sm"
                   disabled={working}
-                  onClick={() => void move(step.alternative!.to)}
+                  onClick={() => {
+                    const to = step.alternative!.to
+                    void (to === "complete" ? complete() : move(to))
+                  }}
                 >
                   {step.alternative.label}
                 </Button>

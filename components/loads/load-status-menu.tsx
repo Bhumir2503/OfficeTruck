@@ -7,6 +7,7 @@ import { toast } from "sonner"
 
 import {
   cancelLoad,
+  markLoadComplete,
   reopenLoad,
   updateLoadStatus,
 } from "@/app/org/[slug]/loads/actions"
@@ -25,8 +26,6 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
@@ -37,8 +36,6 @@ import { STATUS_STYLES } from "@/lib/load-format"
 import {
   cancelLoadSchema,
   isFallenThrough,
-  LOAD_ENDINGS,
-  LOAD_FLOW,
   LOAD_STATUS_LABELS,
   type LoadStatus,
 } from "@/lib/schemas/load"
@@ -150,44 +147,73 @@ function CancelForm({
   )
 }
 
-/** The status badge, which opens a menu to move the load to another status. */
+/** An action in the status menu: what it does to the load. */
+type StatusAction =
+  | { kind: "complete" }
+  | { kind: "status"; to: LoadStatus; label: string }
+  | { kind: "cancel" }
+  | { kind: "reopen" }
+
+/**
+ * What the office can do from a status. Everything else moves on its own:
+ * Dispatched from Save and notify, In transit and Delivered from the BOL,
+ * POD and check-ins. Invoiced and Paid are manual until invoicing and
+ * payments are built.
+ */
+function actionsFor(status: LoadStatus): StatusAction[][] {
+  const end: StatusAction[] = [
+    { kind: "cancel" },
+    { kind: "status", to: "tonu", label: "Truck ordered, not used (TONU)" },
+  ]
+  switch (status) {
+    case "booked":
+      return [end]
+    case "dispatched":
+    case "loaded":
+      return [[{ kind: "complete" }], end]
+    case "delivered":
+      return [[{ kind: "status", to: "invoiced", label: "Mark invoiced" }], end]
+    case "invoiced":
+      return [
+        [
+          { kind: "status", to: "paid", label: "Mark paid" },
+          { kind: "status", to: "factored", label: "Mark factored" },
+        ],
+      ]
+    case "cancelled":
+    case "tonu":
+      return [[{ kind: "reopen" }]]
+    default:
+      return []
+  }
+}
+
+/**
+ * The status badge. Statuses move on their own; the badge opens the few
+ * things the office does by hand, like Mark complete, which shows as
+ * "Delivered · Manual" until real proof of delivery arrives.
+ */
 export function LoadStatusMenu({
   organizationId,
   load,
 }: {
   organizationId: string
-  load: { id: string; reference: string; status: LoadStatus }
+  load: {
+    id: string
+    reference: string
+    status: LoadStatus
+    /** Marked complete by hand, with no POD or last-stop check-in yet. */
+    completed_manually?: boolean
+  }
 }) {
   const [pending, setPending] = useState(false)
   const [canceling, setCanceling] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const groups = actionsFor(load.status)
+  const manual = !!load.completed_manually
 
-  // Statuses only move forward, or off the flow to canceled or TONU. Going
-  // back is an unassign (on the Dispatch card) or a reopen (here).
-  const at = LOAD_FLOW.indexOf(load.status as (typeof LOAD_FLOW)[number])
-  const ended = isFallenThrough(load.status)
-  const canMoveTo = (status: LoadStatus) =>
-    !ended &&
-    status !== "dispatched" &&
-    LOAD_FLOW.indexOf(status as (typeof LOAD_FLOW)[number]) > at
-
-  async function reopen() {
-    setPending(true)
-    const result = await reopenLoad(organizationId, load.id)
-    setPending(false)
-    if ("error" in result) {
-      toast.error(result.error)
-    } else {
-      toast.success(`Load ${load.reference} reopened. It's back to booked.`)
-    }
-  }
-
-  async function change(next: LoadStatus) {
-    if (next === load.status) {
-      return
-    }
-    // Canceling asks why first.
-    if (next === "cancelled") {
+  async function run(action: StatusAction) {
+    if (action.kind === "cancel") {
       // Close the menu first, or it stays open over the popup and takes its
       // clicks.
       setMenuOpen(false)
@@ -195,76 +221,86 @@ export function LoadStatusMenu({
       return
     }
     setPending(true)
-    const result = await updateLoadStatus(organizationId, load.id, next)
+    const result =
+      action.kind === "reopen"
+        ? await reopenLoad(organizationId, load.id)
+        : action.kind === "complete"
+          ? await markLoadComplete(organizationId, load.id)
+          : await updateLoadStatus(organizationId, load.id, action.to)
     setPending(false)
     if ("error" in result) {
       toast.error(result.error)
-    } else {
-      toast.success(
-        `Load ${load.reference} marked ${LOAD_STATUS_LABELS[next].toLowerCase()}.`
-      )
+      return
     }
+    toast.success(
+      action.kind === "reopen"
+        ? `Load ${load.reference} reopened. It's back to booked.`
+        : action.kind === "complete"
+          ? `Load ${load.reference} marked complete. It shows as delivered by hand until the POD comes in.`
+          : `Load ${load.reference} marked ${LOAD_STATUS_LABELS[action.to].toLowerCase()}.`
+    )
   }
+
+  const label = (action: StatusAction) =>
+    action.kind === "complete"
+      ? "Mark complete"
+      : action.kind === "cancel"
+        ? "Cancel load…"
+        : action.kind === "reopen"
+          ? "Reopen as booked"
+          : action.label
 
   return (
     <>
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger
-          disabled={pending}
-          aria-label={`Change status of load ${load.reference}`}
+          disabled={pending || groups.length === 0}
+          aria-label={`Status of load ${load.reference}: ${LOAD_STATUS_LABELS[load.status]}${manual ? ", marked complete by hand" : ""}`}
           className={cn(
-            "inline-flex h-6 items-center gap-1 rounded-4xl pr-1.5 pl-2.5 text-xs font-medium whitespace-nowrap outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-60",
-            STATUS_STYLES[load.status]
+            "inline-flex h-6 items-center gap-1 rounded-4xl pr-1.5 pl-2.5 text-xs font-medium whitespace-nowrap outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-100",
+            STATUS_STYLES[load.status],
+            groups.length === 0 && "pr-2.5"
           )}
         >
           <span className={cn(isFallenThrough(load.status) && "line-through")}>
             {LOAD_STATUS_LABELS[load.status]}
           </span>
-          <ChevronDownIcon className="size-3 opacity-70" />
+          {manual && <span className="font-normal opacity-75">· Manual</span>}
+          {groups.length > 0 && (
+            <ChevronDownIcon className="size-3 opacity-70" />
+          )}
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="min-w-44">
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>Move to</DropdownMenuLabel>
-            <DropdownMenuRadioGroup
-              value={load.status}
-              onValueChange={(value) => change(value as LoadStatus)}
-            >
-              {LOAD_FLOW.map((status) => (
-                <DropdownMenuRadioItem
-                  key={status}
-                  value={status}
-                  disabled={status !== load.status && !canMoveTo(status)}
+        <DropdownMenuContent align="start" className="min-w-52">
+          {groups.map((group, index) => (
+            <DropdownMenuGroup key={index}>
+              {index > 0 && <DropdownMenuSeparator />}
+              {index === 0 && (
+                <DropdownMenuLabel className="font-normal text-muted-foreground">
+                  {load.status === "dispatched" || load.status === "loaded"
+                    ? "Moves on its own from the BOL, POD and check-ins"
+                    : "Actions"}
+                </DropdownMenuLabel>
+              )}
+              {group.map((action) => (
+                <DropdownMenuItem
+                  key={label(action)}
+                  variant={action.kind === "cancel" ? "destructive" : undefined}
+                  onClick={() => void run(action)}
                 >
-                  <span className="flex flex-col">
-                    <span>{LOAD_STATUS_LABELS[status]}</span>
-                    {status === "dispatched" && load.status === "booked" && (
+                  {action.kind === "complete" ? (
+                    <span className="flex flex-col">
+                      <span>Mark complete</span>
                       <span className="text-xs text-muted-foreground">
-                        Use Send to driver
+                        Delivered, marked by hand
                       </span>
-                    )}
-                  </span>
-                </DropdownMenuRadioItem>
-              ))}
-              <DropdownMenuSeparator />
-              {LOAD_ENDINGS.map((status) => (
-                <DropdownMenuRadioItem
-                  key={status}
-                  value={status}
-                  disabled={status !== load.status && ended}
-                >
-                  {LOAD_STATUS_LABELS[status]}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-            {ended && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={reopen}>
-                  Reopen as booked
+                    </span>
+                  ) : (
+                    label(action)
+                  )}
                 </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuGroup>
+              ))}
+            </DropdownMenuGroup>
+          ))}
         </DropdownMenuContent>
       </DropdownMenu>
       <Dialog open={canceling} onOpenChange={setCanceling}>

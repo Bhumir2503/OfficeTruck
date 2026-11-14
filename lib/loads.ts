@@ -63,12 +63,17 @@ export type Load = {
   notes: string | null
   /** Why it was canceled, while it's canceled. */
   cancel_reason: string | null
+  /**
+   * Marked complete by hand, with no POD or last-stop check-in yet. Shown
+   * as "Delivered · Manual".
+   */
+  completed_manually: boolean
   created_at: string
   updated_at: string
 }
 
 const LOAD_COLUMNS =
-  "id, reference, broker_name, broker_id, broker:brokers!loads_broker_fkey (id, legal_name, email_domains, phone, payment_terms_days), rate_con_from, pickup_location, pickup_start, pickup_end, delivery_location, delivery_start, delivery_end, rate, status, driver_name, driver_id, driver:drivers!loads_driver_fkey (id, full_name, pay_type, pay_rate), miles, driver_pay_type, driver_pay_rate, empty_miles, truck, truck_id, truck_link:trucks!loads_truck_fkey (id, unit_number), reference_numbers, equipment, commodity, weight_lbs, trailer_number, detention_free_hours, detention_rate, notes, cancel_reason, created_at, updated_at"
+  "id, reference, broker_name, broker_id, broker:brokers!loads_broker_fkey (id, legal_name, email_domains, phone, payment_terms_days), rate_con_from, pickup_location, pickup_start, pickup_end, delivery_location, delivery_start, delivery_end, rate, status, driver_name, driver_id, driver:drivers!loads_driver_fkey (id, full_name, pay_type, pay_rate), miles, driver_pay_type, driver_pay_rate, empty_miles, truck, truck_id, truck_link:trucks!loads_truck_fkey (id, unit_number), reference_numbers, equipment, commodity, weight_lbs, trailer_number, detention_free_hours, detention_rate, notes, cancel_reason, completed_manually, created_at, updated_at"
 
 /** Every load in the organization, newest pickup first. */
 export async function getLoads(organizationId: string): Promise<Load[]> {

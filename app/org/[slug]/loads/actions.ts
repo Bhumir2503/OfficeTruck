@@ -185,9 +185,18 @@ export async function updateLoadStatus(
   if (!parsed.success) {
     return { error: "Choose a valid status." }
   }
-  // Canceling takes a reason, so it goes through cancelLoad.
+  // Canceling takes a reason, so it goes through cancelLoad. The rest of
+  // the flow moves on its own (Save and notify, the BOL and POD,
+  // check-ins) or through Mark complete; invoicing and payments are manual
+  // until they're built.
   if (parsed.data === "cancelled") {
     return { error: "Give a reason for canceling the load." }
+  }
+  if (!["invoiced", "paid", "factored", "tonu"].includes(parsed.data)) {
+    return {
+      error:
+        "That status is set on its own from the BOL, POD and check-ins. Use Mark complete if they won't come.",
+    }
   }
 
   const supabase = await createClient()
@@ -255,6 +264,29 @@ export async function cancelLoad(
     return { error: "That load doesn't exist anymore." }
   }
 
+  refresh()
+  return { ok: true }
+}
+
+/**
+ * Marks a load on the road delivered by hand, for when the POD or the
+ * driver's check-in won't come. It shows as "Delivered · Manual" until
+ * they do. Logged.
+ */
+export async function markLoadComplete(
+  organizationId: string,
+  loadId: string
+): Promise<ActionResult> {
+  if (!(await isMember(organizationId))) {
+    return { error: "You aren't a member of this organization." }
+  }
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("mark_load_complete", {
+    target_load: loadId,
+  })
+  if (error) {
+    return { error: rpcError(error) }
+  }
   refresh()
   return { ok: true }
 }
