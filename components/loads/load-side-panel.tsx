@@ -5,7 +5,6 @@ import {
   ArrowRight,
   CheckCircle2,
   Circle,
-  FileText,
   Loader2,
   Plus,
   Send,
@@ -20,6 +19,7 @@ import {
   sendToDriver,
   updateLoadStatus,
 } from "@/app/org/[slug]/loads/actions"
+import { DocumentLink } from "@/components/loads/document-viewer"
 import { Button } from "@/components/ui/button"
 import type { LoadDispatch } from "@/lib/dispatch"
 import { formatPay, loadDriverPay } from "@/lib/driver-format"
@@ -32,6 +32,12 @@ import {
 } from "@/lib/load-document-format"
 import { DOCUMENT_TYPES, uploadLoadDocument } from "@/lib/load-document-upload"
 import type { LoadDocument } from "@/lib/load-documents"
+import {
+  EXPENSE_KINDS,
+  EXPENSE_LABELS,
+  expenseTotals,
+} from "@/lib/load-expense-format"
+import type { LoadExpense } from "@/lib/load-expenses"
 import { formatRate } from "@/lib/load-format"
 import type { Load, LoadCharge } from "@/lib/loads"
 import { LOAD_STATUS_LABELS, type LoadStatus } from "@/lib/schemas/load"
@@ -68,9 +74,9 @@ function nextStep(
     case "booked":
       return load.driver && load.truck_link
         ? {
-            title: `Send it to ${firstName(load.driver.full_name)}`,
+            title: `Notify ${firstName(load.driver.full_name)}`,
             detail:
-              "Sends the stops, appointments, pickup numbers and rate con. The load moves to dispatched.",
+              "Sends them the stops, appointments, pickup numbers and rate con. The load moves to dispatched.",
             action: { type: "send" },
           }
         : {
@@ -82,15 +88,15 @@ function nextStep(
       if (!has("bol")) {
         return upload(
           "bol",
-          dispatch?.accepted_at
-            ? `${firstName(load.driver?.full_name) ?? "The driver"} accepted. Add the signed BOL once it's loaded.`
+          dispatch?.seen_at
+            ? `${firstName(load.driver?.full_name) ?? "The driver"} has the load. Add the signed BOL once it's loaded.`
             : "Add the signed BOL once it's loaded."
         )
       }
       return {
-        title: "Mark it loaded",
+        title: "Mark it in transit",
         detail: "The BOL is in, so the freight is on the truck.",
-        action: { type: "status", to: "loaded", label: "Mark loaded" },
+        action: { type: "status", to: "loaded", label: "Mark in transit" },
       }
     case "loaded":
       if (!has("bol")) {
@@ -207,12 +213,14 @@ export function LoadSidePanel({
   load,
   charges,
   documents,
+  expenses,
   dispatch,
 }: {
   organizationId: string
   load: Load
   charges: LoadCharge[]
   documents: LoadDocument[]
+  expenses: LoadExpense[]
   dispatch: LoadDispatch | null
 }) {
   const [busy, setBusy] = useState<string | null>(null)
@@ -220,8 +228,15 @@ export function LoadSidePanel({
   // Which kind the file picker is choosing for.
   const pickingRef = useRef<DocumentKind>("bol")
 
+  // A lumper receipt attached to an expense counts as the lumper receipt.
+  const lumperReceipt = expenses.find(
+    (expense) => expense.kind === "lumper" && expense.receipt_url
+  )
   const required = requiredDocuments(charges)
-  const missing = missingDocuments(charges, documents)
+  const missing = missingDocuments(charges, [
+    ...documents,
+    ...(lumperReceipt ? [{ kind: "lumper_receipt" as const }] : []),
+  ])
   const ready = missing.length === 0
   const step = nextStep(load, missing, dispatch)
   const invoiced = INVOICED_STATUSES.includes(load.status)
@@ -234,6 +249,13 @@ export function LoadSidePanel({
 
   const revenue = Number(load.rate)
   const pay = loadDriverPay(load)
+  // Expenses by what they were for, in the order kinds are listed.
+  const spent = EXPENSE_KINDS.map((kind) => ({
+    kind,
+    total: expenseTotals(expenses.filter((expense) => expense.kind === kind))
+      .total,
+  })).filter((line) => line.total > 0)
+  const expenseTotal = expenseTotals(expenses).total
   const locked = formatPay(load.driver_pay_type, load.driver_pay_rate)
   const allMiles = (load.miles ?? 0) + (load.empty_miles ?? 0)
 
@@ -370,7 +392,7 @@ export function LoadSidePanel({
                     <Upload />
                   ) : null}
                   {action.type === "send"
-                    ? `Send to ${firstName(load.driver?.full_name)}`
+                    ? `Notify ${firstName(load.driver?.full_name)}`
                     : action.type === "upload"
                       ? `Upload ${DOCUMENT_LABELS[action.kind]}`
                       : action.label}
@@ -405,7 +427,11 @@ export function LoadSidePanel({
         <ul className="flex flex-col divide-y">
           {shown.map((kind) => {
             const files = documents.filter((document) => document.kind === kind)
-            const done = files.length > 0
+            const fromExpense =
+              kind === "lumper_receipt" && files.length === 0
+                ? lumperReceipt
+                : undefined
+            const done = files.length > 0 || !!fromExpense
             const uploading = busy === `upload:${kind}`
             return (
               <li key={kind} className="py-2.5 first:pt-0 last:pb-0">
@@ -442,6 +468,17 @@ export function LoadSidePanel({
                     {done ? "Add" : "Upload"}
                   </Button>
                 </div>
+                {fromExpense?.receipt_url && (
+                  <DocumentLink
+                    file={{
+                      url: fromExpense.receipt_url,
+                      name: fromExpense.receipt_name ?? "Lumper receipt",
+                      type: fromExpense.receipt_type ?? "image/webp",
+                    }}
+                    label="On the lumper expense"
+                    className="mt-1.5 pl-6 text-sm"
+                  />
+                )}
                 {files.length > 0 && (
                   <ul className="mt-1.5 flex flex-col gap-1 pl-6">
                     {files.map((file) => (
@@ -450,15 +487,13 @@ export function LoadSidePanel({
                         className="group flex items-center justify-between gap-2 text-sm"
                       >
                         {file.url ? (
-                          <a
-                            href={file.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="flex min-w-0 items-center gap-1.5 text-muted-foreground hover:text-foreground hover:underline"
-                          >
-                            <FileText className="size-3.5 shrink-0" />
-                            <span className="truncate">{file.file_name}</span>
-                          </a>
+                          <DocumentLink
+                            file={{
+                              url: file.url,
+                              name: file.file_name,
+                              type: file.content_type,
+                            }}
+                          />
                         ) : (
                           <span className="truncate text-muted-foreground">
                             {file.file_name}
@@ -517,12 +552,19 @@ export function LoadSidePanel({
                 : "No driver yet"
               : `−${formatRate(pay)}`}
           </MoneyLine>
+          {spent.map((line) => (
+            <MoneyLine key={line.kind} label={EXPENSE_LABELS[line.kind]} muted>
+              −{formatRate(line.total)}
+            </MoneyLine>
+          ))}
           <div className="my-1 border-t" />
-          <MoneyLine label="Margin" strong>
-            {pay === null ? "—" : formatRate(revenue - pay)}
+          <MoneyLine label={spent.length ? "Profit" : "Margin"} strong>
+            {pay === null ? "—" : formatRate(revenue - pay - expenseTotal)}
           </MoneyLine>
           <p className="text-xs text-muted-foreground">
-            Before fuel and fixed costs.
+            {spent.length
+              ? "Before fixed costs like the truck payment and insurance."
+              : "Before fuel and fixed costs. Add expenses as receipts come in."}
           </p>
           <p className="mt-1 text-sm text-muted-foreground tabular-nums">
             {load.miles ? (

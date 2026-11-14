@@ -23,7 +23,8 @@ export type LoadStatus = (typeof LOAD_STATUSES)[number]
 export const LOAD_STATUS_LABELS: Record<LoadStatus, string> = {
   booked: "Booked",
   dispatched: "Dispatched",
-  loaded: "Loaded",
+  // Stored as "loaded"; shown as "In transit", which is what people call it.
+  loaded: "In transit",
   delivered: "Delivered",
   invoiced: "Invoiced",
   paid: "Paid",

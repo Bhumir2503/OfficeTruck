@@ -387,27 +387,40 @@ function DetailSkeleton({
 export function LoadDetailSkeleton() {
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
-      <div className="mx-auto flex max-w-7xl flex-col gap-4">
+      <div className="mx-auto flex max-w-7xl flex-col gap-6">
         {/* The "All loads" link: a small ghost button. */}
         <Skeleton className="h-8 w-24 rounded-md" />
-        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
-          <div className="flex min-w-0 flex-col gap-4">
-            <section className="overflow-hidden rounded-xl border bg-card shadow-xs">
-              <div className="flex items-start justify-between gap-4 px-6 pt-5">
-                <div className="space-y-1">
-                  <div className="flex h-6 items-center">
-                    <Skeleton className="h-4 w-32" />
-                  </div>
-                  <Line className="h-3.5 w-24" />
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
+          <div className="flex min-w-0 flex-col gap-6">
+            <SettingsCard
+              title="Load"
+              description={
+                <span className="inline-block h-4 w-32 animate-pulse rounded-md bg-muted align-middle" />
+              }
+              action={<Skeleton className="h-6 w-20 rounded-full" />}
+            >
+              <div className="grid gap-5 sm:grid-cols-3">
+                <div className="sm:col-span-3">
+                  <DetailSkeleton label="Reference numbers" lines={["w-40"]} />
                 </div>
-                <Skeleton className="h-6 w-20 rounded-full" />
+                <DetailSkeleton label="Equipment" lines={["w-16"]} />
+                <DetailSkeleton label="Commodity" lines={["w-24"]} />
+                <DetailSkeleton label="Weight" lines={["w-20"]} />
               </div>
-              <div className="grid gap-5 px-6 pt-5 pb-6 sm:grid-cols-3">
-                <DetailSkeleton label="Total" lines={["w-20"]} />
-                <DetailSkeleton label="Rate per loaded mile" lines={["w-24"]} />
-                <DetailSkeleton label="Miles" lines={["w-32"]} />
-              </div>
-            </section>
+            </SettingsCard>
+            <SettingsCard
+              title="Broker"
+              description="Who booked it, and who sent the rate con."
+              contentClassName="grid gap-5 sm:grid-cols-6"
+              footer={
+                <SettingsCardFooter hint="Linking a broker re-checks them with FMCSA.">
+                  <Skeleton className="h-8 w-16 rounded-md bg-foreground/10" />
+                </SettingsCardFooter>
+              }
+            >
+              <FieldSkeleton label="Broker" className="sm:col-span-3" />
+              <FieldSkeleton label="Rate con from" className="sm:col-span-3" />
+            </SettingsCard>
             <SettingsCard
               title="Stops"
               description={
@@ -439,54 +452,34 @@ export function LoadDetailSkeleton() {
               <Skeleton className="h-5 w-2/3" />
             </SettingsCard>
             <SettingsCard
-              title="Freight"
-              description="What's being hauled, from the rate con."
-            >
-              <div className="grid gap-5 sm:grid-cols-4">
-                <DetailSkeleton label="Equipment" lines={["w-16"]} />
-                <DetailSkeleton label="Commodity" lines={["w-24"]} />
-                <DetailSkeleton label="Weight" lines={["w-20"]} />
-                <DetailSkeleton label="Trailer" lines={["w-12"]} />
-              </div>
-            </SettingsCard>
-            <SettingsCard
-              title="Broker"
-              description="Who booked it, and who sent the rate con."
-              contentClassName="grid gap-5 sm:grid-cols-6"
-              footer={
-                <SettingsCardFooter hint="Linking a broker re-checks them with FMCSA.">
-                  <Skeleton className="h-8 w-16 rounded-md bg-foreground/10" />
-                </SettingsCardFooter>
-              }
-            >
-              <FieldSkeleton label="Broker" className="sm:col-span-3" />
-              <FieldSkeleton label="Rate con from" className="sm:col-span-3" />
-            </SettingsCard>
-            <SettingsCard
-              title="Truck, driver and dispatch"
+              title="Assignment"
               description={
-                <span className="inline-block h-4 w-72 max-w-full animate-pulse rounded-md bg-muted align-middle" />
+                <span className="inline-block h-4 w-48 animate-pulse rounded-md bg-muted align-middle" />
               }
-              contentClassName="flex flex-col gap-5"
+              contentClassName="grid gap-5 sm:grid-cols-2"
               footer={
                 <SettingsCardFooter
-                  hint={<Skeleton className="h-4 w-48 bg-foreground/10" />}
+                  hint={<Skeleton className="h-4 w-56 bg-foreground/10" />}
                 >
-                  <Skeleton className="h-8 w-28 rounded-md bg-foreground/10" />
                   <Skeleton className="h-8 w-16 rounded-md bg-foreground/10" />
                 </SettingsCardFooter>
               }
             >
-              <div className="grid gap-5 sm:grid-cols-2">
-                <FieldSkeleton label="Truck" />
-                <FieldSkeleton label="Driver" />
-                <FieldSkeleton label="Loaded miles" />
-                <FieldSkeleton label="Empty miles" />
-              </div>
-              <Skeleton className="h-24 w-full rounded-lg" />
+              <FieldSkeleton label="Truck" />
+              <FieldSkeleton label="Driver" />
+              <FieldSkeleton label="Loaded miles" />
+              <FieldSkeleton label="Empty miles" />
+            </SettingsCard>
+            <SettingsCard
+              title="Expenses"
+              description="Fuel, tolls, lumper and other costs on this trip."
+              contentClassName="flex flex-col gap-2"
+            >
+              <Skeleton className="h-5 w-full" />
+              <Skeleton className="h-5 w-2/3" />
             </SettingsCard>
           </div>
-          <div className="flex flex-col gap-4 lg:row-span-2">
+          <div className="flex flex-col gap-6 lg:row-span-2">
             {[
               ["Next step", ["w-48", "w-full", "w-3/4"]],
               ["Documents", ["w-full", "w-full", "w-full", "w-full"]],

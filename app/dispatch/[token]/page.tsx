@@ -1,12 +1,9 @@
 import type { Metadata } from "next"
 import { Ban, MapPin, PackageCheck } from "lucide-react"
 
-import { AcceptButton } from "@/components/dispatch/accept-button"
+import { StopCheckIn } from "@/components/dispatch/stop-check-in"
 import { Logo } from "@/components/logo"
-import {
-  SettingsCard,
-  SettingsCardFooter,
-} from "@/components/settings/settings-card"
+import { SettingsCard } from "@/components/settings/settings-card"
 import { formatRate, formatStopWindow } from "@/lib/load-format"
 import {
   CHARGE_KIND_LABELS,
@@ -51,12 +48,23 @@ type Packet = {
   } | null
 }
 
+/** The load's stops as they are now, for checking in. */
+type LiveStops = {
+  status: string
+  stops: {
+    position: number
+    kind: "pickup" | "delivery"
+    location: string
+    arrived_at: string | null
+    departed_at: string | null
+  }[]
+}
+
 type Dispatch = {
   organization: string
   packet: Packet | null
   sent_at: string
   seen_at: string | null
-  accepted_at: string | null
   revoked: boolean
 }
 
@@ -120,6 +128,20 @@ export default async function DispatchPage({
   }
 
   const load = dispatch.packet
+  const { data: liveData } = await supabase.rpc("dispatch_stops", {
+    link_token: token,
+  })
+  const live = liveData as LiveStops | null
+  const onTheRoad =
+    !!live && ["dispatched", "loaded", "delivered"].includes(live.status)
+  // A stop can be checked in only if it's still the same stop as was sent.
+  const liveStop = (stop: Packet["stops"][number]) =>
+    live?.stops.find(
+      (other) =>
+        other.position === stop.position &&
+        other.kind === stop.kind &&
+        other.location === stop.location
+    )
   const facts = [
     load.equipment && ["Equipment", EQUIPMENT_LABELS[load.equipment]],
     load.trailer_number && ["Trailer", load.trailer_number],
@@ -137,13 +159,6 @@ export default async function DispatchPage({
       <SettingsCard
         title={`Load ${load.reference}`}
         description={`From ${dispatch.organization}${load.driver ? ` for ${load.driver}` : ""}.`}
-        footer={
-          <SettingsCardFooter>
-            <div className="w-full">
-              <AcceptButton token={token} acceptedAt={dispatch.accepted_at} />
-            </div>
-          </SettingsCardFooter>
-        }
       >
         <dl className="grid grid-cols-2 gap-4">
           {facts.map(([label, value]) => (
@@ -160,7 +175,14 @@ export default async function DispatchPage({
         </dl>
       </SettingsCard>
 
-      <SettingsCard title="Stops" description="In the order to run them.">
+      <SettingsCard
+        title="Stops"
+        description={
+          onTheRoad
+            ? "In the order to run them. Tap Arrived when you get there and Departed when you leave."
+            : "In the order to run them. Check-in opens once the load is dispatched."
+        }
+      >
         <ol className="flex flex-col gap-4">
           {load.stops.map((stop) => (
             <li key={stop.position} className="flex gap-3">
@@ -177,7 +199,7 @@ export default async function DispatchPage({
                   <PackageCheck className="size-4" />
                 )}
               </span>
-              <div className="min-w-0 text-sm">
+              <div className="min-w-0 flex-1 text-sm">
                 <p className="font-medium">
                   {stop.kind === "pickup" ? "Pickup" : "Delivery"}
                   {stop.stop_number && (
@@ -200,6 +222,27 @@ export default async function DispatchPage({
                   )}
                 </p>
                 {stop.notes && <p className="mt-1">{stop.notes}</p>}
+                {(() => {
+                  const current = liveStop(stop)
+                  if (!live) return null
+                  if (!current) {
+                    return (
+                      <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">
+                        This stop changed after the load was sent. Ask dispatch
+                        to send it again before checking in.
+                      </p>
+                    )
+                  }
+                  return (
+                    <StopCheckIn
+                      token={token}
+                      position={stop.position}
+                      arrivedAt={current.arrived_at}
+                      departedAt={current.departed_at}
+                      open={onTheRoad}
+                    />
+                  )
+                })()}
               </div>
             </li>
           ))}

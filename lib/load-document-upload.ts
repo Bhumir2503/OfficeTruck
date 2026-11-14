@@ -52,6 +52,61 @@ async function shrink(file: File): Promise<Blob> {
   )
 }
 
+/** Removes files uploaded with uploadLoadFile, e.g. when saving them failed. */
+export async function removeLoadFiles(paths: string[]) {
+  await createClient().storage.from(BUCKET).remove(paths)
+}
+
+/**
+ * Uploads a photo or PDF to the load's folder, named `<prefix>-<random>`.
+ * Photos are shrunk first. Returns where it went, or an error message.
+ */
+export async function uploadLoadFile(
+  organizationId: string,
+  loadId: string,
+  prefix: string,
+  file: File
+): Promise<
+  { path: string; name: string; type: string; size: number } | { error: string }
+> {
+  const problem = documentFileError(file)
+  if (problem) {
+    return { error: problem }
+  }
+  try {
+    // PDFs and HEIC photos (which browsers can't redraw) go up as they are.
+    const asIs = file.type === "application/pdf" || file.type === "image/heic"
+    const body = asIs ? file : await shrink(file)
+    const type = asIs ? file.type : "image/webp"
+    const extension =
+      type === "application/pdf"
+        ? "pdf"
+        : type === "image/heic"
+          ? "heic"
+          : "webp"
+    const path = `${organizationId}/${loadId}/${prefix}-${crypto.randomUUID()}.${extension}`
+    const { error } = await createClient()
+      .storage.from(BUCKET)
+      .upload(path, body, { contentType: type })
+    if (error) {
+      throw error
+    }
+    return {
+      path,
+      name: file.name.slice(0, 200) || "Receipt",
+      type,
+      size: body.size,
+    }
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error && error.message
+          ? `Couldn't upload the file: ${error.message}`
+          : "Couldn't upload the file. Please try again.",
+    }
+  }
+}
+
 /**
  * Uploads a file to the load's folder and records it as a document of
  * `kind`. Returns an error message, or null.
@@ -62,42 +117,25 @@ export async function uploadLoadDocument(
   kind: DocumentKind,
   file: File
 ): Promise<string | null> {
-  const problem = documentFileError(file)
-  if (problem) {
-    return problem
+  const uploaded = await uploadLoadFile(
+    organizationId,
+    loadId,
+    kind.replace("_", "-"),
+    file
+  )
+  if ("error" in uploaded) {
+    return uploaded.error
   }
-  try {
-    // PDFs and HEIC photos (which browsers can't redraw) go up as they are.
-    const asIs = file.type === "application/pdf" || file.type === "image/heic"
-    const body = asIs ? file : await shrink(file)
-    const contentType = asIs ? file.type : "image/webp"
-    const extension =
-      contentType === "application/pdf"
-        ? "pdf"
-        : contentType === "image/heic"
-          ? "heic"
-          : "webp"
-    const path = `${organizationId}/${loadId}/${kind.replace("_", "-")}-${crypto.randomUUID()}.${extension}`
-    const storage = createClient().storage.from(BUCKET)
-    const { error } = await storage.upload(path, body, { contentType })
-    if (error) {
-      throw error
-    }
-    const result = await addLoadDocument(organizationId, loadId, {
-      kind,
-      path,
-      file_name: file.name.slice(0, 200) || "Document",
-      content_type: contentType,
-      size_bytes: body.size,
-    })
-    if ("error" in result) {
-      await storage.remove([path])
-      return result.error
-    }
-    return null
-  } catch (error) {
-    return error instanceof Error && error.message
-      ? `Couldn't upload the file: ${error.message}`
-      : "Couldn't upload the file. Please try again."
+  const result = await addLoadDocument(organizationId, loadId, {
+    kind,
+    path: uploaded.path,
+    file_name: uploaded.name,
+    content_type: uploaded.type,
+    size_bytes: uploaded.size,
+  })
+  if ("error" in result) {
+    await removeLoadFiles([uploaded.path])
+    return result.error
   }
+  return null
 }

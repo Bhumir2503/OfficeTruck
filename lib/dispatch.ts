@@ -11,8 +11,10 @@ export type LoadDispatch = {
   email_to: string | null
   include_rate: boolean
   sent_at: string
+  /** When the driver first opened their link. */
   seen_at: string | null
-  accepted_at: string | null
+  /** The email with their link failed to send. */
+  email_failed: boolean
   revoked_at: string | null
   driver: { id: string; full_name: string } | null
 }
@@ -26,7 +28,7 @@ export async function getLiveDispatch(
   const { data, error } = await supabase
     .from("load_dispatches")
     .select(
-      "id, token, email_to, include_rate, sent_at, seen_at, accepted_at, revoked_at, driver:drivers (id, full_name)"
+      "id, token, email_to, include_rate, sent_at, seen_at, email_failed, revoked_at, driver:drivers (id, full_name)"
     )
     .eq("organization_id", organizationId)
     .eq("load_id", loadId)
@@ -40,7 +42,14 @@ export async function getLiveDispatch(
 
 export type LoadEvent = {
   id: string
-  kind: "dispatched" | "resent" | "unassigned" | "reopened" | "status"
+  kind:
+    | "dispatched"
+    | "resent"
+    | "unassigned"
+    | "reopened"
+    | "status"
+    /** The office entered a stop's arrival or departure. */
+    | "stop_time"
   from_status: string | null
   to_status: string | null
   detail: string | null

@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   Ban,
   ChevronDown,
+  Clock,
   History,
   RotateCcw,
   Send,
@@ -23,6 +24,8 @@ function describe(event: LoadEvent) {
       return event.detail ?? "Sent to the driver again"
     case "unassigned":
       return `${event.detail ?? "Unassigned"}, back to booked`
+    case "stop_time":
+      return event.detail ?? "Stop time entered by the office"
     case "reopened":
       return `Reopened from ${label(event.from_status).toLowerCase()}, back to booked`
     default:
@@ -36,6 +39,7 @@ const ICONS = {
   unassigned: ArrowLeft,
   reopened: RotateCcw,
   status: History,
+  stop_time: Clock,
 }
 
 /**

@@ -107,13 +107,26 @@ function DetailsForm({
   )
 }
 
-/** What's being hauled, with a dialog to change it. */
+/**
+ * The load card at the top of the load page, laid out like the Load card on
+ * New Load: the load number, broker and status, then what's being hauled,
+ * with a dialog to change it.
+ */
 export function LoadDetailsCard({
   organizationId,
   load,
+  description,
+  statusMenu,
+  notice,
 }: {
   organizationId: string
   load: Load
+  /** Under the title: the broker. */
+  description: React.ReactNode
+  /** Beside the Edit button: the status menu. */
+  statusMenu: React.ReactNode
+  /** Above the details, e.g. why the load was canceled. */
+  notice?: React.ReactNode
 }) {
   const [open, setOpen] = useState(false)
   const none = (
@@ -122,16 +135,23 @@ export function LoadDetailsCard({
 
   return (
     <SettingsCard
-      title="Freight"
-      description="What's being hauled, from the rate con."
+      title={`Load ${load.reference}`}
+      description={description}
       action={
-        <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-          <Pencil />
-          Edit
-        </Button>
+        <div className="flex items-center gap-2">
+          {statusMenu}
+          <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+            <Pencil />
+            Edit
+          </Button>
+        </div>
       }
     >
-      <dl className="grid gap-5 sm:grid-cols-4">
+      {notice}
+      <dl className="grid gap-5 sm:grid-cols-3">
+        <Detail label="Reference numbers" className="sm:col-span-3">
+          {load.reference_numbers ?? none}
+        </Detail>
         <Detail label="Equipment">
           {load.equipment ? EQUIPMENT_LABELS[load.equipment] : none}
         </Detail>
@@ -141,11 +161,8 @@ export function LoadDetailsCard({
             ? `${load.weight_lbs.toLocaleString("en-US")} lbs`
             : none}
         </Detail>
-        <Detail label="Trailer">{load.trailer_number ?? none}</Detail>
-        <Detail label="Reference numbers" className="sm:col-span-4">
-          {load.reference_numbers ?? none}
-        </Detail>
-        <Detail label="Notes" className="sm:col-span-4">
+        <Detail label="Trailer number">{load.trailer_number ?? none}</Detail>
+        <Detail label="Notes" className="sm:col-span-2">
           {load.notes ?? none}
         </Detail>
       </dl>

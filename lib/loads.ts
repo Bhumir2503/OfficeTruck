@@ -160,6 +160,8 @@ export async function getLoad(
   return data as unknown as Load | null
 }
 
+export type StopTimeSource = "driver" | "office" | "eld"
+
 export type LoadStop = {
   id: string
   position: number
@@ -170,9 +172,15 @@ export type LoadStop = {
   appointment_end: string | null
   stop_number: string | null
   notes: string | null
-  /** Server time when the driver tapped arrived and departed. */
+  /** When the truck arrived and left the stop. */
   arrived_at: string | null
   departed_at: string | null
+  /** Where each time came from: the driver's tap, the office or the ELD. */
+  arrived_source: StopTimeSource | null
+  departed_source: StopTimeSource | null
+  /** Why the office entered the time, when it did. */
+  arrived_note: string | null
+  departed_note: string | null
 }
 
 export type LoadCharge = {
@@ -211,7 +219,7 @@ export async function getLoadDetail(organizationId: string, id: string) {
     supabase
       .from("load_stops")
       .select(
-        "id, position, kind, location, appointment_start, appointment_end, stop_number, notes, arrived_at, departed_at"
+        "id, position, kind, location, appointment_start, appointment_end, stop_number, notes, arrived_at, departed_at, arrived_source, departed_source, arrived_note, departed_note"
       )
       .eq("load_id", id)
       .order("position"),

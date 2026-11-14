@@ -80,7 +80,7 @@ export async function sendDispatchEmail(email: {
 
   const html = layout(
     `Load ${escapeHtml(email.reference)}`,
-    `<p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#525252;">Hi ${escapeHtml(first)}, ${escapeHtml(email.organizationName)} ${email.resent ? "updated a load you're on" : "sent you a load"}. Open it for the pickup numbers and full details, and tap Accept.</p>
+    `<p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#525252;">Hi ${escapeHtml(first)}, ${escapeHtml(email.organizationName)} ${email.resent ? "updated a load you're on" : "sent you a load"}. Open it for the pickup numbers and full details, and tap Arrived and Departed at each stop.</p>
                 <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 24px;width:100%;">${rows}</table>
                 <table role="presentation" cellpadding="0" cellspacing="0">
                   <tr>
@@ -99,7 +99,7 @@ export async function sendDispatchEmail(email: {
         `${stop.kind === "pickup" ? "Pickup" : "Delivery"}: ${stop.location}, ${stop.when}`
     ),
     "",
-    `Open it and tap Accept: ${email.link}`,
+    `Open it for the details, and tap Arrived and Departed at each stop: ${email.link}`,
   ].join("\n")
 
   return send(email.to, subject, html, text)

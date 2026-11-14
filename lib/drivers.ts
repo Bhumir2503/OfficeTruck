@@ -75,6 +75,9 @@ export type DriverOption = {
   full_name: string
   status: DriverStatus
   email: string | null
+  /** Their rate today, which is locked onto a load when they're assigned. */
+  pay_type: PayType | null
+  pay_rate: number | null
 }
 
 export async function getDriverOptions(
@@ -83,7 +86,7 @@ export async function getDriverOptions(
   const supabase = await createClient()
   const { data, error } = await supabase
     .from("drivers")
-    .select("id, full_name, status, email")
+    .select("id, full_name, status, email, pay_type, pay_rate")
     .eq("organization_id", organizationId)
     .order("full_name")
 

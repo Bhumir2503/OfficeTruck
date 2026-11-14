@@ -325,7 +325,7 @@ function StatusForm({
   onDone: () => void
 }) {
   const [pending, setPending] = useState(false)
-  const label = status === "loaded" ? "Mark loaded" : "Mark delivered"
+  const label = status === "loaded" ? "Mark in transit" : "Mark delivered"
 
   async function save() {
     setPending(true)
@@ -340,7 +340,7 @@ function StatusForm({
       return
     }
     toast.success(
-      `Load ${load.reference} is ${status === "loaded" ? "loaded" : "delivered"}.`
+      `Load ${load.reference} is ${status === "loaded" ? "in transit" : "delivered"}.`
     )
     onDone()
   }
@@ -371,7 +371,7 @@ function StatusForm({
 const TITLES: Record<Action, (load: Load) => string> = {
   assign: (load) => `Assign load ${load.reference}`,
   send: (load) => `Send load ${load.reference}`,
-  loaded: (load) => `Mark ${load.reference} loaded`,
+  loaded: (load) => `Mark ${load.reference} in transit`,
   delivered: (load) => `Mark ${load.reference} delivered`,
 }
 
@@ -439,7 +439,7 @@ export function LoadRowAction({
       icon: <Send />,
       label: `Send to ${load.driver?.full_name.split(" ")[0] ?? "driver"}`,
     },
-    loaded: { icon: <Truck />, label: "Mark loaded" },
+    loaded: { icon: <Truck />, label: "Mark in transit" },
     delivered: { icon: <PackageCheck />, label: "Mark delivered" },
   }[action]
 
