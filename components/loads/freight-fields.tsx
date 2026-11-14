@@ -124,7 +124,6 @@ export function FreightFields({
         name="reference_numbers"
         label="Reference numbers"
         placeholder="e.g. PO 88213, SO 4471"
-        hint="PO, order or other numbers the shipper or receiver goes by."
         defaultValue={defaults?.reference_numbers ?? ""}
         errors={errors}
         className="sm:col-span-6"
@@ -191,7 +190,6 @@ export function FreightFields({
         name="trailer_number"
         label="Trailer number"
         placeholder="e.g. 53104"
-        hint="Can wait until dispatch."
         defaultValue={defaults?.trailer_number ?? ""}
         errors={errors}
         className="sm:col-span-2"

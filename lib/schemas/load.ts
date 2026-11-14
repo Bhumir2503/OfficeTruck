@@ -23,12 +23,13 @@ export type LoadStatus = (typeof LOAD_STATUSES)[number]
 export const LOAD_STATUS_LABELS: Record<LoadStatus, string> = {
   booked: "Booked",
   dispatched: "Dispatched",
-  loaded: "Loaded",
+  // Stored as "loaded"; shown as "In transit", which is what people call it.
+  loaded: "In transit",
   delivered: "Delivered",
   invoiced: "Invoiced",
   paid: "Paid",
   factored: "Factored",
-  cancelled: "Canceled",
+  cancelled: "Cancelled",
   tonu: "TONU",
 }
 
@@ -44,6 +45,16 @@ export const isFallenThrough = (status: LoadStatus) =>
   status === "cancelled" || status === "tonu"
 
 export const loadStatusSchema = z.enum(LOAD_STATUSES, "Choose a status.")
+
+/** Why a load was canceled. Required to cancel one. */
+export const cancelLoadSchema = z.object({
+  reason: z
+    .string("Give a reason for canceling.")
+    .trim()
+    .min(1, "Give a reason for canceling.")
+    .max(500, "Must be 500 characters or fewer."),
+})
+export type CancelLoadValues = z.output<typeof cancelLoadSchema>
 
 export const EQUIPMENT_TYPES = [
   "dry_van",

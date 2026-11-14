@@ -4,6 +4,10 @@ import { ArrowRight, PackagePlus, Search } from "lucide-react"
 import Link from "next/link"
 import { useMemo, useState } from "react"
 
+import {
+  LoadRowAction,
+  type RowActionContext,
+} from "@/components/loads/load-row-action"
 import { LoadStatusMenu } from "@/components/loads/load-status-menu"
 import {
   SettingsCard,
@@ -22,6 +26,7 @@ import {
 } from "@/components/ui/table"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { formatRate, formatStopDate } from "@/lib/load-format"
+import type { PaymentDue } from "@/lib/load-views"
 import type { Load } from "@/lib/loads"
 import {
   LOAD_STATUSES,
@@ -33,11 +38,15 @@ type Filter = LoadStatus | "all"
 
 export function LoadsTable({
   loads,
-  organizationId,
+  payments,
+  context,
   base,
 }: {
   loads: Load[]
-  organizationId: string
+  /** What the row actions need: the org, drivers, trucks. */
+  context: RowActionContext
+  /** When each invoiced or factored load is due, by load id. */
+  payments: Record<string, PaymentDue>
   /** /org/<slug>/loads */
   base: string
 }) {
@@ -93,7 +102,7 @@ export function LoadsTable({
           New load
         </Link>
       }
-      contentClassName="px-0 pb-0"
+      contentClassName="@container px-0 pb-0"
       footer={
         <SettingsCardFooter
           hint={
@@ -140,18 +149,28 @@ export function LoadsTable({
       <Table className="[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6">
         <TableHeader className="bg-muted/40">
           <TableRow>
-            <TableHead>Load</TableHead>
-            <TableHead className="hidden md:table-cell">Route</TableHead>
-            <TableHead className="hidden sm:table-cell">Pickup</TableHead>
-            <TableHead className="text-right">Rate</TableHead>
-            <TableHead className="w-32">Status</TableHead>
+            <TableHead className="w-full @4xl:w-px">Load</TableHead>
+            <TableHead className="hidden w-full @4xl:table-cell">
+              Route
+            </TableHead>
+            <TableHead className="hidden w-px @2xl:table-cell">
+              Pickup
+            </TableHead>
+            <TableHead className="hidden w-px @4xl:table-cell">
+              Driver
+            </TableHead>
+            <TableHead className="w-px text-right">Rate</TableHead>
+            <TableHead className="w-px @max-xl:pr-6">Status</TableHead>
+            <TableHead className="hidden w-px text-right @xl:table-cell">
+              Action
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {filtered.length === 0 && (
             <TableRow>
               <TableCell
-                colSpan={5}
+                colSpan={7}
                 className="h-24 text-center text-muted-foreground"
               >
                 No loads match your search.
@@ -160,7 +179,7 @@ export function LoadsTable({
           )}
           {filtered.map((load) => (
             <TableRow key={load.id}>
-              <TableCell className="max-w-56 py-3">
+              <TableCell className="py-3 @max-4xl:max-w-0">
                 <Link
                   href={`${base}/${load.id}`}
                   className="block truncate font-medium hover:underline"
@@ -171,21 +190,38 @@ export function LoadsTable({
                   {load.broker_name}
                 </div>
               </TableCell>
-              <TableCell className="hidden max-w-72 md:table-cell">
+              <TableCell className="hidden max-w-0 @4xl:table-cell">
                 <div className="flex items-center gap-1.5 text-sm">
                   <span className="truncate">{load.pickup_location}</span>
                   <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" />
                   <span className="truncate">{load.delivery_location}</span>
                 </div>
               </TableCell>
-              <TableCell className="hidden text-muted-foreground sm:table-cell">
+              <TableCell className="hidden text-muted-foreground @2xl:table-cell">
                 {formatStopDate(load.pickup_start)}
+              </TableCell>
+              <TableCell className="hidden @4xl:table-cell">
+                <div className="max-w-40 truncate text-sm">
+                  {load.driver?.full_name ?? load.driver_name ?? (
+                    <span className="text-muted-foreground">Unassigned</span>
+                  )}
+                </div>
               </TableCell>
               <TableCell className="text-right tabular-nums">
                 {formatRate(load.rate)}
               </TableCell>
-              <TableCell>
-                <LoadStatusMenu organizationId={organizationId} load={load} />
+              <TableCell className="@max-xl:pr-6">
+                <LoadStatusMenu
+                  organizationId={context.organizationId}
+                  load={load}
+                />
+              </TableCell>
+              <TableCell className="hidden text-right text-sm @xl:table-cell">
+                <LoadRowAction
+                  load={load}
+                  due={payments[load.id]}
+                  context={context}
+                />
               </TableCell>
             </TableRow>
           ))}

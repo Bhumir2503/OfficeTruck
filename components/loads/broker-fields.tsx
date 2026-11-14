@@ -6,12 +6,7 @@ import { useEffect, useRef, useState } from "react"
 
 import { FlagBadge, FmcsaBadge } from "@/components/brokers/broker-badges"
 import { SenderWarning } from "@/components/brokers/sender-warning"
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldLabel,
-} from "@/components/ui/field"
+import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -241,22 +236,7 @@ export function BrokerFields({
             autoFocus={brokers.length > 0 && !defaults}
           />
         )}
-        {nameErrors ? (
-          <FieldError errors={nameErrors} />
-        ) : (
-          <FieldDescription>
-            {choice === OTHER ? (
-              <>
-                <Link href={`${brokersHref}/new`} className="underline">
-                  Add the broker
-                </Link>{" "}
-                to check them with FMCSA and keep their billing details.
-              </>
-            ) : (
-              "Their FMCSA status and terms show below."
-            )}
-          </FieldDescription>
-        )}
+        <FieldError errors={nameErrors} />
       </Field>
       <Field data-invalid={!!errors.rate_con_from} className="sm:col-span-3">
         <FieldLabel htmlFor="load-rate-con-from">Rate con from</FieldLabel>
@@ -269,13 +249,7 @@ export function BrokerFields({
           aria-invalid={!!errors.rate_con_from}
           onChange={(event) => setSender(event.target.value.toLowerCase())}
         />
-        {errors.rate_con_from ? (
-          <FieldError errors={errors.rate_con_from} />
-        ) : (
-          <FieldDescription>
-            Checked against the broker&apos;s known email domains.
-          </FieldDescription>
-        )}
+        <FieldError errors={errors.rate_con_from} />
       </Field>
       {(broker || (sender && choice !== OTHER)) && (
         <div className="flex flex-col gap-3 sm:col-span-6">

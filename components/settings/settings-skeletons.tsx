@@ -64,6 +64,21 @@ export function GeneralSettingsSkeleton() {
                 )}
               </Field>
             ))}
+            <SettingsCard
+              title="Dispatch"
+              description="What drivers see when you send them a load."
+              footer={
+                <SettingsCardFooter hint="Applies to loads you send from now on." />
+              }
+            >
+              <div className="flex items-start gap-3">
+                <Skeleton className="mt-0.5 size-4 rounded-[4px]" />
+                <div className="flex-1 space-y-1">
+                  <Skeleton className="h-4 w-56" />
+                  <Skeleton className="h-4 w-80 max-w-full" />
+                </div>
+              </div>
+            </SettingsCard>
           </div>
         </SettingsCard>
       ))}

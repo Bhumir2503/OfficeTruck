@@ -4,12 +4,7 @@ import { Plus, Trash2 } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
 import { Button } from "@/components/ui/button"
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldLabel,
-} from "@/components/ui/field"
+import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -237,14 +232,7 @@ export function ChargesEditor({
             </span>
           </p>
         </div>
-        {listError ? (
-          <FieldError errors={listError} />
-        ) : (
-          <FieldDescription>
-            Linehaul and fuel surcharge on their own lines. Blank lines are
-            skipped.
-          </FieldDescription>
-        )}
+        <FieldError errors={listError} />
       </div>
 
       <div className="grid gap-5 sm:grid-cols-2">
@@ -260,13 +248,7 @@ export function ChargesEditor({
             defaultValue={defaultDetention?.free_hours ?? ""}
             aria-invalid={!!errors.detention_free_hours}
           />
-          {errors.detention_free_hours ? (
-            <FieldError errors={errors.detention_free_hours} />
-          ) : (
-            <FieldDescription>
-              At each stop, from the rate con.
-            </FieldDescription>
-          )}
+          <FieldError errors={errors.detention_free_hours} />
         </Field>
         <Field data-invalid={!!errors.detention_rate}>
           <FieldLabel htmlFor="detention-rate">Detention per hour</FieldLabel>
@@ -287,11 +269,7 @@ export function ChargesEditor({
               onBlur={handleCurrencyBlur}
             />
           </div>
-          {errors.detention_rate ? (
-            <FieldError errors={errors.detention_rate} />
-          ) : (
-            <FieldDescription>After the free hours run out.</FieldDescription>
-          )}
+          <FieldError errors={errors.detention_rate} />
         </Field>
       </div>
     </div>

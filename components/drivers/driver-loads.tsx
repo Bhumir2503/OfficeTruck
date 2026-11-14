@@ -1,4 +1,4 @@
-import { ArrowRight, Package } from "lucide-react"
+import { AlertTriangle, ArrowRight, Package } from "lucide-react"
 import Link from "next/link"
 
 import { LoadStatusBadge } from "@/components/loads/load-status-menu"
@@ -15,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { overlapping, SCHEDULED_STATUSES } from "@/lib/dispatch-format"
 import { loadDriverPay } from "@/lib/driver-format"
 import type { DriverLoad } from "@/lib/drivers"
 import { formatRate, formatStopDate } from "@/lib/load-format"
@@ -39,6 +40,22 @@ export function DriverLoads({
       </SettingsCard>
     )
   }
+
+  // Loads still on the schedule whose times overlap another one's.
+  const scheduled = loads.filter((load) =>
+    (SCHEDULED_STATUSES as readonly string[]).includes(load.status)
+  )
+  const clashes = new Map(
+    scheduled
+      .map(
+        (load) =>
+          [
+            load.id,
+            overlapping(load, scheduled).map((other) => other.reference),
+          ] as const
+      )
+      .filter(([, others]) => others.length > 0)
+  )
 
   // Cancelled loads stay in the list but don't count towards the totals.
   const counted = loads.filter((load) => load.status !== "cancelled")
@@ -96,6 +113,15 @@ export function DriverLoads({
                       load.status !== "invoiced" && (
                         <LoadStatusBadge status={load.status} />
                       )}
+                    {clashes.get(load.id) && (
+                      <span
+                        className="inline-flex h-6 shrink-0 items-center gap-1 rounded-4xl bg-amber-500/15 px-2.5 text-xs font-medium whitespace-nowrap text-amber-700 dark:text-amber-300"
+                        title={`Overlaps ${clashes.get(load.id)!.join(", ")}`}
+                      >
+                        <AlertTriangle className="size-3" />
+                        Overlaps {clashes.get(load.id)!.join(", ")}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 text-sm text-muted-foreground">
                     <span className="truncate">{load.pickup_location}</span>
