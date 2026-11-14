@@ -1,15 +1,7 @@
 "use client"
 
 import { cn } from "cn"
-import {
-  CheckCircle2,
-  Circle,
-  CornerDownLeft,
-  Loader2,
-  Sparkles,
-  Upload,
-  X,
-} from "lucide-react"
+import { CornerDownLeft, Loader2, Sparkles, Upload, X } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
@@ -39,7 +31,6 @@ import {
 } from "@/components/loads/driver-select"
 import { useZodForm } from "@/hooks/use-zod-form"
 import type { BrokerOption } from "@/lib/brokers"
-import { driverPay, formatPay } from "@/lib/driver-format"
 import type { DriverOption } from "@/lib/drivers"
 import {
   DOCUMENT_TYPES,
@@ -47,7 +38,6 @@ import {
   shrink,
   uploadLoadDocument,
 } from "@/lib/load-document-upload"
-import { formatRate } from "@/lib/load-format"
 import type { TruckOption } from "@/lib/trucks"
 import {
   type FilledField,
@@ -68,16 +58,6 @@ const LOAD_FIELDS: FilledField[] = [
 ]
 const BROKER_FIELDS: FilledField[] = ["broker", "rate_con_from"]
 const CHARGE_FIELDS: FilledField[] = ["charges", "detention"]
-
-/** "2,450.50" or "$1,240" → a number, or 0 when blank or not a number. */
-const amount = (value: FormDataEntryValue | null) => {
-  const number = Number(String(value ?? "").replace(/[$,\s]/g, ""))
-  return Number.isFinite(number) ? number : 0
-}
-const miles = (value: FormDataEntryValue | null) => {
-  const text = String(value ?? "").replace(/[,\s]/g, "")
-  return text ? Number(text) : null
-}
 
 const FILLED_LABELS: Record<FilledField, string> = {
   reference: "load number",
@@ -144,20 +124,6 @@ function FilledBadge({
       Filled by AI
     </Badge>
   )
-}
-
-/** Revenue and miles as the form stands, for the Money preview. */
-function readPreview(form: HTMLFormElement) {
-  const data = new FormData(form)
-  let revenue = 0
-  for (const [key, value] of data) {
-    if (/^charges\.\d+\.amount$/.test(key)) revenue += amount(value)
-  }
-  return {
-    revenue,
-    miles: miles(data.get("miles")),
-    emptyMiles: miles(data.get("empty_miles")),
-  }
 }
 
 export function NewLoadForm({
@@ -283,12 +249,6 @@ export function NewLoadForm({
     setRateCon(null)
   }
 
-  // What the Money panel shows, read from the form as it's filled in.
-  const [preview, setPreview] = useState({
-    revenue: 0,
-    miles: null as number | null,
-    emptyMiles: null as number | null,
-  })
   const { errors, formError, pending, formProps, revalidate } = useZodForm(
     loadSchema,
     async (values) => {
@@ -322,41 +282,21 @@ export function NewLoadForm({
   )
 
   // Custom controls (pickers, charge lines) don't fire the form's change
-  // event, so they call this to re-check the form and refresh the preview.
+  // event, so they call this to re-check the form.
   function update(form: HTMLFormElement | null) {
     revalidate(form)
-    if (form) setPreview(readPreview(form))
   }
 
-  // After a fill remounts the editors, re-check the form and refresh the
-  // Money preview from the new values.
+  // After a fill remounts the editors, re-check the form with the new values.
   useEffect(() => {
     if (fillKey === 0) return
-    const form = formRef.current
-    if (!form) return
-    revalidate(form)
-    setPreview(readPreview(form))
+    revalidate(formRef.current)
     // Only when a new fill lands; revalidate is a new function every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fillKey])
 
-  const driver = drivers.find((option) => option.id === driverId) ?? null
-  const pay = driver
-    ? driverPay(driver, { rate: preview.revenue, miles: preview.miles })
-    : null
-  const rate = driver ? formatPay(driver.pay_type, driver.pay_rate) : null
-  const allMiles = (preview.miles ?? 0) + (preview.emptyMiles ?? 0)
-
   return (
-    <form
-      ref={formRef}
-      {...formProps}
-      onChange={(event) => {
-        formProps.onChange(event)
-        setPreview(readPreview(event.currentTarget))
-      }}
-      autoComplete="off"
-    >
+    <form ref={formRef} {...formProps} autoComplete="off">
       <fieldset
         disabled={pending}
         className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]"
@@ -542,20 +482,20 @@ export function NewLoadForm({
           </SettingsCard>
         </div>
 
-        {/* Like the load page: beside the cards, saving and the money stay
-            in view; on a phone they come after them. */}
+        {/* Beside the cards, the rate con and saving stay in view; on a
+            phone they come after them. */}
         <aside className="flex flex-col gap-6 lg:sticky lg:top-6">
           <section className="overflow-hidden rounded-xl border bg-card text-card-foreground shadow-xs">
             <div className="px-5 pt-4 pb-5">
               <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                 New load
               </p>
-              <h4 className="mt-1 text-lg font-semibold tracking-tight">
+              <h4 className="mt-1 text-xl font-semibold tracking-tight">
                 Start with the rate con
               </h4>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Add the broker&apos;s rate con, then fill in the load from it.
-                It&apos;s saved with the load.
+              <p className="mt-2 text-sm text-muted-foreground">
+                Upload the broker&apos;s rate con and AI fills in the load for
+                you: broker, stops, charges and more. Check it over, then save.
               </p>
               <input
                 ref={rateConInput}
@@ -616,14 +556,22 @@ export function NewLoadForm({
                     pickRateCon(event.dataTransfer.files?.[0])
                   }}
                   className={cn(
-                    "mt-4 flex w-full flex-col items-center gap-1.5 rounded-lg border border-dashed px-4 py-6 text-center text-sm transition-colors hover:bg-muted/50",
-                    dragging && "border-primary bg-primary/5"
+                    "mt-5 flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-primary/40 bg-primary/[0.03] px-4 py-12 text-center text-sm transition-colors hover:border-primary hover:bg-primary/5",
+                    dragging && "border-primary bg-primary/10"
                   )}
                 >
-                  <Upload className="size-5 text-muted-foreground" />
-                  <span className="font-medium">Upload the rate con</span>
-                  <span className="text-xs text-muted-foreground">
-                    Drop a PDF or photo here, or click to choose
+                  <span className="mb-1 flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <Upload className="size-6" />
+                  </span>
+                  <span className="text-base font-medium">
+                    Drop the rate con here
+                  </span>
+                  <span className="text-muted-foreground">
+                    PDF or photo, or click to choose
+                  </span>
+                  <span className="mt-2 flex items-center gap-1.5 text-xs text-violet-700 dark:text-violet-300">
+                    <Sparkles className="size-3.5" />
+                    AI fills in the load from it
                   </span>
                 </button>
               )}
@@ -662,7 +610,7 @@ export function NewLoadForm({
                   </span>
                 </p>
               )}
-              <div className="mt-4 flex flex-col gap-2">
+              <div className="mt-5 flex flex-col gap-2 border-t pt-5">
                 <Button
                   type="submit"
                   size="lg"
@@ -683,6 +631,9 @@ export function NewLoadForm({
                 >
                   Cancel
                 </Link>
+                <p className="text-center text-xs text-muted-foreground">
+                  The rate con is saved with the load.
+                </p>
               </div>
               {formError && (
                 <p role="alert" className="mt-3 text-sm text-destructive">
@@ -690,79 +641,6 @@ export function NewLoadForm({
                 </p>
               )}
             </div>
-          </section>
-
-          <section className="overflow-hidden rounded-xl border bg-card px-5 py-4 text-card-foreground shadow-xs">
-            <h4 className="font-semibold">Documents</h4>
-            <ul className="mt-3 flex flex-col gap-2 text-sm text-muted-foreground">
-              {["Rate con", "BOL", "POD"].map((label) => (
-                <li key={label} className="flex items-center gap-2">
-                  {label === "Rate con" && rateCon ? (
-                    <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
-                  ) : (
-                    <Circle className="size-4" />
-                  )}
-                  <span
-                    className={cn(
-                      label === "Rate con" &&
-                        rateCon &&
-                        "font-medium text-foreground"
-                    )}
-                  >
-                    {label}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-3 text-xs text-muted-foreground">
-              The BOL and POD are added on the load once it&apos;s on the road.
-            </p>
-          </section>
-
-          <section className="overflow-hidden rounded-xl border bg-card px-5 py-4 text-card-foreground shadow-xs">
-            <h4 className="font-semibold">Money</h4>
-            <dl className="mt-3 flex flex-col gap-2 text-sm">
-              <div className="flex items-baseline justify-between gap-3">
-                <dt>Revenue</dt>
-                <dd className="tabular-nums">{formatRate(preview.revenue)}</dd>
-              </div>
-              <div className="flex items-baseline justify-between gap-3 text-muted-foreground">
-                <dt>{rate ? `Driver pay (${rate})` : "Driver pay"}</dt>
-                <dd className="text-right tabular-nums">
-                  {pay === null
-                    ? driver
-                      ? "Add miles or a rate"
-                      : "No driver yet"
-                    : `−${formatRate(pay)}`}
-                </dd>
-              </div>
-              <div className="my-1 border-t" />
-              <div className="flex items-baseline justify-between gap-3 text-base font-semibold">
-                <dt>Margin</dt>
-                <dd className="tabular-nums">
-                  {pay === null ? "—" : formatRate(preview.revenue - pay)}
-                </dd>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Before fuel and fixed costs.
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground tabular-nums">
-                {preview.miles && preview.revenue ? (
-                  <>
-                    {formatRate(preview.revenue / preview.miles)} per loaded
-                    mile
-                    {preview.emptyMiles ? (
-                      <>
-                        {" · "}
-                        {formatRate(preview.revenue / allMiles)} per mile all-in
-                      </>
-                    ) : null}
-                  </>
-                ) : (
-                  "Add the charges and miles to see the rate per mile."
-                )}
-              </p>
-            </dl>
           </section>
         </aside>
       </fieldset>
