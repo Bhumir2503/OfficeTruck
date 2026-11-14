@@ -19,6 +19,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Textarea } from "@/components/ui/textarea"
+import { AiFillOverlay } from "@/components/loads/ai-fill-overlay"
 import { BrokerFields } from "@/components/loads/broker-fields"
 import { DocumentLink } from "@/components/loads/document-viewer"
 import { ChargesEditor } from "@/components/loads/charges-editor"
@@ -250,6 +251,13 @@ export function NewLoadForm({
     setRateCon(file)
   }
 
+  // Stops waiting on the read; its result is ignored when it comes back.
+  function cancelRead() {
+    readId.current++
+    setReading(false)
+    setReadError(null)
+  }
+
   function removeRateCon() {
     readId.current++
     setReading(false)
@@ -309,185 +317,192 @@ export function NewLoadForm({
         disabled={pending}
         className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]"
       >
-        <div className="flex min-w-0 flex-col gap-6">
-          <SettingsCard
-            title="Load"
-            description={
-              <FilledNote fill={fill} fields={LOAD_FIELDS}>
-                From the rate con.
-              </FilledNote>
-            }
-            action={<FilledBadge fill={fill} fields={LOAD_FIELDS} />}
-            contentClassName="grid gap-5 sm:grid-cols-6"
+        <div className="relative min-w-0">
+          {reading && <AiFillOverlay onCancel={cancelRead} />}
+          <div
+            inert={reading}
+            aria-busy={reading}
+            className="flex min-w-0 flex-col gap-6"
           >
-            <TextField
-              key={`reference-${fillKey}`}
-              defaultValue={fill?.reference ?? undefined}
-              name="reference"
-              label="Load number"
-              placeholder="e.g. 4471023"
-              errors={errors}
-              className="sm:col-span-6"
-              autoFocus
-            />
-            <FreightFields
-              key={`freight-${fillKey}`}
-              defaults={fill?.freight}
-              errors={errors}
-              onUpdate={update}
-            />
-            <Field data-invalid={!!errors.notes} className="sm:col-span-6">
-              <FieldLabel htmlFor="load-notes">Notes</FieldLabel>
-              <Textarea
-                id="load-notes"
-                name="notes"
-                rows={3}
-                placeholder="Special instructions, gate codes…"
-                aria-invalid={!!errors.notes}
+            <SettingsCard
+              title="Load"
+              description={
+                <FilledNote fill={fill} fields={LOAD_FIELDS}>
+                  From the rate con.
+                </FilledNote>
+              }
+              action={<FilledBadge fill={fill} fields={LOAD_FIELDS} />}
+              contentClassName="grid gap-5 sm:grid-cols-6"
+            >
+              <TextField
+                key={`reference-${fillKey}`}
+                defaultValue={fill?.reference ?? undefined}
+                name="reference"
+                label="Load number"
+                placeholder="e.g. 4471023"
+                errors={errors}
+                className="sm:col-span-6"
+                autoFocus
               />
-              <FieldError errors={errors.notes} />
-            </Field>
-          </SettingsCard>
-
-          <SettingsCard
-            title="Broker"
-            description={
-              <FilledNote fill={fill} fields={BROKER_FIELDS}>
-                Who booked it, and who sent the rate con.
-              </FilledNote>
-            }
-            action={<FilledBadge fill={fill} fields={BROKER_FIELDS} />}
-            contentClassName="grid gap-5 sm:grid-cols-6"
-          >
-            <BrokerFields
-              key={`broker-${fillKey}`}
-              defaults={fill?.broker ?? undefined}
-              brokers={brokers}
-              brokersHref={brokersHref}
-              factoringName={factoringName}
-              errors={errors}
-              onUpdate={update}
-            />
-          </SettingsCard>
-
-          <SettingsCard
-            title="Stops"
-            description={
-              <FilledNote fill={fill} fields={["stops"]}>
-                Every pickup and delivery, with its appointment and number.
-              </FilledNote>
-            }
-            action={<FilledBadge fill={fill} fields={["stops"]} />}
-          >
-            <StopsEditor
-              key={`stops-${fillKey}`}
-              defaultStops={
-                fill?.stops ?? [{ kind: "pickup" }, { kind: "delivery" }]
-              }
-              errors={errors}
-              onUpdate={update}
-            />
-          </SettingsCard>
-
-          <SettingsCard
-            title="Charges"
-            description={
-              <FilledNote fill={fill} fields={CHARGE_FIELDS}>
-                From the rate con. Accessorials run up on the road are added to
-                the load later.
-              </FilledNote>
-            }
-            action={<FilledBadge fill={fill} fields={CHARGE_FIELDS} />}
-          >
-            <ChargesEditor
-              key={`charges-${fillKey}`}
-              defaultCharges={
-                fill?.charges ?? [
-                  { kind: "linehaul" },
-                  { kind: "fuel_surcharge" },
-                ]
-              }
-              defaultDetention={fill?.detention ?? undefined}
-              errors={errors}
-              onUpdate={update}
-            />
-          </SettingsCard>
-
-          <SettingsCard
-            title="Assignment"
-            description="Truck and driver can stay empty until the load is dispatched."
-            contentClassName="grid gap-5 sm:grid-cols-2"
-          >
-            <Field data-invalid={!!errors.truck_id}>
-              <FieldLabel htmlFor="load-truck-id">Truck</FieldLabel>
-              <TruckSelect
-                id="load-truck-id"
-                trucks={trucks}
-                invalid={!!errors.truck_id}
-                onPick={(truck) => {
-                  // Prefill the truck's usual driver, unless one was picked by hand.
-                  if (!driverPicked && truck?.default_driver_id) {
-                    setDriverId(truck.default_driver_id)
-                  }
-                }}
+              <FreightFields
+                key={`freight-${fillKey}`}
+                defaults={fill?.freight}
+                errors={errors}
                 onUpdate={update}
               />
-              {errors.truck_id ? (
-                <FieldError errors={errors.truck_id} />
-              ) : (
-                trucks.length === 0 && (
-                  <FieldDescription>
-                    <Link href={trucksHref} className="underline">
-                      Add trucks
-                    </Link>{" "}
-                    to pick them here.
-                  </FieldDescription>
-                )
-              )}
-            </Field>
-            <Field data-invalid={!!errors.driver_id}>
-              <FieldLabel htmlFor="load-driver-id">Driver</FieldLabel>
-              <DriverSelect
-                id="load-driver-id"
-                drivers={drivers}
-                value={driverId}
-                onValueChange={(value) => {
-                  setDriverId(value)
-                  setDriverPicked(true)
-                }}
-                invalid={!!errors.driver_id}
+              <Field data-invalid={!!errors.notes} className="sm:col-span-6">
+                <FieldLabel htmlFor="load-notes">Notes</FieldLabel>
+                <Textarea
+                  id="load-notes"
+                  name="notes"
+                  rows={3}
+                  placeholder="Special instructions, gate codes…"
+                  aria-invalid={!!errors.notes}
+                />
+                <FieldError errors={errors.notes} />
+              </Field>
+            </SettingsCard>
+
+            <SettingsCard
+              title="Broker"
+              description={
+                <FilledNote fill={fill} fields={BROKER_FIELDS}>
+                  Who booked it, and who sent the rate con.
+                </FilledNote>
+              }
+              action={<FilledBadge fill={fill} fields={BROKER_FIELDS} />}
+              contentClassName="grid gap-5 sm:grid-cols-6"
+            >
+              <BrokerFields
+                key={`broker-${fillKey}`}
+                defaults={fill?.broker ?? undefined}
+                brokers={brokers}
+                brokersHref={brokersHref}
+                factoringName={factoringName}
+                errors={errors}
                 onUpdate={update}
               />
-              {errors.driver_id ? (
-                <FieldError errors={errors.driver_id} />
-              ) : (
-                drivers.length === 0 && (
-                  <FieldDescription>
-                    <Link href={driversHref} className="underline">
-                      Add drivers
-                    </Link>{" "}
-                    to pick them here.
-                  </FieldDescription>
-                )
-              )}
-            </Field>
-            <TextField
-              name="miles"
-              label="Loaded miles"
-              inputMode="numeric"
-              placeholder="e.g. 1,240"
-              errors={errors}
-              onChange={handleMilesInput}
-            />
-            <TextField
-              name="empty_miles"
-              label="Empty miles"
-              inputMode="numeric"
-              placeholder="e.g. 85"
-              errors={errors}
-              onChange={handleMilesInput}
-            />
-          </SettingsCard>
+            </SettingsCard>
+
+            <SettingsCard
+              title="Stops"
+              description={
+                <FilledNote fill={fill} fields={["stops"]}>
+                  Every pickup and delivery, with its appointment and number.
+                </FilledNote>
+              }
+              action={<FilledBadge fill={fill} fields={["stops"]} />}
+            >
+              <StopsEditor
+                key={`stops-${fillKey}`}
+                defaultStops={
+                  fill?.stops ?? [{ kind: "pickup" }, { kind: "delivery" }]
+                }
+                errors={errors}
+                onUpdate={update}
+              />
+            </SettingsCard>
+
+            <SettingsCard
+              title="Charges"
+              description={
+                <FilledNote fill={fill} fields={CHARGE_FIELDS}>
+                  From the rate con. Accessorials run up on the road are added
+                  to the load later.
+                </FilledNote>
+              }
+              action={<FilledBadge fill={fill} fields={CHARGE_FIELDS} />}
+            >
+              <ChargesEditor
+                key={`charges-${fillKey}`}
+                defaultCharges={
+                  fill?.charges ?? [
+                    { kind: "linehaul" },
+                    { kind: "fuel_surcharge" },
+                  ]
+                }
+                defaultDetention={fill?.detention ?? undefined}
+                errors={errors}
+                onUpdate={update}
+              />
+            </SettingsCard>
+
+            <SettingsCard
+              title="Assignment"
+              description="Truck and driver can stay empty until the load is dispatched."
+              contentClassName="grid gap-5 sm:grid-cols-2"
+            >
+              <Field data-invalid={!!errors.truck_id}>
+                <FieldLabel htmlFor="load-truck-id">Truck</FieldLabel>
+                <TruckSelect
+                  id="load-truck-id"
+                  trucks={trucks}
+                  invalid={!!errors.truck_id}
+                  onPick={(truck) => {
+                    // Prefill the truck's usual driver, unless one was picked by hand.
+                    if (!driverPicked && truck?.default_driver_id) {
+                      setDriverId(truck.default_driver_id)
+                    }
+                  }}
+                  onUpdate={update}
+                />
+                {errors.truck_id ? (
+                  <FieldError errors={errors.truck_id} />
+                ) : (
+                  trucks.length === 0 && (
+                    <FieldDescription>
+                      <Link href={trucksHref} className="underline">
+                        Add trucks
+                      </Link>{" "}
+                      to pick them here.
+                    </FieldDescription>
+                  )
+                )}
+              </Field>
+              <Field data-invalid={!!errors.driver_id}>
+                <FieldLabel htmlFor="load-driver-id">Driver</FieldLabel>
+                <DriverSelect
+                  id="load-driver-id"
+                  drivers={drivers}
+                  value={driverId}
+                  onValueChange={(value) => {
+                    setDriverId(value)
+                    setDriverPicked(true)
+                  }}
+                  invalid={!!errors.driver_id}
+                  onUpdate={update}
+                />
+                {errors.driver_id ? (
+                  <FieldError errors={errors.driver_id} />
+                ) : (
+                  drivers.length === 0 && (
+                    <FieldDescription>
+                      <Link href={driversHref} className="underline">
+                        Add drivers
+                      </Link>{" "}
+                      to pick them here.
+                    </FieldDescription>
+                  )
+                )}
+              </Field>
+              <TextField
+                name="miles"
+                label="Loaded miles"
+                inputMode="numeric"
+                placeholder="e.g. 1,240"
+                errors={errors}
+                onChange={handleMilesInput}
+              />
+              <TextField
+                name="empty_miles"
+                label="Empty miles"
+                inputMode="numeric"
+                placeholder="e.g. 85"
+                errors={errors}
+                onChange={handleMilesInput}
+              />
+            </SettingsCard>
+          </div>
         </div>
 
         {/* Beside the cards, the rate con and saving stay in view; on a

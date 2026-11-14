@@ -95,3 +95,17 @@
     @apply font-sans;
     }
 }
+/* The AI fill overlay on New Load: a bar sweeping down the rate con while it's read. */
+@theme {
+  --animate-ai-scan: ai-scan 1.8s ease-in-out infinite;
+
+  @keyframes ai-scan {
+    0%,
+    100% {
+      top: 8%;
+    }
+    50% {
+      top: 84%;
+    }
+  }
+}
