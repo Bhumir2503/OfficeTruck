@@ -6,21 +6,25 @@ import { createClient } from "@/lib/supabase/client"
 
 // Matches the load-documents bucket's limits in the migration.
 const BUCKET = "load-documents"
+// What the file picker offers. HEIC is left out on purpose: when it isn't
+// listed, iPhones convert photos to JPEG as they're picked, so they're
+// compressed like any other photo and show in the viewer.
 export const DOCUMENT_TYPES = [
   "image/png",
   "image/jpeg",
   "image/webp",
-  "image/heic",
   "application/pdf",
 ]
+/** HEIC can still arrive (dragged in on a Mac, say); it's compressed if the browser can read it. */
+const HEIC = "image/heic"
 const MAX_BYTES = 20 * 1024 * 1024
 /** Big enough to read a BOL's small print, small enough to send. */
 const MAX_SIDE = 2400
 
 /** Why a file can't be used, or null if it's fine. */
 export function documentFileError(file: File) {
-  if (!DOCUMENT_TYPES.includes(file.type)) {
-    return "Choose a photo (PNG, JPG, WebP or HEIC) or a PDF."
+  if (!DOCUMENT_TYPES.includes(file.type) && file.type !== HEIC) {
+    return "Choose a photo (PNG, JPG or WebP) or a PDF."
   }
   if (file.size > MAX_BYTES) {
     return "Choose a file under 20 MB."
@@ -74,16 +78,26 @@ export async function uploadLoadFile(
     return { error: problem }
   }
   try {
-    // PDFs and HEIC photos (which browsers can't redraw) go up as they are.
-    const asIs = file.type === "application/pdf" || file.type === "image/heic"
-    const body = asIs ? file : await shrink(file)
-    const type = asIs ? file.type : "image/webp"
-    const extension =
-      type === "application/pdf"
-        ? "pdf"
-        : type === "image/heic"
-          ? "heic"
-          : "webp"
+    // PDFs go up as they are: compressing one means redrawing its pages as
+    // pictures, which loses the text and can blur signatures. Photos are
+    // shrunk to WebP, HEIC included where the browser can read it.
+    const pdf = file.type === "application/pdf"
+    let body: Blob = file
+    if (!pdf) {
+      try {
+        body = await shrink(file)
+      } catch (error) {
+        if (file.type === HEIC) {
+          return {
+            error:
+              "This HEIC photo can't be read here. Save it as a JPG and try again.",
+          }
+        }
+        throw error
+      }
+    }
+    const type = pdf ? file.type : "image/webp"
+    const extension = pdf ? "pdf" : "webp"
     const path = `${organizationId}/${loadId}/${prefix}-${crypto.randomUUID()}.${extension}`
     const { error } = await createClient()
       .storage.from(BUCKET)
