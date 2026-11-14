@@ -282,8 +282,8 @@ export function LoadSidePanel({
       }
     }
     setBusy(null)
-    // The database moves the load along for a BOL or POD (see
-    // load_documents_move_status); say so, since the badge changes too.
+    // On the road, the status follows the BOL and POD (see
+    // sync_load_status_from_documents); say so, since the badge changes too.
     const moved =
       kind === "bol" && load.status === "dispatched"
         ? ` Load ${load.reference} is in transit.`
@@ -303,7 +303,18 @@ export function LoadSidePanel({
     if ("error" in result) {
       toast.error(result.error)
     } else {
-      toast.success(`${DOCUMENT_LABELS[document.kind]} removed.`)
+      // Removing a BOL or POD can move the load back. Where to depends on
+      // what's left and the driver's check-ins, which the database decides.
+      const onTheRoad = ["dispatched", "loaded", "delivered"].includes(
+        load.status
+      )
+      toast.success(
+        `${DOCUMENT_LABELS[document.kind]} removed.${
+          onTheRoad && (document.kind === "bol" || document.kind === "pod")
+            ? " The status now matches what's uploaded."
+            : ""
+        }`
+      )
     }
   }
 
