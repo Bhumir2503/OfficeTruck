@@ -1,14 +1,24 @@
 "use client"
 
 import { cn } from "cn"
-import { CheckCircle2, Circle, CornerDownLeft, Upload, X } from "lucide-react"
+import {
+  CheckCircle2,
+  Circle,
+  CornerDownLeft,
+  Loader2,
+  Sparkles,
+  Upload,
+  X,
+} from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
 import { createLoad } from "@/app/org/[slug]/loads/actions"
+import { readRateConFile } from "@/app/org/[slug]/loads/rate-con-actions"
 import { SettingsCard } from "@/components/settings/settings-card"
+import { Badge } from "@/components/ui/badge"
 import { Button, buttonVariants } from "@/components/ui/button"
 import {
   Field,
@@ -34,13 +44,30 @@ import type { DriverOption } from "@/lib/drivers"
 import {
   DOCUMENT_TYPES,
   documentFileError,
+  shrink,
   uploadLoadDocument,
 } from "@/lib/load-document-upload"
 import { formatRate } from "@/lib/load-format"
 import type { TruckOption } from "@/lib/trucks"
+import {
+  type FilledField,
+  type RateConFill,
+  rateConToForm,
+} from "@/lib/rate-con-format"
 import { loadSchema } from "@/lib/schemas/load"
 
 const TextField = LoadTextField
+
+const LOAD_FIELDS: FilledField[] = [
+  "reference",
+  "reference_numbers",
+  "equipment",
+  "commodity",
+  "weight_lbs",
+  "trailer_number",
+]
+const BROKER_FIELDS: FilledField[] = ["broker", "rate_con_from"]
+const CHARGE_FIELDS: FilledField[] = ["charges", "detention"]
 
 /** "2,450.50" or "$1,240" → a number, or 0 when blank or not a number. */
 const amount = (value: FormDataEntryValue | null) => {
@@ -50,6 +77,73 @@ const amount = (value: FormDataEntryValue | null) => {
 const miles = (value: FormDataEntryValue | null) => {
   const text = String(value ?? "").replace(/[,\s]/g, "")
   return text ? Number(text) : null
+}
+
+const FILLED_LABELS: Record<FilledField, string> = {
+  reference: "load number",
+  reference_numbers: "reference numbers",
+  equipment: "equipment",
+  commodity: "commodity",
+  weight_lbs: "weight",
+  trailer_number: "trailer number",
+  broker: "broker",
+  rate_con_from: "sender",
+  stops: "stops, appointments and numbers",
+  charges: "charges",
+  detention: "detention terms",
+}
+
+/** The person's local date, "YYYY-MM-DD", for rate con dates with no year. */
+function localToday() {
+  const now = new Date()
+  const pad = (value: number) => String(value).padStart(2, "0")
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+}
+
+/**
+ * A card's description once AI has filled some of it in: which fields, so
+ * the person checks them. Falls back to the usual description.
+ */
+function FilledNote({
+  fill,
+  fields,
+  children,
+}: {
+  fill: RateConFill | null
+  fields: FilledField[]
+  children: React.ReactNode
+}) {
+  const filled = fields.filter((field) => fill?.filled.includes(field))
+  if (!filled.length) return <>{children}</>
+  const labels = filled.map((field) => FILLED_LABELS[field])
+  const list =
+    labels.length > 1
+      ? `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)}`
+      : labels[0]
+  return (
+    <span className="text-violet-700 dark:text-violet-300">
+      AI filled in the {list} from the rate con. Check them before saving.
+    </span>
+  )
+}
+
+function FilledBadge({
+  fill,
+  fields,
+}: {
+  fill: RateConFill | null
+  fields: FilledField[]
+}) {
+  if (!fields.some((field) => fill?.filled.includes(field))) return null
+  return (
+    <Badge
+      variant="outline"
+      className="border-violet-300 text-violet-700 dark:border-violet-700 dark:text-violet-300"
+    >
+      <Sparkles />
+      Filled by AI
+    </Badge>
+  )
 }
 
 /** Revenue and miles as the form stands, for the Money preview. */
@@ -112,6 +206,65 @@ export function NewLoadForm({
     }
   }, [rateCon])
 
+  // What AI read off the rate con. The editors are uncontrolled, so a new
+  // fill remounts them (fillKey) with its values as their defaults. Nothing
+  // is saved until the person checks the form and saves it.
+  const [fill, setFill] = useState<RateConFill | null>(null)
+  const [fillKey, setFillKey] = useState(0)
+  const [reading, setReading] = useState(false)
+  const [readError, setReadError] = useState<string | null>(null)
+  // Which read is current, so a replaced or removed file's result is ignored.
+  const readId = useRef(0)
+  const formRef = useRef<HTMLFormElement>(null)
+
+  async function readFile(file: File) {
+    const id = ++readId.current
+    setReading(true)
+    setReadError(null)
+    let problem: string | null = null
+    try {
+      // Photos are shrunk to WebP first, as they are when saved.
+      let body: Blob = file
+      if (file.type !== "application/pdf") {
+        try {
+          body = await shrink(file)
+        } catch {
+          problem =
+            "This photo can't be read here. Save it as a JPG and try again, or fill in the load by hand."
+        }
+      }
+      if (!problem) {
+        const data = new FormData()
+        data.set(
+          "file",
+          body,
+          file.type === "application/pdf" ? file.name : "rate-con.webp"
+        )
+        data.set("today", localToday())
+        const result = await readRateConFile(organizationId, data)
+        if (id !== readId.current) return
+        if (!result.ok) {
+          problem = result.error
+        } else {
+          const next = rateConToForm(result.extraction, brokers)
+          if (next.filled.length === 0) {
+            problem =
+              "Nothing could be read off this file. Fill in the load by hand."
+          } else {
+            setFill(next)
+            setFillKey((key) => key + 1)
+          }
+        }
+      }
+    } catch {
+      problem =
+        "The rate con couldn't be read right now. Fill in the load by hand, or try again."
+    }
+    if (id !== readId.current) return
+    setReadError(problem)
+    setReading(false)
+  }
+
   function pickRateCon(file: File | undefined) {
     if (!file) return
     const problem = documentFileError(file)
@@ -120,6 +273,14 @@ export function NewLoadForm({
       return
     }
     setRateCon(file)
+    void readFile(file)
+  }
+
+  function removeRateCon() {
+    readId.current++
+    setReading(false)
+    setReadError(null)
+    setRateCon(null)
   }
 
   // What the Money panel shows, read from the form as it's filled in.
@@ -167,6 +328,18 @@ export function NewLoadForm({
     if (form) setPreview(readPreview(form))
   }
 
+  // After a fill remounts the editors, re-check the form and refresh the
+  // Money preview from the new values.
+  useEffect(() => {
+    if (fillKey === 0) return
+    const form = formRef.current
+    if (!form) return
+    revalidate(form)
+    setPreview(readPreview(form))
+    // Only when a new fill lands; revalidate is a new function every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fillKey])
+
   const driver = drivers.find((option) => option.id === driverId) ?? null
   const pay = driver
     ? driverPay(driver, { rate: preview.revenue, miles: preview.miles })
@@ -176,6 +349,7 @@ export function NewLoadForm({
 
   return (
     <form
+      ref={formRef}
       {...formProps}
       onChange={(event) => {
         formProps.onChange(event)
@@ -190,10 +364,17 @@ export function NewLoadForm({
         <div className="flex min-w-0 flex-col gap-6">
           <SettingsCard
             title="Load"
-            description="From the rate con."
+            description={
+              <FilledNote fill={fill} fields={LOAD_FIELDS}>
+                From the rate con.
+              </FilledNote>
+            }
+            action={<FilledBadge fill={fill} fields={LOAD_FIELDS} />}
             contentClassName="grid gap-5 sm:grid-cols-6"
           >
             <TextField
+              key={`reference-${fillKey}`}
+              defaultValue={fill?.reference ?? undefined}
               name="reference"
               label="Load number"
               placeholder="e.g. 4471023"
@@ -201,7 +382,12 @@ export function NewLoadForm({
               className="sm:col-span-6"
               autoFocus
             />
-            <FreightFields errors={errors} onUpdate={update} />
+            <FreightFields
+              key={`freight-${fillKey}`}
+              defaults={fill?.freight}
+              errors={errors}
+              onUpdate={update}
+            />
             <Field data-invalid={!!errors.notes} className="sm:col-span-6">
               <FieldLabel htmlFor="load-notes">Notes</FieldLabel>
               <Textarea
@@ -217,10 +403,17 @@ export function NewLoadForm({
 
           <SettingsCard
             title="Broker"
-            description="Who booked it, and who sent the rate con."
+            description={
+              <FilledNote fill={fill} fields={BROKER_FIELDS}>
+                Who booked it, and who sent the rate con.
+              </FilledNote>
+            }
+            action={<FilledBadge fill={fill} fields={BROKER_FIELDS} />}
             contentClassName="grid gap-5 sm:grid-cols-6"
           >
             <BrokerFields
+              key={`broker-${fillKey}`}
+              defaults={fill?.broker ?? undefined}
               brokers={brokers}
               brokersHref={brokersHref}
               factoringName={factoringName}
@@ -231,10 +424,18 @@ export function NewLoadForm({
 
           <SettingsCard
             title="Stops"
-            description="Every pickup and delivery, with its appointment and number."
+            description={
+              <FilledNote fill={fill} fields={["stops"]}>
+                Every pickup and delivery, with its appointment and number.
+              </FilledNote>
+            }
+            action={<FilledBadge fill={fill} fields={["stops"]} />}
           >
             <StopsEditor
-              defaultStops={[{ kind: "pickup" }, { kind: "delivery" }]}
+              key={`stops-${fillKey}`}
+              defaultStops={
+                fill?.stops ?? [{ kind: "pickup" }, { kind: "delivery" }]
+              }
               errors={errors}
               onUpdate={update}
             />
@@ -242,13 +443,23 @@ export function NewLoadForm({
 
           <SettingsCard
             title="Charges"
-            description="From the rate con. Accessorials run up on the road are added to the load later."
+            description={
+              <FilledNote fill={fill} fields={CHARGE_FIELDS}>
+                From the rate con. Accessorials run up on the road are added to
+                the load later.
+              </FilledNote>
+            }
+            action={<FilledBadge fill={fill} fields={CHARGE_FIELDS} />}
           >
             <ChargesEditor
-              defaultCharges={[
-                { kind: "linehaul" },
-                { kind: "fuel_surcharge" },
-              ]}
+              key={`charges-${fillKey}`}
+              defaultCharges={
+                fill?.charges ?? [
+                  { kind: "linehaul" },
+                  { kind: "fuel_surcharge" },
+                ]
+              }
+              defaultDetention={fill?.detention ?? undefined}
               errors={errors}
               onUpdate={update}
             />
@@ -384,7 +595,7 @@ export function NewLoadForm({
                       variant="ghost"
                       size="icon-xs"
                       aria-label="Remove the rate con"
-                      onClick={() => setRateCon(null)}
+                      onClick={removeRateCon}
                     >
                       <X />
                     </Button>
@@ -415,6 +626,41 @@ export function NewLoadForm({
                     Drop a PDF or photo here, or click to choose
                   </span>
                 </button>
+              )}
+              {rateCon && reading && (
+                <p
+                  role="status"
+                  className="mt-3 flex items-center gap-2 text-sm text-muted-foreground"
+                >
+                  <Loader2 className="size-4 animate-spin" />
+                  Reading the rate con…
+                </p>
+              )}
+              {rateCon && !reading && readError && (
+                <div
+                  role="alert"
+                  className="mt-3 flex flex-col items-start gap-1 text-sm text-amber-700 dark:text-amber-300"
+                >
+                  <p>{readError}</p>
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="xs"
+                    className="h-auto px-0"
+                    onClick={() => void readFile(rateCon)}
+                  >
+                    Try reading it again
+                  </Button>
+                </div>
+              )}
+              {rateCon && !reading && !readError && fill && (
+                <p className="mt-3 flex items-start gap-2 text-sm text-violet-700 dark:text-violet-300">
+                  <Sparkles className="mt-0.5 size-4 shrink-0" />
+                  <span>
+                    AI filled in the load from the rate con. Check each part
+                    marked &ldquo;Filled by AI&rdquo; before saving.
+                  </span>
+                </p>
               )}
               <div className="mt-4 flex flex-col gap-2">
                 <Button

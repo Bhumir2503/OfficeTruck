@@ -33,7 +33,7 @@ export function documentFileError(file: File) {
 }
 
 /** Shrinks a photo to at most 2400px on its longest side, as WebP. */
-async function shrink(file: File): Promise<Blob> {
+export async function shrink(file: File): Promise<Blob> {
   const bitmap = await createImageBitmap(file)
   const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height))
   const canvas = document.createElement("canvas")
