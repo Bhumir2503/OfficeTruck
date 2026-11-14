@@ -179,6 +179,9 @@ export function NewLoadForm({
   const [fillKey, setFillKey] = useState(0)
   const [reading, setReading] = useState(false)
   const [readError, setReadError] = useState<string | null>(null)
+  // The file AI last filled the form from, so the button hides until the
+  // rate con is replaced.
+  const [filledFrom, setFilledFrom] = useState<File | null>(null)
   // Which read is current, so a replaced or removed file's result is ignored.
   const readId = useRef(0)
   const formRef = useRef<HTMLFormElement>(null)
@@ -219,6 +222,7 @@ export function NewLoadForm({
           } else {
             setFill(next)
             setFillKey((key) => key + 1)
+            setFilledFrom(file)
           }
         }
       }
@@ -238,8 +242,12 @@ export function NewLoadForm({
       toast.error(problem)
       return
     }
+    // Attaching the rate con doesn't read it: the person chooses whether AI
+    // fills in the form.
+    readId.current++
+    setReading(false)
+    setReadError(null)
     setRateCon(file)
-    void readFile(file)
   }
 
   function removeRateCon() {
@@ -494,8 +502,9 @@ export function NewLoadForm({
                 Start with the rate con
               </h4>
               <p className="mt-2 text-sm text-muted-foreground">
-                Upload the broker&apos;s rate con and AI fills in the load for
-                you: broker, stops, charges and more. Check it over, then save.
+                Upload the broker&apos;s rate con, then fill in the load
+                yourself or let AI do it for you. Either way, check it over
+                before saving.
               </p>
               <input
                 ref={rateConInput}
@@ -569,39 +578,45 @@ export function NewLoadForm({
                   <span className="text-muted-foreground">
                     PDF or photo, or click to choose
                   </span>
-                  <span className="mt-2 flex items-center gap-1.5 text-xs text-violet-700 dark:text-violet-300">
-                    <Sparkles className="size-3.5" />
-                    AI fills in the load from it
-                  </span>
                 </button>
               )}
-              {rateCon && reading && (
-                <p
-                  role="status"
-                  className="mt-3 flex items-center gap-2 text-sm text-muted-foreground"
-                >
-                  <Loader2 className="size-4 animate-spin" />
-                  Reading the rate con…
-                </p>
-              )}
-              {rateCon && !reading && readError && (
-                <div
-                  role="alert"
-                  className="mt-3 flex flex-col items-start gap-1 text-sm text-amber-700 dark:text-amber-300"
-                >
-                  <p>{readError}</p>
+              {rateCon && filledFrom !== rateCon && (
+                <div className="mt-3 flex flex-col gap-2">
                   <Button
                     type="button"
-                    variant="link"
-                    size="xs"
-                    className="h-auto px-0"
+                    variant="outline"
+                    className="w-full border-violet-300 text-violet-700 hover:bg-violet-50 hover:text-violet-800 dark:border-violet-700 dark:text-violet-300 dark:hover:bg-violet-950"
+                    disabled={reading}
                     onClick={() => void readFile(rateCon)}
                   >
-                    Try reading it again
+                    {reading ? (
+                      <>
+                        <Loader2 className="animate-spin" />
+                        <span role="status">Reading the rate con…</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles />
+                        {readError ? "Try again with AI" : "Fill in with AI"}
+                      </>
+                    )}
                   </Button>
+                  {readError && !reading ? (
+                    <p
+                      role="alert"
+                      className="text-sm text-amber-700 dark:text-amber-300"
+                    >
+                      {readError}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Reads the rate con and fills in the form for you to check.
+                      Replaces anything already typed.
+                    </p>
+                  )}
                 </div>
               )}
-              {rateCon && !reading && !readError && fill && (
+              {rateCon && filledFrom === rateCon && (
                 <p className="mt-3 flex items-start gap-2 text-sm text-violet-700 dark:text-violet-300">
                   <Sparkles className="mt-0.5 size-4 shrink-0" />
                   <span>
