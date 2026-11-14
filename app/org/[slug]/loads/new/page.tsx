@@ -1,7 +1,10 @@
 import type { Metadata } from "next"
+import { ArrowLeft } from "lucide-react"
+import Link from "next/link"
 import { notFound } from "next/navigation"
 
 import { NewLoadForm } from "@/components/loads/new-load-form"
+import { buttonVariants } from "@/components/ui/button"
 import { getBrokerOptions } from "@/lib/brokers"
 import { getDriverOptions } from "@/lib/drivers"
 import { getFactoringCompany } from "@/lib/factoring"
@@ -20,7 +23,18 @@ export default async function NewLoadPage({
 
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto flex max-w-7xl flex-col gap-6">
+        <Link
+          href={`/org/${organization.slug}/loads`}
+          className={buttonVariants({
+            variant: "ghost",
+            size: "sm",
+            className: "-ml-2 w-fit",
+          })}
+        >
+          <ArrowLeft />
+          All loads
+        </Link>
         <NewLoadForm
           organizationId={organization.id}
           base={`/org/${organization.slug}/loads`}

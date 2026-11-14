@@ -274,90 +274,120 @@ function ChargeRowSkeleton({ labels = false }: { labels?: boolean }) {
 export function NewLoadSkeleton() {
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
-      <div className="mx-auto flex max-w-5xl flex-col gap-6">
-        <SettingsCard
-          title="Load"
-          description="From the rate con."
-          contentClassName="grid gap-5 sm:grid-cols-6"
-        >
-          <FieldSkeleton label="Load number" className="sm:col-span-6" />
-          <FieldSkeleton label="Reference numbers" className="sm:col-span-6" />
-          <FieldSkeleton label="Equipment" className="sm:col-span-2" />
-          <FieldSkeleton label="Commodity" className="sm:col-span-2" />
-          <FieldSkeleton label="Weight (lbs)" className="sm:col-span-2" />
-          <FieldSkeleton label="Trailer number" className="sm:col-span-2" />
-        </SettingsCard>
-        <SettingsCard
-          title="Broker"
-          description="Who booked it, and who sent the rate con."
-          contentClassName="grid gap-5 sm:grid-cols-6"
-        >
-          <FieldSkeleton label="Broker" className="sm:col-span-3" />
-          <FieldSkeleton label="Rate con from" className="sm:col-span-3" />
-        </SettingsCard>
-        <SettingsCard
-          title="Stops"
-          description="Every pickup and delivery, with its appointment and number."
-        >
-          <div className="flex flex-col gap-4">
-            <ol className="flex flex-col gap-4">
-              <StopRowSkeleton number={1} kind="pickup" />
-              <StopRowSkeleton number={2} kind="delivery" />
-            </ol>
-            {/* Add pickup, add delivery. */}
-            <div className="flex flex-wrap items-center gap-2">
-              <Skeleton className="h-8 w-28 rounded-md" />
-              <Skeleton className="h-8 w-32 rounded-md" />
-            </div>
-            <FieldDescription>
-              In the order they&apos;re run: start with a pickup, end with a
-              delivery.
-            </FieldDescription>
-          </div>
-        </SettingsCard>
-        <SettingsCard
-          title="Charges"
-          description="From the rate con. Accessorials run up on the road are added to the load later."
-        >
-          <div className="flex flex-col gap-5">
-            <div className="flex flex-col gap-3">
-              <ChargeRowSkeleton labels />
-              <ChargeRowSkeleton />
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
-                <Skeleton className="h-8 w-24 rounded-md" />
-                <p className="text-sm">
-                  <span className="text-muted-foreground">Total </span>
-                  <span className="inline-block h-4 w-14 animate-pulse rounded-md bg-muted align-middle" />
-                </p>
+      <div className="mx-auto flex max-w-7xl flex-col gap-6">
+        {/* The "All loads" link: a small ghost button. */}
+        <Skeleton className="h-8 w-24 rounded-md" />
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
+          <div className="flex min-w-0 flex-col gap-6">
+            <SettingsCard
+              title="Load"
+              description="From the rate con."
+              contentClassName="grid gap-5 sm:grid-cols-6"
+            >
+              <FieldSkeleton label="Load number" className="sm:col-span-6" />
+              <FieldSkeleton
+                label="Reference numbers"
+                className="sm:col-span-6"
+              />
+              <FieldSkeleton label="Equipment" className="sm:col-span-2" />
+              <FieldSkeleton label="Commodity" className="sm:col-span-2" />
+              <FieldSkeleton label="Weight (lbs)" className="sm:col-span-2" />
+              <FieldSkeleton label="Trailer number" className="sm:col-span-2" />
+              <FieldSkeleton
+                label="Notes"
+                className="sm:col-span-6"
+                inputClassName="h-20"
+              />
+            </SettingsCard>
+            <SettingsCard
+              title="Broker"
+              description="Who booked it, and who sent the rate con."
+              contentClassName="grid gap-5 sm:grid-cols-6"
+            >
+              <FieldSkeleton label="Broker" className="sm:col-span-3" />
+              <FieldSkeleton label="Rate con from" className="sm:col-span-3" />
+            </SettingsCard>
+            <SettingsCard
+              title="Stops"
+              description="Every pickup and delivery, with its appointment and number."
+            >
+              <div className="flex flex-col gap-4">
+                <ol className="flex flex-col gap-4">
+                  <StopRowSkeleton number={1} kind="pickup" />
+                  <StopRowSkeleton number={2} kind="delivery" />
+                </ol>
+                {/* Add pickup, add delivery. */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Skeleton className="h-8 w-28 rounded-md" />
+                  <Skeleton className="h-8 w-32 rounded-md" />
+                </div>
+                <FieldDescription>
+                  In the order they&apos;re run: start with a pickup, end with a
+                  delivery.
+                </FieldDescription>
               </div>
-            </div>
-            <div className="grid gap-5 sm:grid-cols-2">
-              <FieldSkeleton label="Detention free hours" />
-              <FieldSkeleton label="Detention per hour" />
-            </div>
+            </SettingsCard>
+            <SettingsCard
+              title="Charges"
+              description="From the rate con. Accessorials run up on the road are added to the load later."
+            >
+              <div className="flex flex-col gap-5">
+                <div className="flex flex-col gap-3">
+                  <ChargeRowSkeleton labels />
+                  <ChargeRowSkeleton />
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+                    <Skeleton className="h-8 w-24 rounded-md" />
+                    <p className="text-sm">
+                      <span className="text-muted-foreground">Total </span>
+                      <span className="inline-block h-4 w-14 animate-pulse rounded-md bg-muted align-middle" />
+                    </p>
+                  </div>
+                </div>
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <FieldSkeleton label="Detention free hours" />
+                  <FieldSkeleton label="Detention per hour" />
+                </div>
+              </div>
+            </SettingsCard>
+            <SettingsCard
+              title="Assignment"
+              description="Truck and driver can stay empty until the load is dispatched."
+              contentClassName="grid gap-5 sm:grid-cols-2"
+            >
+              <FieldSkeleton label="Truck" />
+              <FieldSkeleton label="Driver" />
+              <FieldSkeleton label="Loaded miles" />
+              <FieldSkeleton label="Empty miles" />
+            </SettingsCard>
           </div>
-        </SettingsCard>
-        <SettingsCard
-          title="Assignment"
-          description="Truck and driver can stay empty until the load is dispatched."
-          contentClassName="grid gap-5 sm:grid-cols-2"
-          footer={
-            <SettingsCardFooter hint="New loads start as booked.">
-              <Skeleton className="h-8 w-16 rounded-md bg-foreground/10" />
-              <Skeleton className="h-8 w-24 rounded-md bg-foreground/10" />
-            </SettingsCardFooter>
-          }
-        >
-          <FieldSkeleton label="Truck" />
-          <FieldSkeleton label="Driver" />
-          <FieldSkeleton label="Loaded miles" />
-          <FieldSkeleton label="Empty miles" />
-          <FieldSkeleton
-            label="Notes"
-            className="sm:col-span-2"
-            inputClassName="h-20"
-          />
-        </SettingsCard>
+          <div className="flex flex-col gap-6">
+            <section className="overflow-hidden rounded-xl border bg-card px-5 pt-4 pb-5 shadow-xs">
+              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                New load
+              </p>
+              <p className="mt-1 text-lg font-semibold tracking-tight">
+                Start with the rate con
+              </p>
+              <Line className="mt-1 w-full" />
+              {/* The drop area, then Save. */}
+              <Skeleton className="mt-4 h-28 w-full rounded-lg" />
+              <Skeleton className="mt-4 h-10 w-full rounded-md bg-foreground/10" />
+            </section>
+            {["Documents", "Money"].map((title) => (
+              <section
+                key={title}
+                className="overflow-hidden rounded-xl border bg-card px-5 py-4 shadow-xs"
+              >
+                <p className="mb-3 font-semibold">{title}</p>
+                <div className="flex flex-col gap-2">
+                  <Line className="w-full" />
+                  <Line className="w-full" />
+                  <Line className="w-2/3" />
+                </div>
+              </section>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   )
