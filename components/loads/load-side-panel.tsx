@@ -282,8 +282,17 @@ export function LoadSidePanel({
       }
     }
     setBusy(null)
+    // The database moves the load along for a BOL or POD (see
+    // load_documents_move_status); say so, since the badge changes too.
+    const moved =
+      kind === "bol" && load.status === "dispatched"
+        ? ` Load ${load.reference} is in transit.`
+        : kind === "pod" &&
+            (load.status === "dispatched" || load.status === "loaded")
+          ? ` Load ${load.reference} is delivered.`
+          : ""
     toast.success(
-      `${DOCUMENT_LABELS[kind]} added${files.length > 1 ? ` (${files.length} files)` : ""}.`
+      `${DOCUMENT_LABELS[kind]} added${files.length > 1 ? ` (${files.length} files)` : ""}.${moved}`
     )
   }
 
