@@ -167,7 +167,7 @@ function actionsFor(status: LoadStatus): StatusAction[][] {
   ]
   switch (status) {
     case "booked":
-      return [end]
+      return [[{ kind: "complete" }], end]
     case "dispatched":
     case "loaded":
       return [[{ kind: "complete" }], end]
@@ -191,7 +191,7 @@ function actionsFor(status: LoadStatus): StatusAction[][] {
 /**
  * The status badge. Statuses move on their own; the badge opens the few
  * things the office does by hand, like Mark complete, which shows as
- * "Delivered · Manual" until real proof of delivery arrives.
+ * "Completed" until real proof of delivery arrives.
  */
 export function LoadStatusMenu({
   organizationId,
@@ -210,7 +210,10 @@ export function LoadStatusMenu({
   const [canceling, setCanceling] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const groups = actionsFor(load.status)
-  const manual = !!load.completed_manually
+  // Marked complete by hand and still waiting on proof: "Completed" instead
+  // of "Delivered". Past delivered (invoiced, paid) the usual name shows.
+  const manual = !!load.completed_manually && load.status === "delivered"
+  const statusLabel = manual ? "Completed" : LOAD_STATUS_LABELS[load.status]
 
   async function run(action: StatusAction) {
     if (action.kind === "cancel") {
@@ -236,7 +239,7 @@ export function LoadStatusMenu({
       action.kind === "reopen"
         ? `Load ${load.reference} reopened. It's back to booked.`
         : action.kind === "complete"
-          ? `Load ${load.reference} marked complete. It shows as delivered by hand until the POD comes in.`
+          ? `Load ${load.reference} marked complete. It shows as Completed until the POD comes in.`
           : `Load ${load.reference} marked ${LOAD_STATUS_LABELS[action.to].toLowerCase()}.`
     )
   }
@@ -255,7 +258,12 @@ export function LoadStatusMenu({
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger
           disabled={pending || groups.length === 0}
-          aria-label={`Status of load ${load.reference}: ${LOAD_STATUS_LABELS[load.status]}${manual ? ", marked complete by hand" : ""}`}
+          aria-label={`Status of load ${load.reference}: ${statusLabel}${manual ? ", marked complete by hand" : ""}`}
+          title={
+            manual
+              ? "Marked complete by hand. No POD or check-in yet."
+              : undefined
+          }
           className={cn(
             "inline-flex h-6 items-center gap-1 rounded-4xl pr-1.5 pl-2.5 text-xs font-medium whitespace-nowrap outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-100",
             STATUS_STYLES[load.status],
@@ -263,9 +271,8 @@ export function LoadStatusMenu({
           )}
         >
           <span className={cn(isFallenThrough(load.status) && "line-through")}>
-            {LOAD_STATUS_LABELS[load.status]}
+            {statusLabel}
           </span>
-          {manual && <span className="font-normal opacity-75">· Manual</span>}
           {groups.length > 0 && (
             <ChevronDownIcon className="size-3 opacity-70" />
           )}

@@ -79,11 +79,13 @@ function nextStep(
             detail:
               "Sends them the stops, appointments, pickup numbers and rate con. The load moves to dispatched.",
             action: { type: "send" },
+            alternative: { to: "complete", label: "Mark complete" },
           }
         : {
             title: "Assign a truck and driver",
             detail: "Then send the load to the driver.",
             action: { type: "assign" },
+            alternative: { to: "complete", label: "Mark complete" },
           }
     case "dispatched":
     case "loaded": {
@@ -346,7 +348,7 @@ export function LoadSidePanel({
       toast.error(result.error)
     } else {
       toast.success(
-        `Load ${load.reference} marked complete. It shows as delivered by hand until the POD comes in.`
+        `Load ${load.reference} marked complete. It shows as Completed until the POD comes in.`
       )
     }
   }

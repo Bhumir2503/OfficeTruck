@@ -270,7 +270,7 @@ export async function cancelLoad(
 
 /**
  * Marks a load on the road delivered by hand, for when the POD or the
- * driver's check-in won't come. It shows as "Delivered · Manual" until
+ * driver's check-in won't come. It shows as "Completed" until
  * they do. Logged.
  */
 export async function markLoadComplete(

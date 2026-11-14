@@ -333,7 +333,7 @@ function CompleteForm({
       return
     }
     toast.success(
-      `Load ${load.reference} marked complete. It shows as delivered by hand until the POD comes in.`
+      `Load ${load.reference} marked complete. It shows as Completed until the POD comes in.`
     )
     onDone()
   }
@@ -345,7 +345,7 @@ function CompleteForm({
         <p className="text-muted-foreground">
           The status moves on its own when the BOL and POD are uploaded or the
           driver checks in. Mark it complete only if those won&apos;t come; it
-          shows as &ldquo;Delivered · Manual&rdquo; and moves to Needs billing.
+          shows as &ldquo;Completed&rdquo; and moves to Needs billing.
         </p>
       </div>
       <DialogFooter>

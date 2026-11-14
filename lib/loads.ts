@@ -65,7 +65,7 @@ export type Load = {
   cancel_reason: string | null
   /**
    * Marked complete by hand, with no POD or last-stop check-in yet. Shown
-   * as "Delivered · Manual".
+   * as "Completed" instead of "Delivered".
    */
   completed_manually: boolean
   created_at: string
