@@ -21,7 +21,7 @@ import {
 } from "@/lib/currency"
 import { formatRate } from "@/lib/load-format"
 import {
-  CHARGE_KINDS,
+  RATE_CON_CHARGE_KINDS,
   CHARGE_KIND_LABELS,
   type ChargeKind,
 } from "@/lib/schemas/load"
@@ -125,7 +125,7 @@ export function ChargesEditor({
                       )
                     )
                   }
-                  items={CHARGE_KINDS.map((value) => ({
+                  items={RATE_CON_CHARGE_KINDS.map((value) => ({
                     value,
                     label: CHARGE_KIND_LABELS[value],
                   }))}
@@ -138,7 +138,7 @@ export function ChargesEditor({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {CHARGE_KINDS.map((value) => (
+                    {RATE_CON_CHARGE_KINDS.map((value) => (
                       <SelectItem key={value} value={value}>
                         {CHARGE_KIND_LABELS[value]}
                       </SelectItem>

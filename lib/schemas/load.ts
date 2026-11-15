@@ -108,7 +108,25 @@ export const CHARGE_KIND_LABELS: Record<ChargeKind, string> = {
   other: "Other",
 }
 
-/** Run up on the road, added by a person after booking. */
+/**
+ * What a rate con's lines can be. Not TONU: a rate con only promises it if
+ * the load is cancelled, so it's added once the load is marked TONU.
+ */
+export const RATE_CON_CHARGE_KINDS = [
+  "linehaul",
+  "fuel_surcharge",
+  "detention",
+  "lumper",
+  "layover",
+  "stop_off",
+  "other",
+] as const satisfies readonly ChargeKind[]
+export type RateConChargeKind = (typeof RATE_CON_CHARGE_KINDS)[number]
+
+/**
+ * Run up on the road, added by a person after booking. TONU only once the
+ * load is marked TONU (see accessorialKindsFor).
+ */
 export const ACCESSORIAL_KINDS = [
   "detention",
   "lumper",
@@ -117,6 +135,14 @@ export const ACCESSORIAL_KINDS = [
   "stop_off",
   "other",
 ] as const satisfies readonly ChargeKind[]
+export type AccessorialKind = (typeof ACCESSORIAL_KINDS)[number]
+
+/** The accessorials a load can take: TONU only once it's marked TONU. */
+export function accessorialKindsFor(status: LoadStatus): AccessorialKind[] {
+  return status === "tonu"
+    ? [...ACCESSORIAL_KINDS]
+    : ACCESSORIAL_KINDS.filter((kind) => kind !== "tonu")
+}
 
 /**
  * Turns form data with keys like "stops.0.location" into nested objects and
@@ -350,7 +376,7 @@ export type LoadStopsValues = z.output<typeof loadStopsSchema>
 // ---------------------------------------------------------- Charges -----
 
 const chargeSchema = z.object({
-  kind: z.enum(CHARGE_KINDS, "Choose a charge."),
+  kind: z.enum(RATE_CON_CHARGE_KINDS, "Choose a charge."),
   description: optional(120),
   amount: money("Enter the amount."),
 })
@@ -437,6 +463,13 @@ export const accessorialSchema = z.object({
   amount: money("Enter the amount."),
 })
 export type AccessorialValues = z.output<typeof accessorialSchema>
+
+/** Marking a load TONU: what the broker owes for it. */
+export const tonuSchema = z.object({
+  amount: money("Enter the TONU amount."),
+  description: optional(120),
+})
+export type TonuValues = z.output<typeof tonuSchema>
 
 // -------------------------------------------------------- New load -----
 

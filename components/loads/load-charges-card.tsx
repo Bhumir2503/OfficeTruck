@@ -43,9 +43,10 @@ import {
 import { formatRate } from "@/lib/load-format"
 import type { Load, LoadCharge, RateVersion } from "@/lib/loads"
 import {
-  ACCESSORIAL_KINDS,
+  accessorialKindsFor,
   accessorialSchema,
   CHARGE_KIND_LABELS,
+  type LoadStatus,
   rateRevisionSchema,
 } from "@/lib/schemas/load"
 
@@ -150,13 +151,19 @@ function ReviseForm({
 function AccessorialForm({
   organizationId,
   loadId,
+  status,
   onDone,
 }: {
   organizationId: string
   loadId: string
+  status: LoadStatus
   onDone: () => void
 }) {
-  const [kind, setKind] = useState<string>("lumper")
+  const kinds = accessorialKindsFor(status)
+  // A TONU load's charge is almost always the TONU itself.
+  const [kind, setKind] = useState<string>(
+    status === "tonu" ? "tonu" : "lumper"
+  )
   const { errors, formError, pending, formProps } = useZodForm(
     accessorialSchema,
     async (values) => {
@@ -178,7 +185,7 @@ function AccessorialForm({
           <Select
             value={kind}
             onValueChange={(value) => setKind((value as string) ?? "lumper")}
-            items={ACCESSORIAL_KINDS.map((value) => ({
+            items={kinds.map((value) => ({
               value,
               label: CHARGE_KIND_LABELS[value],
             }))}
@@ -187,7 +194,7 @@ function AccessorialForm({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {ACCESSORIAL_KINDS.map((value) => (
+              {kinds.map((value) => (
                 <SelectItem key={value} value={value}>
                   {CHARGE_KIND_LABELS[value]}
                 </SelectItem>
@@ -312,7 +319,10 @@ export function LoadChargesCard({
   versions,
 }: {
   organizationId: string
-  load: Pick<Load, "id" | "rate" | "detention_free_hours" | "detention_rate">
+  load: Pick<
+    Load,
+    "id" | "rate" | "status" | "detention_free_hours" | "detention_rate"
+  >
   charges: LoadCharge[]
   versions: RateVersion[]
 }) {
@@ -487,6 +497,7 @@ export function LoadChargesCard({
             <AccessorialForm
               organizationId={organizationId}
               loadId={load.id}
+              status={load.status}
               onDone={() => setOpen(false)}
             />
           )}

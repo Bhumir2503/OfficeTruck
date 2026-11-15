@@ -6,11 +6,16 @@ import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod"
 import { z } from "zod"
 
 import type { RateConExtraction } from "@/lib/rate-con-format"
-import { CHARGE_KINDS, EQUIPMENT_TYPES, STOP_KINDS } from "@/lib/schemas/load"
+import {
+  RATE_CON_CHARGE_KINDS,
+  EQUIPMENT_TYPES,
+  STOP_KINDS,
+} from "@/lib/schemas/load"
 
-// Opus 5.5 reads scanned and photographed paperwork most reliably, and at
-// low effort it answers in a few seconds.
-const MODEL = "claude-opus-5-5"
+// Haiku 5.5 copies fields off a rate con into the schema for a fraction of a
+// cent a read. If blurry photos or bad scans start coming back wrong, Sonnet
+// 5.5 (claude-sonnet-5-5) is the next step up.
+const MODEL = "claude-haiku-5-5"
 
 /** What the file can be. Matches documentFileError, minus HEIC (photos are sent as WebP). */
 export const READABLE_TYPES = [
@@ -75,7 +80,7 @@ const extractionSchema = z.object({
   charges: z
     .array(
       z.object({
-        kind: z.enum(CHARGE_KINDS),
+        kind: z.enum(RATE_CON_CHARGE_KINDS),
         description: text("A short label when the kind alone doesn't say it."),
         amount: z.number().nullable().describe("The amount in US dollars."),
       })
@@ -146,9 +151,6 @@ export async function readRateCon(
     const response = await client.beta.messages.parse({
       model: MODEL,
       max_tokens: 16000,
-      // If the model declines, the API retries on its default fallback.
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
       output_config: {
         effort: "low",
         format: betaZodOutputFormat(extractionSchema),

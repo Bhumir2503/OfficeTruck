@@ -39,6 +39,8 @@ import {
   rateRevisionSchema,
   type RateRevisionValues,
   STATUSES_NEEDING_ASSIGNMENT,
+  tonuSchema,
+  type TonuValues,
 } from "@/lib/schemas/load"
 import { createClient } from "@/lib/supabase/server"
 
@@ -185,14 +187,18 @@ export async function updateLoadStatus(
   if (!parsed.success) {
     return { error: "Choose a valid status." }
   }
-  // Canceling takes a reason, so it goes through cancelLoad. The rest of
+  // Canceling takes a reason, so it goes through cancelLoad, and TONU takes
+  // its amount, so it goes through markLoadTonu. The rest of
   // the flow moves on its own (Save and notify, the BOL and POD,
   // check-ins) or through Mark complete; invoicing and payments are manual
   // until they're built.
   if (parsed.data === "cancelled") {
     return { error: "Give a reason for canceling the load." }
   }
-  if (!["invoiced", "paid", "factored", "tonu"].includes(parsed.data)) {
+  if (parsed.data === "tonu") {
+    return { error: "Enter the TONU amount to mark the load TONU." }
+  }
+  if (!["invoiced", "paid", "factored"].includes(parsed.data)) {
     return {
       error:
         "That status is set on its own from the BOL, POD and check-ins. Use Mark complete if they won't come.",
@@ -265,6 +271,54 @@ export async function cancelLoad(
   }
 
   refresh()
+  return { ok: true }
+}
+
+/**
+ * Marks a load TONU (truck ordered, not used) and adds the TONU the broker
+ * owes as a charge, so it isn't forgotten at invoicing.
+ */
+export async function markLoadTonu(
+  organizationId: string,
+  loadId: string,
+  input: TonuValues
+): Promise<ActionResult> {
+  if (!(await isMember(organizationId))) {
+    return { error: "You aren't a member of this organization." }
+  }
+  const parsed = tonuSchema.safeParse(input)
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Check the amount." }
+  }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("loads")
+    .update({ status: "tonu" })
+    .eq("organization_id", organizationId)
+    .eq("id", loadId)
+    .select("id")
+  if (error) {
+    return { error: rpcError(error) }
+  }
+  if (!data.length) {
+    return { error: "That load doesn't exist anymore." }
+  }
+
+  const { error: chargeError } = await supabase.from("load_charges").insert({
+    organization_id: organizationId,
+    load_id: loadId,
+    source: "accessorial",
+    kind: "tonu",
+    amount: parsed.data.amount,
+    description: parsed.data.description,
+  })
+  refresh()
+  if (chargeError) {
+    return {
+      error: `The load is marked TONU, but the charge didn't save: ${chargeError.message} Add it under Charges.`,
+    }
+  }
   return { ok: true }
 }
 
@@ -471,6 +525,18 @@ export async function addAccessorial(
   }
 
   const supabase = await createClient()
+  // A TONU is only owed once the load is marked TONU.
+  if (parsed.data.kind === "tonu") {
+    const { data: load } = await supabase
+      .from("loads")
+      .select("status")
+      .eq("organization_id", organizationId)
+      .eq("id", loadId)
+      .maybeSingle()
+    if (load?.status !== "tonu") {
+      return { error: "Mark the load TONU before adding a TONU charge." }
+    }
+  }
   const { error } = await supabase.from("load_charges").insert({
     ...parsed.data,
     organization_id: organizationId,
