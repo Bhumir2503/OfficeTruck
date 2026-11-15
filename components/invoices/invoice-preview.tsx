@@ -30,7 +30,14 @@ function Block({
  * The invoice page as it prints, on a white sheet in both themes. The
  * packet PDF draws the same `InvoicePage`.
  */
-export function InvoicePreview({ page }: { page: InvoicePage }) {
+export function InvoicePreview({
+  page,
+  numberField,
+}: {
+  page: InvoicePage
+  /** Shown in place of the number, e.g. a field to change it on a draft. */
+  numberField?: React.ReactNode
+}) {
   const facts: [string, string][] = [
     ["Load #", page.load.reference],
     ...(page.load.reference_numbers
@@ -70,7 +77,9 @@ export function InvoicePreview({ page }: { page: InvoicePage }) {
             </p>
             <dl className="mt-3 grid grid-cols-[auto_auto] gap-x-4 gap-y-1 text-sm whitespace-nowrap sm:justify-end">
               <dt className="text-neutral-500">Invoice #</dt>
-              <dd className="font-semibold tabular-nums">{page.number}</dd>
+              <dd className="font-semibold tabular-nums">
+                {numberField ?? page.number}
+              </dd>
               <dt className="text-neutral-500">Invoice date</dt>
               <dd className="font-semibold">
                 {formatInvoiceDate(page.invoice_date)}

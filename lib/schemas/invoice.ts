@@ -60,14 +60,16 @@ export const voidInvoiceSchema = z.object({
 })
 export type VoidInvoiceValues = z.output<typeof voidInvoiceSchema>
 
-export const nextInvoiceNumberSchema = z.object({
-  next_invoice_number: z.preprocess(
+/** A draft's invoice number, typed over the one it was given. */
+export const invoiceNumberSchema = z.object({
+  number: z.preprocess(
     (value) =>
-      typeof value === "string" ? value.replace(/[,\s]/g, "") : value,
+      typeof value === "string" ? value.replace(/[,\s#]/g, "") : value,
     z
       .string()
       .regex(/^\d{1,9}$/, "Enter a whole number, like 1001.")
       .transform(Number)
-      .pipe(z.number().min(1, "Start at 1 or more."))
+      .pipe(z.number().min(1, "Invoice numbers start at 1."))
   ),
 })
+export type InvoiceNumberValues = z.output<typeof invoiceNumberSchema>

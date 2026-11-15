@@ -17,9 +17,10 @@ import {
   type EmailInvoiceValues,
   invoiceDraftSchema,
   type InvoiceDraftValues,
+  invoiceNumberSchema,
+  type InvoiceNumberValues,
   markSentSchema,
   type MarkSentValues,
-  nextInvoiceNumberSchema,
   paymentSchema,
   type PaymentValues,
   voidInvoiceSchema,
@@ -82,6 +83,37 @@ export async function updateInvoiceDraft(
   })
   if (error) {
     return { error: rpcError(error) }
+  }
+  refresh()
+  return { ok: true }
+}
+
+/** Changes a draft's number. Later invoices carry on from it. */
+export async function setInvoiceNumber(
+  organizationId: string,
+  invoiceId: string,
+  values: InvoiceNumberValues
+): Promise<ActionResult> {
+  if (!(await isMember(organizationId))) return NOT_MEMBER
+  const parsed = invoiceNumberSchema.safeParse({
+    number: String(values.number),
+  })
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message }
+  }
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("set_invoice_number", {
+    target_invoice: invoiceId,
+    new_number: parsed.data.number,
+  })
+  if (error) {
+    // Two drafts renumbered at once can still meet the unique constraint.
+    return {
+      error:
+        error.code === "23505"
+          ? `Invoice ${parsed.data.number} already exists. Choose another number.`
+          : rpcError(error),
+    }
   }
   refresh()
   return { ok: true }
@@ -256,35 +288,6 @@ export async function voidInvoice(
   })
   if (error) {
     return { error: rpcError(error) }
-  }
-  refresh()
-  return { ok: true }
-}
-
-/** Sets the number the next invoice gets. Owners and admins only. */
-export async function setNextInvoiceNumber(
-  organizationId: string,
-  value: string
-): Promise<ActionResult> {
-  if (!(await isMember(organizationId))) return NOT_MEMBER
-  const parsed = nextInvoiceNumberSchema.safeParse({
-    next_invoice_number: value,
-  })
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0].message }
-  }
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("organizations")
-    .update({ next_invoice_number: parsed.data.next_invoice_number })
-    .eq("id", organizationId)
-    .select("id")
-  if (error) {
-    return { error: error.message }
-  }
-  // Row-level security skips the update for members.
-  if (!data.length) {
-    return { error: "Only owners and admins can change invoice numbering." }
   }
   refresh()
   return { ok: true }

@@ -3,6 +3,7 @@ import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 
+import { InvoiceNumberField } from "@/components/invoices/invoice-number-field"
 import { InvoicePreview } from "@/components/invoices/invoice-preview"
 import {
   InvoiceDetails,
@@ -115,7 +116,18 @@ export default async function InvoicePage({
         </div>
         <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]">
           <div className="min-w-0">
-            <InvoicePreview page={page} />
+            <InvoicePreview
+              page={page}
+              numberField={
+                invoice.status === "draft" ? (
+                  <InvoiceNumberField
+                    organizationId={organization.id}
+                    invoiceId={invoice.id}
+                    number={invoice.number}
+                  />
+                ) : undefined
+              }
+            />
             {invoice.status === "draft" && (
               <p className="mt-3 text-sm text-muted-foreground">
                 The lines are the load&apos;s charges as they are now. Change
@@ -123,7 +135,8 @@ export default async function InvoicePage({
                 <Link href={loadHref} className="underline">
                   load
                 </Link>
-                ; they&apos;re locked in when the invoice is sent.
+                ; they&apos;re locked in when the invoice is sent. Click the
+                invoice number to change it.
               </p>
             )}
           </div>

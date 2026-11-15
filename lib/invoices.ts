@@ -309,17 +309,3 @@ export async function packetFiles(organizationId: string, loadId: string) {
   ]
   return files.sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind))
 }
-
-/** The number the next invoice will get. */
-export async function getNextInvoiceNumber(organizationId: string) {
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("organizations")
-    .select("next_invoice_number")
-    .eq("id", organizationId)
-    .single()
-  if (error) {
-    throw error
-  }
-  return data.next_invoice_number as number
-}
