@@ -108,6 +108,37 @@ export function emailDomain(email: string) {
   return match ? match[1] : null
 }
 
+/**
+ * Free email providers. Anyone can get an address on these, so they're
+ * never one broker's own domain.
+ */
+const FREE_EMAIL_DOMAINS = new Set([
+  "gmail.com",
+  "googlemail.com",
+  "yahoo.com",
+  "ymail.com",
+  "outlook.com",
+  "hotmail.com",
+  "live.com",
+  "msn.com",
+  "aol.com",
+  "icloud.com",
+  "me.com",
+  "mac.com",
+  "proton.me",
+  "protonmail.com",
+  "mail.com",
+  "gmx.com",
+  "zoho.com",
+  "comcast.net",
+  "att.net",
+  "verizon.net",
+])
+
+export function isFreeEmailDomain(domain: string) {
+  return FREE_EMAIL_DOMAINS.has(domain.trim().toLowerCase())
+}
+
 export type SenderCheck =
   | { state: "empty" }
   | { state: "invalid" }

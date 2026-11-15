@@ -1,10 +1,15 @@
 "use client"
 
-import { Ban, Loader2, Search, Wallet } from "lucide-react"
+import { Ban, Loader2, Plus, Search, Wallet } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
+import { toast } from "sonner"
 
-import { lookupMc, type McLookup } from "@/app/org/[slug]/brokers/actions"
+import {
+  addBrokerDomain,
+  lookupMc,
+  type McLookup,
+} from "@/app/org/[slug]/brokers/actions"
 import { FlagBadge, FmcsaBadge } from "@/components/brokers/broker-badges"
 import { SenderWarning } from "@/components/brokers/sender-warning"
 import { Button } from "@/components/ui/button"
@@ -22,6 +27,7 @@ import {
   fmcsaFlags,
   formatMc,
   formatTerms,
+  isFreeEmailDomain,
 } from "@/lib/broker-format"
 import type { BrokerOption } from "@/lib/brokers"
 import { cleanMc, nameKey } from "@/lib/rate-con-format"
@@ -198,6 +204,70 @@ function FmcsaLookupResult({
   )
 }
 
+/**
+ * Adds the rate con sender's domain to the broker's known domains, for a
+ * sender the office has confirmed. Free email providers can't be added.
+ */
+function AddSenderDomain({
+  organizationId,
+  broker,
+  domain,
+  mismatch,
+}: {
+  organizationId: string
+  broker: BrokerOption
+  domain: string
+  /** The broker has other domains, so this one might be someone posing. */
+  mismatch: boolean
+}) {
+  const [pending, setPending] = useState(false)
+  const name = broker.dba_name ?? broker.legal_name
+
+  if (isFreeEmailDomain(domain)) {
+    return (
+      <p className="text-xs opacity-90">
+        <span className="font-medium">{domain}</span> is a free email provider,
+        so it can&apos;t be saved as {name}&apos;s domain.
+      </p>
+    )
+  }
+
+  async function add() {
+    setPending(true)
+    const result = await addBrokerDomain(organizationId, broker.id, domain)
+    setPending(false)
+    if ("error" in result) {
+      toast.error(result.error)
+      return
+    }
+    toast.success(`${domain} added to ${name}'s domains.`)
+  }
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+      <p className="min-w-0 text-xs opacity-90">
+        {mismatch
+          ? `Called ${name} and it's really them? Save the domain so it's trusted next time.`
+          : `Is this ${name}'s company email? Save the domain to check senders from now on.`}
+      </p>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="max-w-full shrink-0 border-current/20 bg-background text-foreground shadow-xs hover:bg-background/80"
+        title={`Add ${domain} to ${name}'s known domains`}
+        disabled={pending}
+        onClick={() => void add()}
+      >
+        {pending ? <Loader2 className="animate-spin" /> : <Plus />}
+        <span className="truncate">
+          {pending ? "Saving…" : `Trust ${domain}`}
+        </span>
+      </Button>
+    </div>
+  )
+}
+
 type Lookup =
   | { state: "idle" }
   | { state: "checking"; mc: string }
@@ -353,6 +423,7 @@ export function BrokerFields({
     { value: OTHER, label: "Not in your list: type the name" },
   ]
   const nameErrors = errors.broker_name ?? errors.broker_id
+  const senderCheck = broker ? checkSender(sender, broker.email_domains) : null
   const checkedMc =
     lookup.state === "done" || lookup.state === "checking" ? lookup.mc : null
 
@@ -496,12 +567,23 @@ export function BrokerFields({
               in your brokers, so it&apos;s picked by its MC number.
             </p>
           )}
-          {broker && sender && (
+          {broker && senderCheck && sender && (
             <SenderWarning
-              check={checkSender(sender, broker.email_domains)}
+              check={senderCheck}
               brokerName={broker.dba_name ?? broker.legal_name}
               phone={broker.phone}
-            />
+            >
+              {(senderCheck.state === "mismatch" ||
+                senderCheck.state === "unknown") && (
+                <AddSenderDomain
+                  key={senderCheck.domain}
+                  organizationId={organizationId}
+                  broker={broker}
+                  domain={senderCheck.domain}
+                  mismatch={senderCheck.state === "mismatch"}
+                />
+              )}
+            </SenderWarning>
           )}
           {broker && (
             <BrokerSummary
