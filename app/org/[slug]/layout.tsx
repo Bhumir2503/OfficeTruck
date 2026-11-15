@@ -57,7 +57,7 @@ export default async function OrganizationLayout({
         organization={organization}
         user={{ name, email, avatarUrl }}
         organizations={await getMyOrganizations()}
-        dashboardBadge={totalActions(await getActionCounts())}
+        dashboardBadge={totalActions(await getActionCounts(organization.id))}
       />
       <SidebarInset>
         <SiteHeader slug={organization.slug} />

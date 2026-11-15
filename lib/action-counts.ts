@@ -1,3 +1,7 @@
+import { localToday } from "@/lib/invoice-format"
+import { getLoadsToInvoice } from "@/lib/invoices"
+import { createClient } from "@/lib/supabase/server"
+
 export type ActionCounts = {
   loadsMissingPod: number
   invoicesReadyToSend: number
@@ -7,14 +11,35 @@ export type ActionCounts = {
 
 /**
  * What needs the owner's attention today, shown on the dashboard and as its sidebar badge.
- * Loads, invoices and documents aren't stored yet, so everything is zero until
- * those tables exist; then count them here for the current organization.
+ * Invoices are counted; missing PODs and expiring documents are still zero
+ * until they're wired up.
  */
-export async function getActionCounts(): Promise<ActionCounts> {
+export async function getActionCounts(
+  organizationId: string
+): Promise<ActionCounts> {
+  const supabase = await createClient()
+  const [ready, drafts, overdue] = await Promise.all([
+    getLoadsToInvoice(organizationId),
+    supabase
+      .from("invoices")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", organizationId)
+      .eq("status", "draft"),
+    supabase
+      .from("invoices")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", organizationId)
+      .eq("status", "sent")
+      .lt("due_on", localToday()),
+  ])
+
   return {
     loadsMissingPod: 0,
-    invoicesReadyToSend: 0,
-    overduePayments: 0,
+    // Loads with all their paperwork and no invoice yet, plus drafts.
+    invoicesReadyToSend:
+      ready.filter((load) => load.missing.length === 0).length +
+      (drafts.count ?? 0),
+    overduePayments: overdue.count ?? 0,
     documentsExpiringSoon: 0,
   }
 }

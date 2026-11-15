@@ -19,6 +19,7 @@ import { getLiveDispatch, getLoadEvents } from "@/lib/dispatch"
 import { getDriverOptions } from "@/lib/drivers"
 import { getFactoringCompany } from "@/lib/factoring"
 import { getLoadDocuments } from "@/lib/load-documents"
+import { getLoadInvoice } from "@/lib/invoices"
 import { getLoadExpenses } from "@/lib/load-expenses"
 import { getLoadDetail } from "@/lib/loads"
 import { getOrganization } from "@/lib/organizations"
@@ -57,6 +58,7 @@ export default async function LoadPage({
     events,
     documents,
     expenses,
+    invoice,
   ] = await Promise.all([
     getDriverOptions(organization.id),
     getTruckOptions(organization.id),
@@ -66,6 +68,7 @@ export default async function LoadPage({
     getLoadEvents(organization.id, load.id),
     getLoadDocuments(organization.id, load.id),
     getLoadExpenses(organization.id, load.id),
+    getLoadInvoice(organization.id, load.id),
   ])
   const link = dispatch ? `${await appUrl()}/dispatch/${dispatch.token}` : null
 
@@ -174,6 +177,8 @@ export default async function LoadPage({
               trucksBase={`/org/${organization.slug}/equipment`}
               driversBase={`/org/${organization.slug}/drivers`}
               loadsBase={base}
+              invoice={invoice}
+              invoicesBase={`/org/${organization.slug}/invoices`}
             />
           </aside>
           {/* Under the cards on a wide screen; last of all on a phone. */}
