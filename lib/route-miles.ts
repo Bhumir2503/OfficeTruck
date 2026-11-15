@@ -82,7 +82,9 @@ export async function routeMiles(addresses: string[]): Promise<RouteMiles> {
   }
 
   const route = body.routes?.[0]
-  if (!route?.distanceMeters) {
+  // Google leaves distanceMeters out when it's 0 (the same place), so only
+  // a missing route means there's no way to drive it.
+  if (!route) {
     return {
       ok: false,
       error:
@@ -92,7 +94,7 @@ export async function routeMiles(addresses: string[]): Promise<RouteMiles> {
   const seconds = Number(route.duration?.replace(/s$/, "") ?? 0)
   return {
     ok: true,
-    miles: Math.round(route.distanceMeters / METERS_PER_MILE),
+    miles: Math.round((route.distanceMeters ?? 0) / METERS_PER_MILE),
     hours: Math.round((seconds / 3600) * 10) / 10,
   }
 }

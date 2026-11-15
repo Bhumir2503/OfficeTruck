@@ -24,13 +24,11 @@ import { BrokerFields } from "@/components/loads/broker-fields"
 import { DocumentLink } from "@/components/loads/document-viewer"
 import { ChargesEditor } from "@/components/loads/charges-editor"
 import { FreightFields, LoadTextField } from "@/components/loads/freight-fields"
+import { EmptyMilesField } from "@/components/loads/empty-miles-field"
 import { RouteMilesField } from "@/components/loads/route-miles-field"
 import { StopsEditor } from "@/components/loads/stops-editor"
 import { TruckSelect } from "@/components/loads/truck-select"
-import {
-  DriverSelect,
-  handleMilesInput,
-} from "@/components/loads/driver-select"
+import { DriverSelect } from "@/components/loads/driver-select"
 import { useZodForm } from "@/hooks/use-zod-form"
 import type { BrokerOption } from "@/lib/brokers"
 import type { DriverOption } from "@/lib/drivers"
@@ -114,6 +112,7 @@ export function NewLoadForm({
 }) {
   const router = useRouter()
   const [driverId, setDriverId] = useState<string | null>(null)
+  const [truckId, setTruckId] = useState<string | null>(null)
   const [driverPicked, setDriverPicked] = useState(false)
   // The rate con, held here until the load is saved, and a local link to
   // open it while filling in the form.
@@ -149,6 +148,17 @@ export function NewLoadForm({
   // Bumped when stops change, so loaded miles are worked out again.
   const [stopsVersion, setStopsVersion] = useState(0)
   const stopsChanged = () => setStopsVersion((version) => version + 1)
+  /** The first stop in the form: where empty miles end. */
+  const firstPickup = () => {
+    const field = (name: string) =>
+      formRef.current?.querySelector<HTMLInputElement>(
+        `input[name="stops.0.${name}"]`
+      )?.value ?? ""
+    return {
+      location: field("location"),
+      start: field("appointment_start") || null,
+    }
+  }
   /** The stop addresses in the form, in order. */
   const stopAddresses = () =>
     Array.from(
@@ -356,7 +366,6 @@ export function NewLoadForm({
             >
               <StopsEditor
                 key={`stops-${fillKey}`}
-                organizationId={organizationId}
                 defaultStops={
                   fill?.stops ?? [
                     { kind: "pickup", appointment_type: "appointment" },
@@ -400,6 +409,7 @@ export function NewLoadForm({
                   trucks={trucks}
                   invalid={!!errors.truck_id}
                   onPick={(truck) => {
+                    setTruckId(truck?.id ?? null)
                     // Prefill the truck's usual driver, unless one was picked by hand.
                     if (!driverPicked && truck?.default_driver_id) {
                       setDriverId(truck.default_driver_id)
@@ -452,13 +462,13 @@ export function NewLoadForm({
                 stopsVersion={stopsVersion}
                 errors={errors.miles}
               />
-              <TextField
-                name="empty_miles"
-                label="Empty miles"
-                inputMode="numeric"
-                placeholder="e.g. 85"
-                errors={errors}
-                onChange={handleMilesInput}
+              <EmptyMilesField
+                organizationId={organizationId}
+                truckId={truckId}
+                pickup={firstPickup}
+                stopsVersion={stopsVersion}
+                errors={errors.empty_miles}
+                trucksBase={trucksHref}
               />
             </SettingsCard>
           </div>
@@ -620,9 +630,6 @@ export function NewLoadForm({
                 >
                   Cancel
                 </Link>
-                <p className="text-center text-xs text-muted-foreground">
-                  The rate con is saved with the load.
-                </p>
               </div>
               {formError && (
                 <p role="alert" className="mt-3 text-sm text-destructive">

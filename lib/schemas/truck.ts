@@ -110,6 +110,7 @@ export const truckSchema = z.object({
     z.uuid("Choose a driver.").nullable()
   ),
   motive_vehicle_id: optional(max(50)),
+  home_base: optional(max(200)),
   monthly_payment: monthly,
   monthly_insurance: monthly,
   monthly_other_costs: monthly,

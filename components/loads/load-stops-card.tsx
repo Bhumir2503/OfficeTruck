@@ -267,7 +267,6 @@ function EditStopsForm({
       <fieldset disabled={pending} className="flex flex-col gap-6">
         <div className="max-h-[60vh] overflow-y-auto pr-1">
           <StopsEditor
-            organizationId={organizationId}
             defaultStops={stops.map((stop) => ({
               ...stop,
               locked: !!stop.arrived_at,

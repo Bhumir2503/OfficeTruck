@@ -18,12 +18,7 @@ import {
   type ExpenseValues,
 } from "@/lib/load-expense-format"
 import { getMyOrganizations, getUser } from "@/lib/organizations"
-import {
-  pickAddress,
-  suggestAddresses,
-  type AddressSuggestion,
-  type PickedAddress,
-} from "@/lib/places"
+import { estimateEmptyMiles, type EmptyMilesEstimate } from "@/lib/empty-miles"
 import { MAX_ROUTE_STOPS, routeMiles, type RouteMiles } from "@/lib/route-miles"
 import {
   accessorialSchema,
@@ -435,33 +430,45 @@ export async function calculateRouteMiles(
   return routeMiles(addresses)
 }
 
-/** Google's address suggestions for a stop's address box. */
-export async function suggestStopAddresses(
+/**
+ * Estimated empty miles for a truck to a load's first pickup. New Load sends
+ * the pickup from the form; a saved load (`loadId`) uses its saved stops.
+ */
+export async function estimateLoadEmptyMiles(
   organizationId: string,
-  input: string,
-  sessionToken: string
-): Promise<
-  { ok: true; value: AddressSuggestion[] } | { ok: false; error: string }
-> {
+  input: {
+    truckId: string
+    loadId?: string
+    pickupLocation?: string
+    pickupStart?: string | null
+  }
+): Promise<EmptyMilesEstimate> {
   if (!(await isMember(organizationId))) {
     return { ok: false, error: "You aren't a member of this organization." }
   }
-  if (typeof input !== "string" || input.length > 200) {
-    return { ok: true, value: [] }
+  let pickupLocation = String(input.pickupLocation ?? "").slice(0, 200)
+  let pickupStart = input.pickupStart ? String(input.pickupStart) : null
+  if (input.loadId) {
+    const supabase = await createClient()
+    const { data: stop } = await supabase
+      .from("load_stops")
+      .select("location, appointment_start")
+      .eq("organization_id", organizationId)
+      .eq("load_id", input.loadId)
+      .order("position")
+      .limit(1)
+      .maybeSingle()
+    if (!stop) return { ok: false, error: "That load doesn't exist anymore." }
+    pickupLocation = stop.location as string
+    pickupStart = stop.appointment_start as string
   }
-  return suggestAddresses(input, String(sessionToken).slice(0, 100))
-}
-
-/** The full address of the suggestion that was picked. */
-export async function pickStopAddress(
-  organizationId: string,
-  placeId: string,
-  sessionToken: string
-): Promise<{ ok: true; value: PickedAddress } | { ok: false; error: string }> {
-  if (!(await isMember(organizationId))) {
-    return { ok: false, error: "You aren't a member of this organization." }
-  }
-  return pickAddress(String(placeId), String(sessionToken).slice(0, 100))
+  return estimateEmptyMiles({
+    organizationId,
+    truckId: String(input.truckId),
+    pickupLocation,
+    pickupStart,
+    excludeLoadId: input.loadId,
+  })
 }
 
 /** Adds, changes, reorders or removes a load's stops. */
@@ -486,13 +493,36 @@ export async function saveLoadStops(
   if (error) {
     return { error: rpcError(error) }
   }
-  // New stops, new estimate. If Google Maps can't route them, the old
-  // estimate stays and can be fixed by hand.
-  const route = await routeMiles(parsed.data.stops.map((stop) => stop.location))
-  if (route.ok) {
+  // New stops, new estimates: loaded miles through the stops, and empty
+  // miles to the first pickup. If Google Maps can't route them, the old
+  // estimates stay and can be fixed by hand.
+  const { data: load } = await supabase
+    .from("loads")
+    .select("truck_id")
+    .eq("organization_id", organizationId)
+    .eq("id", loadId)
+    .maybeSingle()
+  const first = parsed.data.stops[0]
+  const [route, empty] = await Promise.all([
+    routeMiles(parsed.data.stops.map((stop) => stop.location)),
+    load?.truck_id
+      ? estimateEmptyMiles({
+          organizationId,
+          truckId: load.truck_id as string,
+          pickupLocation: first.location,
+          pickupStart: first.appointment_start,
+          excludeLoadId: loadId,
+        })
+      : null,
+  ])
+  const miles = {
+    ...(route.ok && { miles: route.miles }),
+    ...(empty?.ok && { empty_miles: empty.miles }),
+  }
+  if (Object.keys(miles).length) {
     await supabase
       .from("loads")
-      .update({ miles: route.miles })
+      .update(miles)
       .eq("organization_id", organizationId)
       .eq("id", loadId)
   }

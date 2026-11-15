@@ -20,9 +20,11 @@ import {
   sendToDriver,
   updateLoadStatus,
 } from "@/app/org/[slug]/loads/actions"
+import { AssignDialog } from "@/components/loads/assign-dialog"
 import { DocumentLink } from "@/components/loads/document-viewer"
 import { Button } from "@/components/ui/button"
 import type { LoadDispatch } from "@/lib/dispatch"
+import type { DriverOption } from "@/lib/drivers"
 import { formatPay, loadDriverPay } from "@/lib/driver-format"
 import {
   DOCUMENT_LABELS,
@@ -42,6 +44,7 @@ import type { LoadExpense } from "@/lib/load-expenses"
 import { formatRate } from "@/lib/load-format"
 import type { Load, LoadCharge } from "@/lib/loads"
 import { LOAD_STATUS_LABELS, type LoadStatus } from "@/lib/schemas/load"
+import type { TruckOption } from "@/lib/trucks"
 
 type Step = {
   title: string
@@ -216,6 +219,11 @@ export function LoadSidePanel({
   documents,
   expenses,
   dispatch,
+  trucks,
+  drivers,
+  trucksBase,
+  driversBase,
+  loadsBase,
 }: {
   organizationId: string
   load: Load
@@ -223,7 +231,17 @@ export function LoadSidePanel({
   documents: LoadDocument[]
   expenses: LoadExpense[]
   dispatch: LoadDispatch | null
+  /** For assigning a truck and driver from the next step. */
+  trucks: TruckOption[]
+  drivers: DriverOption[]
+  /** /org/<slug>/equipment */
+  trucksBase: string
+  /** /org/<slug>/drivers */
+  driversBase: string
+  /** /org/<slug>/loads */
+  loadsBase: string
 }) {
+  const [assigning, setAssigning] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   // Which kind the file picker is choosing for.
@@ -384,6 +402,18 @@ export function LoadSidePanel({
         }}
       />
 
+      <AssignDialog
+        open={assigning}
+        onOpenChange={setAssigning}
+        organizationId={organizationId}
+        load={load}
+        trucks={trucks}
+        drivers={drivers}
+        trucksBase={trucksBase}
+        driversBase={driversBase}
+        loadsBase={loadsBase}
+      />
+
       {/* Next step */}
       <section className="overflow-hidden rounded-xl border bg-card text-card-foreground shadow-xs">
         <div className="px-5 pt-4 pb-5">
@@ -397,12 +427,13 @@ export function LoadSidePanel({
           {action && (
             <div className="mt-4 flex flex-col gap-2">
               {action.type === "assign" ? (
-                <a
-                  href="#assignment"
-                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                <Button
+                  size="lg"
+                  className="w-full"
+                  onClick={() => setAssigning(true)}
                 >
-                  Assign truck and driver <ArrowRight className="size-4" />
-                </a>
+                  Assign truck and driver <ArrowRight />
+                </Button>
               ) : (
                 <Button
                   size="lg"

@@ -21,10 +21,9 @@ import {
 
 /**
  * A date picker and a time input that together fill one hidden input with
- * "YYYY-MM-DDTHH:mm", the wall-clock time at the stop. The time starts at
- * `defaultTime`, so people see what a time looks like, but only counts once a
- * date is picked: with no date the field is empty. A date with the time
- * cleared is sent as "2026-11-14T", so validation reports it.
+ * "YYYY-MM-DDTHH:mm", the wall-clock time at the stop. Neither starts with a
+ * value: with no date the field is empty, and a date with no time is sent
+ * as "2026-11-14T", so validation asks for the time.
  *
  * With `dateOnly`, there's no time input and the value is midnight that day,
  * for a stop that isn't scheduled yet.
@@ -37,7 +36,6 @@ export function DateTimeField({
   label,
   stopLabel,
   hint,
-  defaultTime = "",
   defaultValue,
   errors,
   onUpdate,
@@ -49,8 +47,6 @@ export function DateTimeField({
   /** Which stop, so the date and time controls get names like "Pickup from date". */
   stopLabel: string
   hint?: string
-  /** "HH:mm" to start the time input at. */
-  defaultTime?: string
   /** A saved value, "YYYY-MM-DDTHH:mm[:ss]", to start from. */
   defaultValue?: string | null
   errors?: { message: string }[]
@@ -66,7 +62,7 @@ export function DateTimeField({
     return new Date(year, month - 1, day)
   })
   const [time, setTime] = useState(
-    defaultValue ? defaultValue.slice(11, 16) : defaultTime
+    defaultValue ? defaultValue.slice(11, 16) : ""
   )
   const hiddenRef = useRef<HTMLInputElement>(null)
   const firstRender = useRef(true)
@@ -137,7 +133,7 @@ export function DateTimeField({
             aria-invalid={invalid}
             value={time}
             onChange={(event) => setTime(event.target.value)}
-            className="w-28 flex-1 appearance-none sm:flex-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
+            className="w-32 flex-1 appearance-none bg-background sm:flex-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
           />
         )}
       </div>
