@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
+import { AddressInput } from "@/components/loads/address-input"
 import { DateTimeField } from "@/components/loads/date-time-field"
 import { Button } from "@/components/ui/button"
 import {
@@ -91,11 +92,13 @@ const TYPE_HINTS: Record<AppointmentType, string> = {
  * address is edited, so miles can be worked out again.
  */
 export function StopsEditor({
+  organizationId,
   defaultStops,
   errors,
   onUpdate,
   onStopsChange,
 }: {
+  organizationId: string
   defaultStops: StopDefaults[]
   errors: Errors
   onUpdate: (form: HTMLFormElement | null) => void
@@ -306,22 +309,28 @@ export function StopsEditor({
                   className="sm:col-span-6"
                 >
                   <FieldLabel htmlFor={id("location")}>Address</FieldLabel>
-                  <Input
+                  <AddressInput
+                    organizationId={organizationId}
                     id={id("location")}
                     name={name("location")}
                     defaultValue={row.location}
                     placeholder={
                       row.kind === "pickup"
-                        ? "e.g. 1001 SE 5th St, Bentonville, AR 72712"
-                        : "e.g. 2500 Main St, Dallas, TX 75201"
+                        ? "Start typing: Walmart DC Bentonville, or a street address"
+                        : "Start typing: Kroger Dallas, or a street address"
                     }
-                    aria-invalid={!!error("location")}
-                    autoComplete="off"
-                    onBlur={(event) => {
-                      if (event.target.value !== event.target.defaultValue) {
-                        onStopsChange?.()
+                    invalid={!!error("location")}
+                    onPick={(picked) => {
+                      // A business's name fills an empty shipper or
+                      // receiver box.
+                      const facility = document.getElementById(
+                        id("facility")
+                      ) as HTMLInputElement | null
+                      if (picked.name && facility && !facility.value.trim()) {
+                        facility.value = picked.name
                       }
                     }}
+                    onChanged={onStopsChange}
                   />
                   <FieldError errors={error("location")} />
                 </Field>

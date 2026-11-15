@@ -606,7 +606,7 @@ export function LoadSidePanel({
           <p className="mt-1 text-sm text-muted-foreground tabular-nums">
             {load.miles ? (
               <>
-                {formatRate(revenue / load.miles)} per loaded mile
+                {formatRate(revenue / load.miles)} per estimated loaded mile
                 {load.empty_miles ? (
                   <>
                     {" · "}

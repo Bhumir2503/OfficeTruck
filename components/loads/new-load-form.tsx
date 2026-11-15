@@ -409,6 +409,7 @@ export function NewLoadForm({
             >
               <StopsEditor
                 key={`stops-${fillKey}`}
+                organizationId={organizationId}
                 defaultStops={
                   fill?.stops ?? [
                     { kind: "pickup", appointment_type: "appointment" },

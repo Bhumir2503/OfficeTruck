@@ -359,7 +359,7 @@ export function NewLoadSkeleton() {
             >
               <FieldSkeleton label="Truck" />
               <FieldSkeleton label="Driver" />
-              <FieldSkeleton label="Loaded miles" />
+              <FieldSkeleton label="Estimated loaded miles" />
               <FieldSkeleton label="Empty miles" />
             </SettingsCard>
           </div>
@@ -500,7 +500,7 @@ export function LoadDetailSkeleton() {
             >
               <FieldSkeleton label="Truck" />
               <FieldSkeleton label="Driver" />
-              <FieldSkeleton label="Loaded miles" />
+              <FieldSkeleton label="Estimated loaded miles" />
               <FieldSkeleton label="Empty miles" />
             </SettingsCard>
             <SettingsCard

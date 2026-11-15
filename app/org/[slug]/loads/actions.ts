@@ -18,6 +18,12 @@ import {
   type ExpenseValues,
 } from "@/lib/load-expense-format"
 import { getMyOrganizations, getUser } from "@/lib/organizations"
+import {
+  pickAddress,
+  suggestAddresses,
+  type AddressSuggestion,
+  type PickedAddress,
+} from "@/lib/places"
 import { MAX_ROUTE_STOPS, routeMiles, type RouteMiles } from "@/lib/route-miles"
 import {
   accessorialSchema,
@@ -429,25 +435,33 @@ export async function calculateRouteMiles(
   return routeMiles(addresses)
 }
 
-/** Driving miles through a saved load's stops, from Google Maps. */
-export async function calculateLoadMiles(
+/** Google's address suggestions for a stop's address box. */
+export async function suggestStopAddresses(
   organizationId: string,
-  loadId: string
-): Promise<RouteMiles> {
+  input: string,
+  sessionToken: string
+): Promise<
+  { ok: true; value: AddressSuggestion[] } | { ok: false; error: string }
+> {
   if (!(await isMember(organizationId))) {
     return { ok: false, error: "You aren't a member of this organization." }
   }
-  const supabase = await createClient()
-  const { data: stops } = await supabase
-    .from("load_stops")
-    .select("location")
-    .eq("organization_id", organizationId)
-    .eq("load_id", loadId)
-    .order("position")
-  if (!stops?.length) {
-    return { ok: false, error: "That load doesn't exist anymore." }
+  if (typeof input !== "string" || input.length > 200) {
+    return { ok: true, value: [] }
   }
-  return routeMiles(stops.map((stop) => stop.location as string))
+  return suggestAddresses(input, String(sessionToken).slice(0, 100))
+}
+
+/** The full address of the suggestion that was picked. */
+export async function pickStopAddress(
+  organizationId: string,
+  placeId: string,
+  sessionToken: string
+): Promise<{ ok: true; value: PickedAddress } | { ok: false; error: string }> {
+  if (!(await isMember(organizationId))) {
+    return { ok: false, error: "You aren't a member of this organization." }
+  }
+  return pickAddress(String(placeId), String(sessionToken).slice(0, 100))
 }
 
 /** Adds, changes, reorders or removes a load's stops. */
@@ -471,6 +485,16 @@ export async function saveLoadStops(
   })
   if (error) {
     return { error: rpcError(error) }
+  }
+  // New stops, new estimate. If Google Maps can't route them, the old
+  // estimate stays and can be fixed by hand.
+  const route = await routeMiles(parsed.data.stops.map((stop) => stop.location))
+  if (route.ok) {
+    await supabase
+      .from("loads")
+      .update({ miles: route.miles })
+      .eq("organization_id", organizationId)
+      .eq("id", loadId)
   }
   refresh()
   return { ok: true }

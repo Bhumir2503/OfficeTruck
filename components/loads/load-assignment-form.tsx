@@ -392,8 +392,9 @@ export function LoadAssignmentForm({
 
           <div className="grid gap-5 sm:grid-cols-2">
             <RouteMilesField
+              // Re-estimated when the stops are saved: show the new number.
+              key={`miles-${load.miles}`}
               organizationId={organizationId}
-              loadId={load.id}
               defaultValue={load.miles}
               errors={errors.miles}
             />

@@ -157,7 +157,10 @@ export default async function DispatchPage({
       "Weight",
       `${Number(load.weight_lbs).toLocaleString("en-US")} lbs`,
     ],
-    load.miles != null && ["Miles", Number(load.miles).toLocaleString("en-US")],
+    load.miles != null && [
+      "Estimated miles",
+      Number(load.miles).toLocaleString("en-US"),
+    ],
   ].filter(Boolean) as [string, string][]
 
   return (
