@@ -8,6 +8,7 @@ import { toast } from "sonner"
 import {
   cancelLoad,
   markLoadComplete,
+  markLoadTonu,
   reopenLoad,
   unmarkLoadComplete,
   updateLoadStatus,
@@ -30,15 +31,22 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { LoadTextField } from "@/components/loads/freight-fields"
 import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Textarea } from "@/components/ui/textarea"
 import { useZodForm } from "@/hooks/use-zod-form"
-import { STATUS_STYLES } from "@/lib/load-format"
+import {
+  handleCurrencyBlur,
+  handleCurrencyInput,
+  handleCurrencyKeyDown,
+} from "@/lib/currency"
+import { formatRate, STATUS_STYLES } from "@/lib/load-format"
 import {
   cancelLoadSchema,
   isFallenThrough,
   LOAD_STATUS_LABELS,
   type LoadStatus,
+  tonuSchema,
 } from "@/lib/schemas/load"
 
 export function LoadStatusBadge({
@@ -148,12 +156,74 @@ function CancelForm({
   )
 }
 
+// Lives inside the dialog content so it starts empty each time it opens.
+function TonuForm({
+  organizationId,
+  load,
+  onDone,
+}: {
+  organizationId: string
+  load: { id: string; reference: string }
+  onDone: () => void
+}) {
+  const { errors, formError, pending, formProps } = useZodForm(
+    tonuSchema,
+    async (values) => {
+      const result = await markLoadTonu(organizationId, load.id, values)
+      if ("error" in result) {
+        return result.error
+      }
+      toast.success(
+        `Load ${load.reference} marked TONU, with a ${formatRate(values.amount ?? 0)} TONU charge.`
+      )
+      onDone()
+    }
+  )
+
+  return (
+    <form {...formProps} autoComplete="off">
+      <fieldset disabled={pending} className="flex flex-col gap-5">
+        <LoadTextField
+          name="amount"
+          label="TONU amount"
+          prefix="$"
+          inputMode="decimal"
+          placeholder="e.g. 150.00"
+          autoFocus
+          errors={errors}
+          onChange={handleCurrencyInput}
+          onKeyDown={handleCurrencyKeyDown}
+          onBlur={handleCurrencyBlur}
+        />
+        <LoadTextField
+          name="description"
+          label="Note"
+          placeholder="Optional, e.g. Shipper canceled at the dock"
+          errors={errors}
+        />
+        <DialogFooter className="items-center">
+          {formError && (
+            <p className="mr-auto text-sm text-destructive">{formError}</p>
+          )}
+          <Button type="button" variant="outline" onClick={onDone}>
+            Keep load
+          </Button>
+          <Button type="submit" variant="destructive" disabled={pending}>
+            {pending ? "Saving…" : "Mark TONU"}
+          </Button>
+        </DialogFooter>
+      </fieldset>
+    </form>
+  )
+}
+
 /** An action in the status menu: what it does to the load. */
 type StatusAction =
   | { kind: "complete" }
   | { kind: "uncomplete" }
   | { kind: "status"; to: LoadStatus; label: string }
   | { kind: "cancel" }
+  | { kind: "tonu" }
   | { kind: "reopen" }
 
 /**
@@ -163,10 +233,7 @@ type StatusAction =
  * payments are built.
  */
 function actionsFor(status: LoadStatus, manual: boolean): StatusAction[][] {
-  const end: StatusAction[] = [
-    { kind: "cancel" },
-    { kind: "status", to: "tonu", label: "TONU" },
-  ]
+  const end: StatusAction[] = [{ kind: "cancel" }, { kind: "tonu" }]
   switch (status) {
     case "booked":
       return [[{ kind: "complete" }], end]
@@ -216,6 +283,7 @@ export function LoadStatusMenu({
 }) {
   const [pending, setPending] = useState(false)
   const [canceling, setCanceling] = useState(false)
+  const [markingTonu, setMarkingTonu] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   // Marked complete by hand and still waiting on proof: "Completed" instead
   // of "Delivered". Past delivered (invoiced, paid) the usual name shows.
@@ -229,6 +297,11 @@ export function LoadStatusMenu({
       // clicks.
       setMenuOpen(false)
       setCanceling(true)
+      return
+    }
+    if (action.kind === "tonu") {
+      setMenuOpen(false)
+      setMarkingTonu(true)
       return
     }
     setPending(true)
@@ -271,9 +344,11 @@ export function LoadStatusMenu({
         ? "Undo complete"
         : action.kind === "cancel"
           ? "Cancelled"
-          : action.kind === "reopen"
-            ? "Reopen as booked"
-            : action.label
+          : action.kind === "tonu"
+            ? "TONU"
+            : action.kind === "reopen"
+              ? "Reopen as booked"
+              : action.label
 
   return (
     <>
@@ -313,7 +388,11 @@ export function LoadStatusMenu({
               {group.map((action) => (
                 <DropdownMenuItem
                   key={label(action)}
-                  variant={action.kind === "cancel" ? "destructive" : undefined}
+                  variant={
+                    action.kind === "cancel" || action.kind === "tonu"
+                      ? "destructive"
+                      : undefined
+                  }
                   onClick={() => void run(action)}
                 >
                   {action.kind === "complete" ? (
@@ -345,6 +424,23 @@ export function LoadStatusMenu({
             organizationId={organizationId}
             load={load}
             onDone={() => setCanceling(false)}
+          />
+        </DialogContent>
+      </Dialog>
+      <Dialog open={markingTonu} onOpenChange={setMarkingTonu}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Mark load {load.reference} TONU?</DialogTitle>
+            <DialogDescription>
+              Truck ordered, not used. Enter what the broker owes for it.
+              It&apos;s added to the load&apos;s charges, so it gets invoiced.
+              You can reopen the load later.
+            </DialogDescription>
+          </DialogHeader>
+          <TonuForm
+            organizationId={organizationId}
+            load={load}
+            onDone={() => setMarkingTonu(false)}
           />
         </DialogContent>
       </Dialog>

@@ -464,6 +464,13 @@ export const accessorialSchema = z.object({
 })
 export type AccessorialValues = z.output<typeof accessorialSchema>
 
+/** Marking a load TONU: what the broker owes for it. */
+export const tonuSchema = z.object({
+  amount: money("Enter the TONU amount."),
+  description: optional(120),
+})
+export type TonuValues = z.output<typeof tonuSchema>
+
 // -------------------------------------------------------- New load -----
 
 export const loadSchema = z.preprocess(
