@@ -68,6 +68,8 @@ export type RateConFill = {
     brokerId: string | null
     brokerName: string
     sender: string | null
+    /** The broker's MC number, digits only, from the rate con or your list. */
+    mc: string | null
   } | null
   stops:
     | {
@@ -264,18 +266,22 @@ export function rateConToForm(
   const email = cleanText(extraction.sender_email, 254)?.toLowerCase() ?? null
   const sender = email && EMAIL.test(email) ? email : null
   const brokerName = cleanText(extraction.broker_name, 120)
-  const match = matchBroker(brokers, brokerName, extraction.broker_mc_number)
+  const mc = cleanMc(extraction.broker_mc_number)
+  // The MC number wins over the name, so a misspelled name on the rate con
+  // still lands on the right broker.
+  const match = matchBroker(brokers, brokerName, mc)
   let broker: RateConFill["broker"] = null
   if (match) {
     broker = {
       brokerId: match.id,
       brokerName: match.dba_name ?? match.legal_name,
       sender,
+      mc: match.mc_number ? cleanMc(match.mc_number) : mc,
     }
-  } else if (brokerName || sender) {
-    broker = { brokerId: null, brokerName: brokerName ?? "", sender }
+  } else if (brokerName || sender || mc) {
+    broker = { brokerId: null, brokerName: brokerName ?? "", sender, mc }
   }
-  if (match || brokerName) filled.push("broker")
+  if (match || brokerName || mc) filled.push("broker")
   if (sender) filled.push("rate_con_from")
 
   const stops = (extraction.stops ?? [])

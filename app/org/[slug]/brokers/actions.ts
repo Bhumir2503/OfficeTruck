@@ -59,6 +59,8 @@ export type McLookup =
       /** What FMCSA has on file, to fill in the form. */
       fmcsa: FmcsaRecord | null
       fmcsaError?: string
+      /** FMCSA answered, and has no company with this MC number. */
+      fmcsaNotFound?: boolean
     }
 
 /**
@@ -98,6 +100,7 @@ export async function lookupMc(
     existing: null,
     fmcsa: (data as FmcsaRecord | null) ?? null,
     fmcsaError: result.error,
+    fmcsaNotFound: result.notFound,
   }
 }
 
