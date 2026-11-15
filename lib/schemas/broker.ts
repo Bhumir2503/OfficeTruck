@@ -80,7 +80,8 @@ export function cleanDomain(value: string) {
     .replace(/\/.*$/, "")
 }
 
-const domain = z
+/** One email domain, from "tql.com" or a whole address like "a@tql.com". */
+export const domain = z
   .string()
   .transform(cleanDomain)
   .pipe(

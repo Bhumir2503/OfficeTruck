@@ -75,6 +75,7 @@ export function LoadBrokerForm({
           }
         >
           <BrokerFields
+            organizationId={organizationId}
             brokers={brokers}
             brokersHref={brokersHref}
             factoringName={factoringName}

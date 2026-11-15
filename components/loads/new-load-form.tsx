@@ -374,6 +374,7 @@ export function NewLoadForm({
               contentClassName="grid gap-5 sm:grid-cols-6"
             >
               <BrokerFields
+                organizationId={organizationId}
                 key={`broker-${fillKey}`}
                 defaults={fill?.broker ?? undefined}
                 brokers={brokers}

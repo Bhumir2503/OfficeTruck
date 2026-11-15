@@ -15,6 +15,7 @@ export function SenderWarning({
   brokerName,
   phone,
   compact = false,
+  children,
 }: {
   check: SenderCheck
   email?: string
@@ -24,6 +25,8 @@ export function SenderWarning({
   phone?: string | null
   /** A one-line version for tables. */
   compact?: boolean
+  /** Shown under the message, e.g. a button to add the domain. */
+  children?: React.ReactNode
 }) {
   if (check.state === "empty") {
     return null
@@ -82,44 +85,49 @@ export function SenderWarning({
   return (
     <div
       role={check.state === "mismatch" ? "alert" : "status"}
-      className={cn(
-        "flex items-start gap-2 rounded-lg px-3 py-2 text-sm",
-        styles
-      )}
+      className={cn("overflow-hidden rounded-lg text-sm", styles)}
     >
-      <Icon className="mt-0.5 size-4 shrink-0" />
-      <span>
-        {check.state === "match" && (
-          <>
-            <span className="font-medium">{check.domain}</span> is one of{" "}
-            {whose} known domains.
-          </>
-        )}
-        {check.state === "mismatch" && (
-          <>
-            <span className="font-medium">{check.domain}</span> isn&apos;t one
-            of {whose} known domains. Someone may be posing as this broker:{" "}
-            {phone ? (
-              <>
-                call them on{" "}
-                <a href={`tel:${phone}`} className="font-medium underline">
-                  {formatPhone(phone)}
-                </a>
-              </>
-            ) : (
-              "call them on a number you already have"
-            )}{" "}
-            before hauling.
-          </>
-        )}
-        {check.state === "unknown" && (
-          <>
-            {brokerName ?? "This broker"} has no known email domains yet, so{" "}
-            <span className="font-medium">{check.domain}</span> can&apos;t be
-            checked. Add their domains on the broker page.
-          </>
-        )}
-      </span>
+      <div className="flex items-start gap-2 px-3 py-2.5">
+        <Icon className="mt-0.5 size-4 shrink-0" />
+        <span className="min-w-0 break-words">
+          {check.state === "match" && (
+            <>
+              <span className="font-medium">{check.domain}</span> is one of{" "}
+              {whose} known domains.
+            </>
+          )}
+          {check.state === "mismatch" && (
+            <>
+              <span className="font-medium">{check.domain}</span> isn&apos;t one
+              of {whose} known domains. Someone may be posing as this broker:{" "}
+              {phone ? (
+                <>
+                  call them on{" "}
+                  <a href={`tel:${phone}`} className="font-medium underline">
+                    {formatPhone(phone)}
+                  </a>
+                </>
+              ) : (
+                "call them on a number you already have"
+              )}{" "}
+              before hauling.
+            </>
+          )}
+          {check.state === "unknown" && (
+            <>
+              {brokerName ?? "This broker"} has no known email domains yet, so{" "}
+              <span className="font-medium">{check.domain}</span> can&apos;t be
+              checked.{!children && " Add their domains on the broker page."}
+            </>
+          )}
+        </span>
+      </div>
+      {children && (
+        // Lined up with the message, under the icon's gutter.
+        <div className="border-t border-current/15 py-2.5 pr-3 pl-9">
+          {children}
+        </div>
+      )}
     </div>
   )
 }

@@ -2,7 +2,7 @@
 
 import { refresh } from "next/cache"
 
-import { isStale } from "@/lib/broker-format"
+import { isFreeEmailDomain, isStale } from "@/lib/broker-format"
 import { findBrokerByMc } from "@/lib/brokers"
 import { checkFmcsa, FMCSA_COLUMNS, type FmcsaRecord } from "@/lib/fmcsa"
 import { getMyOrganizations } from "@/lib/organizations"
@@ -11,6 +11,7 @@ import {
   cleanMcNumber,
   contactSchema,
   doNotUseSchema,
+  domain,
   type BrokerValues,
   type ContactValues,
 } from "@/lib/schemas/broker"
@@ -59,6 +60,8 @@ export type McLookup =
       /** What FMCSA has on file, to fill in the form. */
       fmcsa: FmcsaRecord | null
       fmcsaError?: string
+      /** FMCSA answered, and has no company with this MC number. */
+      fmcsaNotFound?: boolean
     }
 
 /**
@@ -98,6 +101,7 @@ export async function lookupMc(
     existing: null,
     fmcsa: (data as FmcsaRecord | null) ?? null,
     fmcsaError: result.error,
+    fmcsaNotFound: result.notFound,
   }
 }
 
@@ -207,6 +211,54 @@ export async function setDoNotUse(
     do_not_use_reason: parsed.data.do_not_use
       ? parsed.data.do_not_use_reason
       : null,
+  })
+}
+
+/**
+ * Adds a rate con sender's email domain to a broker's known domains, once
+ * the office has confirmed the sender really works there.
+ */
+export async function addBrokerDomain(
+  organizationId: string,
+  brokerId: string,
+  input: string
+): Promise<ActionResult> {
+  if (!(await isMember(organizationId))) {
+    return { error: NOT_MEMBER }
+  }
+  const parsed = domain.safeParse(input)
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Check the domain." }
+  }
+  const newDomain = parsed.data
+  if (isFreeEmailDomain(newDomain)) {
+    return {
+      error: `${newDomain} is a free email provider, so it can't be a broker's own domain.`,
+    }
+  }
+
+  const supabase = await createClient()
+  const { data: broker } = await supabase
+    .from("brokers")
+    .select("email_domains")
+    .eq("organization_id", organizationId)
+    .eq("id", brokerId)
+    .maybeSingle()
+  if (!broker) {
+    return { error: "That broker doesn't exist anymore." }
+  }
+  const domains = (broker.email_domains ?? []) as string[]
+  if (domains.includes(newDomain)) {
+    return { ok: true }
+  }
+  if (domains.length >= 20) {
+    return {
+      error:
+        "This broker already has 20 domains. Remove one on the broker page first.",
+    }
+  }
+  return update(organizationId, brokerId, {
+    email_domains: [...domains, newDomain],
   })
 }
 
