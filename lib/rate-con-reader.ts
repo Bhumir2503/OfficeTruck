@@ -6,7 +6,11 @@ import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod"
 import { z } from "zod"
 
 import type { RateConExtraction } from "@/lib/rate-con-format"
-import { CHARGE_KINDS, EQUIPMENT_TYPES, STOP_KINDS } from "@/lib/schemas/load"
+import {
+  RATE_CON_CHARGE_KINDS,
+  EQUIPMENT_TYPES,
+  STOP_KINDS,
+} from "@/lib/schemas/load"
 
 // Haiku 5.5 copies fields off a rate con into the schema for a fraction of a
 // cent a read. If blurry photos or bad scans start coming back wrong, Sonnet
@@ -76,7 +80,7 @@ const extractionSchema = z.object({
   charges: z
     .array(
       z.object({
-        kind: z.enum(CHARGE_KINDS),
+        kind: z.enum(RATE_CON_CHARGE_KINDS),
         description: text("A short label when the kind alone doesn't say it."),
         amount: z.number().nullable().describe("The amount in US dollars."),
       })

@@ -471,6 +471,18 @@ export async function addAccessorial(
   }
 
   const supabase = await createClient()
+  // A TONU is only owed once the load is marked TONU.
+  if (parsed.data.kind === "tonu") {
+    const { data: load } = await supabase
+      .from("loads")
+      .select("status")
+      .eq("organization_id", organizationId)
+      .eq("id", loadId)
+      .maybeSingle()
+    if (load?.status !== "tonu") {
+      return { error: "Mark the load TONU before adding a TONU charge." }
+    }
+  }
   const { error } = await supabase.from("load_charges").insert({
     ...parsed.data,
     organization_id: organizationId,
