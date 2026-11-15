@@ -275,6 +275,47 @@ function PaymentForm({
   )
 }
 
+/** The Record payment popup, from the invoice page or a row in the list. */
+export function RecordPaymentDialog({
+  open,
+  onOpenChange,
+  organizationId,
+  invoice,
+  balance,
+  today,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  organizationId: string
+  invoice: Invoice
+  /** What's still owed. */
+  balance: number
+  /** "YYYY-MM-DD" */
+  today: string
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Record payment for invoice {invoice.number}</DialogTitle>
+          <DialogDescription>
+            {invoice.factored
+              ? "The load stays factored. This records that the money came in."
+              : "Once it's paid in full, the load moves to paid."}
+          </DialogDescription>
+        </DialogHeader>
+        <PaymentForm
+          organizationId={organizationId}
+          invoice={invoice}
+          balance={balance}
+          today={today}
+          onDone={() => onOpenChange(false)}
+        />
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function VoidForm({
   organizationId,
   invoice,
@@ -750,27 +791,14 @@ export function InvoiceSidePanel({
         </Panel>
       )}
 
-      <Dialog open={paying} onOpenChange={setPaying}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              Record payment for invoice {invoice.number}
-            </DialogTitle>
-            <DialogDescription>
-              {invoice.factored
-                ? "The load stays factored. This records that the money came in."
-                : "Once it's paid in full, the load moves to paid."}
-            </DialogDescription>
-          </DialogHeader>
-          <PaymentForm
-            organizationId={organizationId}
-            invoice={invoice}
-            balance={balance}
-            today={today}
-            onDone={() => setPaying(false)}
-          />
-        </DialogContent>
-      </Dialog>
+      <RecordPaymentDialog
+        open={paying}
+        onOpenChange={setPaying}
+        organizationId={organizationId}
+        invoice={invoice}
+        balance={balance}
+        today={today}
+      />
 
       <Dialog open={voiding} onOpenChange={setVoiding}>
         <DialogContent className="sm:max-w-md">

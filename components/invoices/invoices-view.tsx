@@ -14,6 +14,7 @@ import { useMemo, useState } from "react"
 import { toast } from "sonner"
 
 import { createInvoice } from "@/app/org/[slug]/invoices/actions"
+import { InvoiceRowAction } from "@/components/invoices/invoice-row-action"
 import { InvoiceStatusBadge } from "@/components/invoices/invoice-status-badge"
 import {
   SettingsCard,
@@ -378,14 +379,17 @@ export function InvoicesView({
                     Due
                   </TableHead>
                   <TableHead className="w-px text-right">Amount</TableHead>
-                  <TableHead className="w-px">Status</TableHead>
+                  <TableHead className="w-px @max-xl:pr-6">Status</TableHead>
+                  <TableHead className="hidden w-px text-right @xl:table-cell">
+                    Action
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 && (
                   <TableRow>
                     <TableCell
-                      colSpan={6}
+                      colSpan={7}
                       className="h-24 text-center text-muted-foreground"
                     >
                       No invoices match your search.
@@ -445,8 +449,17 @@ export function InvoicesView({
                     <TableCell className="text-right tabular-nums">
                       {formatRate(amountOf(invoice))}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="@max-xl:pr-6">
                       <InvoiceStatusBadge state={state} />
+                    </TableCell>
+                    <TableCell className="hidden text-right text-sm @xl:table-cell">
+                      <InvoiceRowAction
+                        organizationId={organizationId}
+                        invoice={invoice}
+                        state={state}
+                        href={`${base}/${invoice.id}`}
+                        today={today}
+                      />
                     </TableCell>
                   </TableRow>
                 ))}
