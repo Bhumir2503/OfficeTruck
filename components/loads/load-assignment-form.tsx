@@ -17,6 +17,7 @@ import {
   handleMilesInput,
 } from "@/components/loads/driver-select"
 import { LocalTime } from "@/components/loads/local-time"
+import { RouteMilesField } from "@/components/loads/route-miles-field"
 import { TruckSelect } from "@/components/loads/truck-select"
 import {
   SettingsCard,
@@ -390,10 +391,10 @@ export function LoadAssignmentForm({
           )}
 
           <div className="grid gap-5 sm:grid-cols-2">
-            <MilesField
-              name="miles"
-              label="Loaded miles"
-              value={load.miles}
+            <RouteMilesField
+              organizationId={organizationId}
+              loadId={load.id}
+              defaultValue={load.miles}
               errors={errors.miles}
             />
             <MilesField

@@ -149,10 +149,12 @@ describe("rateConToForm", () => {
       brokerId: "b-1",
       brokerName: "Prairie Freight Brokers, LLC",
       sender: "dispatch@prairiefreight.example",
+      mc: "123456",
     })
     assert.deepEqual(fill.stops, [
-      { kind: "pickup", location: "Cold Store, 1 Ice Rd, Fargo, ND", appointment_start: "2026-11-14T06:00", appointment_end: "2026-11-14T10:00", stop_number: "PU-77" },
-      { kind: "delivery", location: "Market DC, 9 Elm St, Denver, CO", appointment_start: "2026-11-16T", appointment_end: null, stop_number: null },
+      { kind: "pickup", facility: null, location: "Cold Store, 1 Ice Rd, Fargo, ND", appointment_type: "window", appointment_start: "2026-11-14T06:00", appointment_end: "2026-11-14T10:00", stop_number: "PU-77", reference_numbers: null, contact_phone: null, notes: null },
+      // A date with no time is still to be scheduled.
+      { kind: "delivery", facility: null, location: "Market DC, 9 Elm St, Denver, CO", appointment_type: "tbd", appointment_start: "2026-11-16T00:00", appointment_end: null, stop_number: null, reference_numbers: null, contact_phone: null, notes: null },
     ])
     assert.deepEqual(fill.charges, [
       { kind: "linehaul", description: null, amount: 2300 },
@@ -167,7 +169,7 @@ describe("rateConToForm", () => {
 
   it("types the broker's name when they aren't in the list", () => {
     const fill = rateConToForm({ ...empty, broker_name: "New Broker Co", sender_email: "not an email" }, brokers)
-    assert.deepEqual(fill.broker, { brokerId: null, brokerName: "New Broker Co", sender: null })
+    assert.deepEqual(fill.broker, { brokerId: null, brokerName: "New Broker Co", sender: null, mc: null })
     assert.deepEqual(fill.filled, ["broker"])
   })
 
@@ -207,6 +209,38 @@ describe("rateConToForm", () => {
     assert.equal(fill.stops.length, 2)
     assert.equal(fill.stops[0].appointment_end, null)
     assert.equal(fill.stops[1].appointment_end, null)
+  })
+
+  it("reads each stop's facility, PO numbers, phone, notes and appointment type", () => {
+    const fill = rateConToForm(
+      {
+        ...empty,
+        stops: [
+          { kind: "pickup", facility: "Walmart DC 6094", address: "1001 SE 5th St, Bentonville, AR", appointment_type: "appointment", appointment_start: "2026-11-14T08:00", appointment_end: "2026-11-14T10:00", number: "PU-1", reference_numbers: ["PO 88213", "PO 88214"], contact_phone: "(479) 555-0100", notes: "Check in at gate 2." },
+          { kind: "delivery", facility: "Kroger DC", address: "2500 Main St, Dallas, TX", appointment_type: "tbd", appointment_start: "2026-11-16T14:00", appointment_end: null, number: null, reference_numbers: [], contact_phone: "call dispatch", notes: null },
+        ],
+      },
+      brokers
+    )
+    assert.deepEqual(fill.stops[0], {
+      kind: "pickup",
+      facility: "Walmart DC 6094",
+      location: "1001 SE 5th St, Bentonville, AR",
+      appointment_type: "appointment",
+      appointment_start: "2026-11-14T08:00",
+      // Only a window keeps an end.
+      appointment_end: null,
+      stop_number: "PU-1",
+      reference_numbers: "PO 88213, PO 88214",
+      contact_phone: "(479) 555-0100",
+      notes: "Check in at gate 2.",
+    })
+    // A stop to be scheduled keeps only its date, and a phone that isn't
+    // one is left out.
+    assert.equal(fill.stops[1].appointment_type, "tbd")
+    assert.equal(fill.stops[1].appointment_start, "2026-11-16T00:00")
+    assert.equal(fill.stops[1].contact_phone, null)
+    assert.equal(fill.stops[1].reference_numbers, null)
   })
 
   it("keeps half of the detention terms for the person to finish", () => {

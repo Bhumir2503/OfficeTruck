@@ -3,7 +3,12 @@
 // tested on its own. Nothing here saves anything: a person checks the form
 // and saves it.
 
-import type { ChargeKind, EquipmentType, StopKind } from "./schemas/load"
+import type {
+  AppointmentType,
+  ChargeKind,
+  EquipmentType,
+  StopKind,
+} from "./schemas/load"
 
 /** What Claude reads off a rate con. Anything not on it is null or empty. */
 export type RateConExtraction = {
@@ -18,10 +23,15 @@ export type RateConExtraction = {
   trailer_number: string | null
   stops: {
     kind: StopKind
+    facility: string | null
     address: string | null
+    appointment_type: AppointmentType | null
     appointment_start: string | null
     appointment_end: string | null
     number: string | null
+    reference_numbers: string[]
+    contact_phone: string | null
+    notes: string | null
   }[]
   charges: {
     kind: ChargeKind
@@ -74,10 +84,15 @@ export type RateConFill = {
   stops:
     | {
         kind: StopKind
+        facility?: string | null
         location?: string
+        appointment_type: AppointmentType
         appointment_start?: string
         appointment_end?: string | null
         stop_number?: string | null
+        reference_numbers?: string | null
+        contact_phone?: string | null
+        notes?: string | null
       }[]
     | null
   charges:
@@ -286,17 +301,37 @@ export function rateConToForm(
 
   const stops = (extraction.stops ?? [])
     .map((stop) => {
-      const start = toWallClock(stop.appointment_start)
+      let start = toWallClock(stop.appointment_start)
       let end = toWallClock(stop.appointment_end)
+      // A date with no time is a stop still to be scheduled.
+      let type: AppointmentType =
+        stop.appointment_type ?? (end ? "window" : "appointment")
+      if (type === "tbd" || start?.endsWith("T")) {
+        type = "tbd"
+        start = start ? `${start.slice(0, 10)}T00:00` : null
+      }
       // An end with no time, or one that isn't after the start, is left for
       // the person rather than guessed at.
       if (end && (end.endsWith("T") || !start || end <= start)) end = null
+      if (type !== "window") end = null
+      const phone = cleanText(stop.contact_phone, 30)
       return {
         kind: stop.kind,
+        facility: cleanText(stop.facility, 120),
         location: cleanText(stop.address, 200) ?? undefined,
+        appointment_type: type,
         appointment_start: start ?? undefined,
         appointment_end: end,
         stop_number: cleanText(stop.number, 50),
+        reference_numbers: cleanText(
+          (stop.reference_numbers ?? []).join(", "),
+          200
+        ),
+        contact_phone:
+          phone && /^[0-9+().\-\s]+(\s*(x|ext\.?)\s*\d+)?$/i.test(phone)
+            ? phone
+            : null,
+        notes: cleanText(stop.notes, 500),
       }
     })
     .filter((stop) => stop.location || stop.appointment_start)

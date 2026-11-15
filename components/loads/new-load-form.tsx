@@ -24,6 +24,7 @@ import { BrokerFields } from "@/components/loads/broker-fields"
 import { DocumentLink } from "@/components/loads/document-viewer"
 import { ChargesEditor } from "@/components/loads/charges-editor"
 import { FreightFields, LoadTextField } from "@/components/loads/freight-fields"
+import { RouteMilesField } from "@/components/loads/route-miles-field"
 import { StopsEditor } from "@/components/loads/stops-editor"
 import { TruckSelect } from "@/components/loads/truck-select"
 import {
@@ -186,6 +187,16 @@ export function NewLoadForm({
   // Which read is current, so a replaced or removed file's result is ignored.
   const readId = useRef(0)
   const formRef = useRef<HTMLFormElement>(null)
+  // Bumped when stops change, so loaded miles are worked out again.
+  const [stopsVersion, setStopsVersion] = useState(0)
+  const stopsChanged = () => setStopsVersion((version) => version + 1)
+  /** The stop addresses in the form, in order. */
+  const stopAddresses = () =>
+    Array.from(
+      formRef.current?.querySelectorAll<HTMLInputElement>(
+        'input[name^="stops."][name$=".location"]'
+      ) ?? []
+    ).map((input) => input.value)
 
   async function readFile(file: File) {
     const id = ++readId.current
@@ -223,6 +234,8 @@ export function NewLoadForm({
           } else {
             setFill(next)
             setFillKey((key) => key + 1)
+            // A fill brings new stops: work the miles out from them.
+            stopsChanged()
             setFilledFrom(file)
           }
         }
@@ -397,10 +410,14 @@ export function NewLoadForm({
               <StopsEditor
                 key={`stops-${fillKey}`}
                 defaultStops={
-                  fill?.stops ?? [{ kind: "pickup" }, { kind: "delivery" }]
+                  fill?.stops ?? [
+                    { kind: "pickup", appointment_type: "appointment" },
+                    { kind: "delivery", appointment_type: "appointment" },
+                  ]
                 }
                 errors={errors}
                 onUpdate={update}
+                onStopsChange={stopsChanged}
               />
             </SettingsCard>
 
@@ -486,13 +503,11 @@ export function NewLoadForm({
                   )
                 )}
               </Field>
-              <TextField
-                name="miles"
-                label="Loaded miles"
-                inputMode="numeric"
-                placeholder="e.g. 1,240"
-                errors={errors}
-                onChange={handleMilesInput}
+              <RouteMilesField
+                organizationId={organizationId}
+                addresses={stopAddresses}
+                stopsVersion={stopsVersion}
+                errors={errors.miles}
               />
               <TextField
                 name="empty_miles"

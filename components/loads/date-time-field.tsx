@@ -26,6 +26,9 @@ import {
  * date is picked: with no date the field is empty. A date with the time
  * cleared is sent as "2026-11-14T", so validation reports it.
  *
+ * With `dateOnly`, there's no time input and the value is midnight that day,
+ * for a stop that isn't scheduled yet.
+ *
  * `onUpdate` runs with the form after the hidden input changes, since
  * changes made from state don't fire the form's change event.
  */
@@ -39,6 +42,7 @@ export function DateTimeField({
   errors,
   onUpdate,
   className,
+  dateOnly = false,
 }: {
   name: string
   label: string
@@ -52,6 +56,8 @@ export function DateTimeField({
   errors?: { message: string }[]
   onUpdate: (form: HTMLFormElement | null) => void
   className?: string
+  /** Just a date: no time input, sent as midnight. */
+  dateOnly?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [date, setDate] = useState<Date | undefined>(() => {
@@ -66,7 +72,7 @@ export function DateTimeField({
   const firstRender = useRef(true)
 
   const day = date ? format(date, "yyyy-MM-dd") : ""
-  const value = day ? `${day}T${time}` : ""
+  const value = day ? `${day}T${dateOnly ? "00:00" : time}` : ""
 
   useEffect(() => {
     if (firstRender.current) {
@@ -87,7 +93,7 @@ export function DateTimeField({
     <Field data-invalid={invalid} className={className}>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
       <input ref={hiddenRef} type="hidden" name={name} value={value} />
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger
             render={
@@ -96,7 +102,7 @@ export function DateTimeField({
                 variant="outline"
                 aria-invalid={invalid}
                 aria-label={`${stopLabel} ${fieldName} date`}
-                className="min-w-0 flex-1 justify-start font-normal"
+                className="min-w-40 flex-1 justify-start font-normal"
               />
             }
           >
@@ -124,14 +130,16 @@ export function DateTimeField({
             />
           </PopoverContent>
         </Popover>
-        <Input
-          type="time"
-          aria-label={`${stopLabel} ${fieldName} time`}
-          aria-invalid={invalid}
-          value={time}
-          onChange={(event) => setTime(event.target.value)}
-          className="w-32 shrink-0 appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
-        />
+        {!dateOnly && (
+          <Input
+            type="time"
+            aria-label={`${stopLabel} ${fieldName} time`}
+            aria-invalid={invalid}
+            value={time}
+            onChange={(event) => setTime(event.target.value)}
+            className="w-28 flex-1 appearance-none sm:flex-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
+          />
+        )}
       </div>
       {invalid ? (
         <FieldError errors={errors} />

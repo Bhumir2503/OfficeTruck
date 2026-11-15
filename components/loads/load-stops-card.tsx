@@ -393,13 +393,42 @@ export function LoadStopsCard({
                       </span>
                     )}
                   </p>
+                  {stop.facility && (
+                    <p className="font-medium break-words">{stop.facility}</p>
+                  )}
                   <p className="break-words">{stop.location}</p>
-                  <p className="text-muted-foreground">
+                  <p
+                    className={cn(
+                      "text-muted-foreground",
+                      stop.appointment_type === "tbd" &&
+                        "text-amber-700 dark:text-amber-300"
+                    )}
+                  >
                     {formatStopWindow(
                       stop.appointment_start,
-                      stop.appointment_end
+                      stop.appointment_end,
+                      stop.appointment_type
                     )}
                   </p>
+                  {(stop.reference_numbers || stop.contact_phone) && (
+                    <p className="text-muted-foreground">
+                      {stop.reference_numbers}
+                      {stop.reference_numbers && stop.contact_phone && " · "}
+                      {stop.contact_phone && (
+                        <a
+                          href={`tel:${stop.contact_phone}`}
+                          className="underline-offset-2 hover:underline"
+                        >
+                          {stop.contact_phone}
+                        </a>
+                      )}
+                    </p>
+                  )}
+                  {stop.notes && (
+                    <p className="pt-1 break-words whitespace-pre-wrap">
+                      {stop.notes}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="flex shrink-0 flex-col gap-2 pl-10 text-sm sm:items-end sm:pl-0">

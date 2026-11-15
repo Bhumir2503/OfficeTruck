@@ -2,6 +2,7 @@ import { paymentDue, type PaymentDue } from "@/lib/load-views"
 import { createClient } from "@/lib/supabase/server"
 import type { PayType } from "@/lib/schemas/driver"
 import type {
+  AppointmentType,
   ChargeKind,
   EquipmentType,
   LoadStatus,
@@ -26,9 +27,12 @@ export type Load = {
   /** Wall-clock time at the stop, "YYYY-MM-DDTHH:mm:ss" with no zone. */
   pickup_start: string
   pickup_end: string | null
+  /** How the first pickup's appointment works; "tbd" has a date only. */
+  pickup_appointment_type: AppointmentType
   delivery_location: string
   delivery_start: string
   delivery_end: string | null
+  delivery_appointment_type: AppointmentType
   /** The total of the load's charges. */
   rate: number
   status: LoadStatus
@@ -73,7 +77,7 @@ export type Load = {
 }
 
 const LOAD_COLUMNS =
-  "id, reference, broker_name, broker_id, broker:brokers!loads_broker_fkey (id, legal_name, email_domains, phone, payment_terms_days), rate_con_from, pickup_location, pickup_start, pickup_end, delivery_location, delivery_start, delivery_end, rate, status, driver_name, driver_id, driver:drivers!loads_driver_fkey (id, full_name, pay_type, pay_rate), miles, driver_pay_type, driver_pay_rate, empty_miles, truck, truck_id, truck_link:trucks!loads_truck_fkey (id, unit_number), reference_numbers, equipment, commodity, weight_lbs, trailer_number, detention_free_hours, detention_rate, notes, cancel_reason, completed_manually, created_at, updated_at"
+  "id, reference, broker_name, broker_id, broker:brokers!loads_broker_fkey (id, legal_name, email_domains, phone, payment_terms_days), rate_con_from, pickup_location, pickup_start, pickup_end, pickup_appointment_type, delivery_location, delivery_start, delivery_end, delivery_appointment_type, rate, status, driver_name, driver_id, driver:drivers!loads_driver_fkey (id, full_name, pay_type, pay_rate), miles, driver_pay_type, driver_pay_rate, empty_miles, truck, truck_id, truck_link:trucks!loads_truck_fkey (id, unit_number), reference_numbers, equipment, commodity, weight_lbs, trailer_number, detention_free_hours, detention_rate, notes, cancel_reason, completed_manually, created_at, updated_at"
 
 /** Every load in the organization, newest pickup first. */
 export async function getLoads(organizationId: string): Promise<Load[]> {
@@ -171,11 +175,17 @@ export type LoadStop = {
   id: string
   position: number
   kind: StopKind
+  /** The shipper or receiver's name. */
+  facility: string | null
   location: string
+  appointment_type: AppointmentType
   /** Wall-clock time at the stop, "YYYY-MM-DDTHH:mm:ss" with no zone. */
   appointment_start: string
   appointment_end: string | null
   stop_number: string | null
+  /** PO or other numbers for this stop. */
+  reference_numbers: string | null
+  contact_phone: string | null
   notes: string | null
   /** When the truck arrived and left the stop. */
   arrived_at: string | null
@@ -224,7 +234,7 @@ export async function getLoadDetail(organizationId: string, id: string) {
     supabase
       .from("load_stops")
       .select(
-        "id, position, kind, location, appointment_start, appointment_end, stop_number, notes, arrived_at, departed_at, arrived_source, departed_source, arrived_note, departed_note"
+        "id, position, kind, facility, location, appointment_type, appointment_start, appointment_end, stop_number, reference_numbers, contact_phone, notes, arrived_at, departed_at, arrived_source, departed_source, arrived_note, departed_note"
       )
       .eq("load_id", id)
       .order("position"),
