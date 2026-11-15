@@ -85,6 +85,19 @@ export const STOP_KIND_LABELS: Record<StopKind, string> = {
   delivery: "Delivery",
 }
 
+/**
+ * How a stop's appointment works: a set time, a window (often FCFS), or not
+ * scheduled yet. A stop to be scheduled has a date but no time.
+ */
+export const APPOINTMENT_TYPES = ["appointment", "window", "tbd"] as const
+export type AppointmentType = (typeof APPOINTMENT_TYPES)[number]
+
+export const APPOINTMENT_TYPE_LABELS: Record<AppointmentType, string> = {
+  appointment: "Set time",
+  window: "Window",
+  tbd: "TBD",
+}
+
 export const CHARGE_KINDS = [
   "linehaul",
   "fuel_surcharge",
@@ -315,24 +328,76 @@ export type LoadDetailsValues = z.output<typeof loadDetailsSchema>
 
 // ------------------------------------------------------------ Stops -----
 
-const stopSchema = z
-  .object({
-    id: id("That stop isn't on this load anymore."),
-    kind: z.enum(STOP_KINDS, "Choose pickup or delivery."),
-    location: required("the address", 200),
-    appointment_start: dateTime("Enter the appointment date and time."),
-    appointment_end: optionalDateTime,
-    stop_number: optional(50),
-  })
-  // The strings are zero-padded and the same length, so they compare as dates.
-  .refine(
-    (stop) =>
-      !stop.appointment_end || stop.appointment_end >= stop.appointment_start,
-    {
-      path: ["appointment_end"],
-      message: "Must be after the start of the window.",
-    }
-  )
+/**
+ * Before checking a stop: a stop to be scheduled keeps only its date (sent
+ * as midnight), and only a window keeps an end time.
+ */
+function normalizeStop(value: unknown) {
+  if (!value || typeof value !== "object") return value
+  const stop = { ...(value as Record<string, unknown>) }
+  const type = stop.appointment_type || "appointment"
+  stop.appointment_type = type
+  if (type === "tbd" && typeof stop.appointment_start === "string") {
+    const day = stop.appointment_start.slice(0, 10)
+    stop.appointment_start = /^\d{4}-\d{2}-\d{2}$/.test(day)
+      ? `${day}T00:00`
+      : ""
+  }
+  if (type !== "window") stop.appointment_end = null
+  return stop
+}
+
+const stopSchema = z.preprocess(
+  normalizeStop,
+  z
+    .object({
+      id: id("That stop isn't on this load anymore."),
+      kind: z.enum(STOP_KINDS, "Choose pickup or delivery."),
+      facility: optional(120),
+      location: required("the address", 200),
+      appointment_type: z.enum(
+        APPOINTMENT_TYPES,
+        "Choose how the appointment works."
+      ),
+      appointment_start: dateTime("Enter the appointment date and time."),
+      appointment_end: optionalDateTime,
+      stop_number: optional(50),
+      reference_numbers: optional(200),
+      contact_phone: z.preprocess(
+        (value) =>
+          typeof value === "string" && value.trim() !== ""
+            ? value.trim()
+            : null,
+        z
+          .string()
+          .max(30, "Must be 30 characters or fewer.")
+          .regex(
+            /^[0-9+().\-\s]+(\s*(x|ext\.?)\s*\d+)?$/i,
+            "Enter a valid phone number."
+          )
+          .nullable()
+      ),
+      notes: optional(500),
+    })
+    .superRefine((stop, ctx) => {
+      if (stop.appointment_type !== "window") return
+      if (!stop.appointment_end) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["appointment_end"],
+          message: "Enter when the window ends.",
+        })
+        // The strings are zero-padded and the same length, so they compare
+        // as dates.
+      } else if (stop.appointment_end < stop.appointment_start) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["appointment_end"],
+          message: "Must be after the start of the window.",
+        })
+      }
+    })
+)
 
 export type StopValues = z.output<typeof stopSchema>
 
@@ -357,7 +422,14 @@ const stopsSchema = z
     }
     stops.forEach((stop, index) => {
       const previous = stops[index - 1]
-      if (previous && stop.appointment_start < previous.appointment_start) {
+      // Next to a stop to be scheduled, only the dates can be compared.
+      const byDate =
+        stop.appointment_type === "tbd" || previous?.appointment_type === "tbd"
+      const cut = (value: string) => (byDate ? value.slice(0, 10) : value)
+      if (
+        previous &&
+        cut(stop.appointment_start) < cut(previous.appointment_start)
+      ) {
         ctx.addIssue({
           code: "custom",
           path: [index, "appointment_start"],

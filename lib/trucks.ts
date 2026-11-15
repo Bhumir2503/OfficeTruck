@@ -17,6 +17,8 @@ export type Truck = {
   default_driver_id: string | null
   default_driver: { id: string; full_name: string } | null
   motive_vehicle_id: string | null
+  /** Where it starts when it has no earlier load, for empty miles. */
+  home_base: string | null
   /** Dollars per month. */
   monthly_payment: number | null
   monthly_insurance: number | null
@@ -31,7 +33,7 @@ export type Truck = {
 }
 
 const TRUCK_COLUMNS =
-  "id, unit_number, vin, year, make, model, plate_number, plate_state, status, ownership, default_driver_id, default_driver:drivers!trucks_default_driver_fkey (id, full_name), motive_vehicle_id, monthly_payment, monthly_insurance, monthly_other_costs, annual_inspection_on, registration_expires_on, plate_expires_on, notes, created_at, updated_at"
+  "id, unit_number, vin, year, make, model, plate_number, plate_state, status, ownership, default_driver_id, default_driver:drivers!trucks_default_driver_fkey (id, full_name), motive_vehicle_id, home_base, monthly_payment, monthly_insurance, monthly_other_costs, annual_inspection_on, registration_expires_on, plate_expires_on, notes, created_at, updated_at"
 
 /** Every truck in the organization, by unit number. */
 export async function getTrucks(organizationId: string): Promise<Truck[]> {

@@ -169,6 +169,11 @@ export default async function LoadPage({
               documents={documents}
               expenses={expenses}
               dispatch={dispatch}
+              trucks={trucks}
+              drivers={drivers}
+              trucksBase={`/org/${organization.slug}/equipment`}
+              driversBase={`/org/${organization.slug}/drivers`}
+              loadsBase={base}
             />
           </aside>
           {/* Under the cards on a wide screen; last of all on a phone. */}

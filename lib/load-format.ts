@@ -1,4 +1,4 @@
-import type { LoadStatus } from "@/lib/schemas/load"
+import type { AppointmentType, LoadStatus } from "@/lib/schemas/load"
 
 // Stop times are wall-clock times with no zone, so they're read and printed
 // as UTC: the server render and the browser then agree on the same text.
@@ -14,6 +14,13 @@ const dateTimeFormat = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
   hour: "numeric",
   minute: "2-digit",
+  timeZone: "UTC",
+})
+const dayFormat = new Intl.DateTimeFormat("en-US", {
+  weekday: "short",
+  month: "short",
+  day: "numeric",
+  year: "numeric",
   timeZone: "UTC",
 })
 const timeFormat = new Intl.DateTimeFormat("en-US", {
@@ -32,7 +39,15 @@ export function formatStopDate(value: string) {
 }
 
 /** "Fri, Nov 14, 2026, 8:00 AM – 11:00 AM", or with a date on both ends when the window spans days. */
-export function formatStopWindow(start: string, end: string | null) {
+export function formatStopWindow(
+  start: string,
+  end: string | null,
+  /** A stop to be scheduled shows its date with "appointment TBD". */
+  type?: AppointmentType | null
+) {
+  if (type === "tbd") {
+    return `${dayFormat.format(wallClock(start))} · appointment TBD`
+  }
   const from = dateTimeFormat.format(wallClock(start))
   if (!end) {
     return from

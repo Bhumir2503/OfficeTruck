@@ -162,9 +162,9 @@ function DateTimeSkeleton({
   return (
     <Field className={className}>
       <FieldLabel>{label}</FieldLabel>
-      <div className="flex gap-2">
-        <Skeleton className="h-9 flex-1" />
-        <Skeleton className="h-9 w-32 shrink-0" />
+      <div className="flex flex-wrap gap-2">
+        <Skeleton className="h-9 min-w-40 flex-1" />
+        <Skeleton className="h-9 w-28" />
       </div>
       <FieldDescription>{hint}</FieldDescription>
     </Field>
@@ -180,8 +180,8 @@ function StopRowSkeleton({
   kind: "pickup" | "delivery"
 }) {
   return (
-    <li className="flex flex-col gap-4 rounded-lg border p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <li className="overflow-hidden rounded-xl border bg-card">
+      <div className="flex items-center justify-between gap-2 border-b bg-muted/30 px-4 py-2">
         <div className="flex items-center gap-2">
           <span
             className={cn(
@@ -193,31 +193,34 @@ function StopRowSkeleton({
           >
             {number}
           </span>
-          <Skeleton className="h-8 w-32 rounded-md" />
+          <Skeleton className="h-8 w-28 rounded-md" />
         </div>
         {/* Move up, move down, remove. */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center">
           <Skeleton className="size-8 rounded-md" />
           <Skeleton className="size-8 rounded-md" />
           <Skeleton className="size-8 rounded-md" />
         </div>
       </div>
-      <div className="grid gap-5 sm:grid-cols-6">
-        <FieldSkeleton label="Address" className="sm:col-span-4" />
+      <div className="grid gap-5 p-4 sm:grid-cols-6">
         <FieldSkeleton
-          label={kind === "pickup" ? "Pickup number" : "Delivery number"}
+          label={kind === "pickup" ? "Shipper" : "Receiver"}
+          className="sm:col-span-4"
+        />
+        <FieldSkeleton
+          label={kind === "pickup" ? "Pickup #" : "Delivery #"}
           className="sm:col-span-2"
         />
-        <DateTimeSkeleton
-          label="Appointment"
-          hint="Local time at the stop."
-          className="sm:col-span-3"
-        />
-        <DateTimeSkeleton
-          label="Window ends (optional)"
-          hint="Leave blank for a set appointment."
-          className="sm:col-span-3"
-        />
+        <FieldSkeleton label="Address" className="sm:col-span-6" />
+        <div className="flex flex-col gap-3 sm:col-span-6">
+          {/* Appointment, window or to be scheduled. */}
+          <Skeleton className="h-8 w-full rounded-md" />
+          <DateTimeSkeleton
+            label="Appointment"
+            hint="A set appointment time, local to the stop."
+            className="sm:w-1/2"
+          />
+        </div>
       </div>
     </li>
   )
@@ -356,7 +359,7 @@ export function NewLoadSkeleton() {
             >
               <FieldSkeleton label="Truck" />
               <FieldSkeleton label="Driver" />
-              <FieldSkeleton label="Loaded miles" />
+              <FieldSkeleton label="Estimated loaded miles" />
               <FieldSkeleton label="Empty miles" />
             </SettingsCard>
           </div>
@@ -497,7 +500,7 @@ export function LoadDetailSkeleton() {
             >
               <FieldSkeleton label="Truck" />
               <FieldSkeleton label="Driver" />
-              <FieldSkeleton label="Loaded miles" />
+              <FieldSkeleton label="Estimated loaded miles" />
               <FieldSkeleton label="Empty miles" />
             </SettingsCard>
             <SettingsCard

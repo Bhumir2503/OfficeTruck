@@ -388,6 +388,15 @@ export function TruckForm({
               </FieldDescription>
             )}
           </Field>
+          <TextField
+            name="home_base"
+            label="Home base"
+            placeholder="e.g. 4100 Industrial Blvd, Fort Worth, TX"
+            defaultValue={truck?.home_base ?? undefined}
+            errors={errors}
+            className="sm:col-span-6"
+            hint="Where the truck starts when it has no earlier load. Empty miles to the first pickup are estimated from its last delivery, or from here."
+          />
         </SettingsCard>
 
         <SettingsCard

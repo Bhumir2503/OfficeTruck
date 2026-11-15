@@ -75,7 +75,11 @@ function Route({ load }: { load: Load }) {
         <div className="min-w-0">
           <p className="truncate font-medium">{load.pickup_location}</p>
           <p className="text-muted-foreground">
-            {formatStopWindow(load.pickup_start, load.pickup_end)}
+            {formatStopWindow(
+              load.pickup_start,
+              load.pickup_end,
+              load.pickup_appointment_type
+            )}
           </p>
         </div>
       </div>
@@ -84,7 +88,11 @@ function Route({ load }: { load: Load }) {
         <div className="min-w-0">
           <p className="truncate font-medium">{load.delivery_location}</p>
           <p className="text-muted-foreground">
-            {formatStopWindow(load.delivery_start, load.delivery_end)}
+            {formatStopWindow(
+              load.delivery_start,
+              load.delivery_end,
+              load.delivery_appointment_type
+            )}
           </p>
         </div>
       </div>

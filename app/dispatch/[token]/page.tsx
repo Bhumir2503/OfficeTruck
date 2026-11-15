@@ -8,6 +8,7 @@ import { formatRate, formatStopWindow } from "@/lib/load-format"
 import {
   CHARGE_KIND_LABELS,
   EQUIPMENT_LABELS,
+  type AppointmentType,
   type ChargeKind,
   type EquipmentType,
 } from "@/lib/schemas/load"
@@ -34,10 +35,15 @@ type Packet = {
   stops: {
     position: number
     kind: "pickup" | "delivery"
+    /** Sent from this change on; older dispatches don't have them. */
+    facility?: string | null
     location: string
+    appointment_type?: AppointmentType
     appointment_start: string
     appointment_end: string | null
     stop_number: string | null
+    reference_numbers?: string | null
+    contact_phone?: string | null
     notes: string | null
   }[]
   rate: {
@@ -151,7 +157,10 @@ export default async function DispatchPage({
       "Weight",
       `${Number(load.weight_lbs).toLocaleString("en-US")} lbs`,
     ],
-    load.miles != null && ["Miles", Number(load.miles).toLocaleString("en-US")],
+    load.miles != null && [
+      "Estimated miles",
+      Number(load.miles).toLocaleString("en-US"),
+    ],
   ].filter(Boolean) as [string, string][]
 
   return (
@@ -209,6 +218,9 @@ export default async function DispatchPage({
                     </span>
                   )}
                 </p>
+                {stop.facility && (
+                  <p className="font-medium">{stop.facility}</p>
+                )}
                 <a
                   href={`https://maps.google.com/?q=${encodeURIComponent(stop.location)}`}
                   className="block underline-offset-2 hover:underline"
@@ -218,10 +230,27 @@ export default async function DispatchPage({
                 <p className="text-muted-foreground">
                   {formatStopWindow(
                     stop.appointment_start,
-                    stop.appointment_end
+                    stop.appointment_end,
+                    stop.appointment_type
                   )}
                 </p>
-                {stop.notes && <p className="mt-1">{stop.notes}</p>}
+                {stop.reference_numbers && (
+                  <p className="text-muted-foreground">
+                    {stop.reference_numbers}
+                  </p>
+                )}
+                {stop.contact_phone && (
+                  <a
+                    href={`tel:${stop.contact_phone}`}
+                    className="block font-medium underline underline-offset-2"
+                  >
+                    Call {stop.kind === "pickup" ? "shipper" : "receiver"}:{" "}
+                    {stop.contact_phone}
+                  </a>
+                )}
+                {stop.notes && (
+                  <p className="mt-1 whitespace-pre-wrap">{stop.notes}</p>
+                )}
                 {(() => {
                   const current = liveStop(stop)
                   if (!live) return null

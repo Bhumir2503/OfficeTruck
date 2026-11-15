@@ -18,6 +18,8 @@ import {
   type ExpenseValues,
 } from "@/lib/load-expense-format"
 import { getMyOrganizations, getUser } from "@/lib/organizations"
+import { estimateEmptyMiles, type EmptyMilesEstimate } from "@/lib/empty-miles"
+import { MAX_ROUTE_STOPS, routeMiles, type RouteMiles } from "@/lib/route-miles"
 import {
   accessorialSchema,
   type AccessorialValues,
@@ -405,6 +407,70 @@ export async function updateLoadDetails(
   return { ok: true }
 }
 
+/**
+ * Driving miles through these stop addresses, in order, from Google Maps.
+ * For New Load, before the stops are saved.
+ */
+export async function calculateRouteMiles(
+  organizationId: string,
+  addresses: string[]
+): Promise<RouteMiles> {
+  if (!(await isMember(organizationId))) {
+    return { ok: false, error: "You aren't a member of this organization." }
+  }
+  if (
+    !Array.isArray(addresses) ||
+    addresses.length > MAX_ROUTE_STOPS ||
+    addresses.some(
+      (address) => typeof address !== "string" || address.length > 200
+    )
+  ) {
+    return { ok: false, error: "Check the stop addresses." }
+  }
+  return routeMiles(addresses)
+}
+
+/**
+ * Estimated empty miles for a truck to a load's first pickup. New Load sends
+ * the pickup from the form; a saved load (`loadId`) uses its saved stops.
+ */
+export async function estimateLoadEmptyMiles(
+  organizationId: string,
+  input: {
+    truckId: string
+    loadId?: string
+    pickupLocation?: string
+    pickupStart?: string | null
+  }
+): Promise<EmptyMilesEstimate> {
+  if (!(await isMember(organizationId))) {
+    return { ok: false, error: "You aren't a member of this organization." }
+  }
+  let pickupLocation = String(input.pickupLocation ?? "").slice(0, 200)
+  let pickupStart = input.pickupStart ? String(input.pickupStart) : null
+  if (input.loadId) {
+    const supabase = await createClient()
+    const { data: stop } = await supabase
+      .from("load_stops")
+      .select("location, appointment_start")
+      .eq("organization_id", organizationId)
+      .eq("load_id", input.loadId)
+      .order("position")
+      .limit(1)
+      .maybeSingle()
+    if (!stop) return { ok: false, error: "That load doesn't exist anymore." }
+    pickupLocation = stop.location as string
+    pickupStart = stop.appointment_start as string
+  }
+  return estimateEmptyMiles({
+    organizationId,
+    truckId: String(input.truckId),
+    pickupLocation,
+    pickupStart,
+    excludeLoadId: input.loadId,
+  })
+}
+
 /** Adds, changes, reorders or removes a load's stops. */
 export async function saveLoadStops(
   organizationId: string,
@@ -426,6 +492,39 @@ export async function saveLoadStops(
   })
   if (error) {
     return { error: rpcError(error) }
+  }
+  // New stops, new estimates: loaded miles through the stops, and empty
+  // miles to the first pickup. If Google Maps can't route them, the old
+  // estimates stay and can be fixed by hand.
+  const { data: load } = await supabase
+    .from("loads")
+    .select("truck_id")
+    .eq("organization_id", organizationId)
+    .eq("id", loadId)
+    .maybeSingle()
+  const first = parsed.data.stops[0]
+  const [route, empty] = await Promise.all([
+    routeMiles(parsed.data.stops.map((stop) => stop.location)),
+    load?.truck_id
+      ? estimateEmptyMiles({
+          organizationId,
+          truckId: load.truck_id as string,
+          pickupLocation: first.location,
+          pickupStart: first.appointment_start,
+          excludeLoadId: loadId,
+        })
+      : null,
+  ])
+  const miles = {
+    ...(route.ok && { miles: route.miles }),
+    ...(empty?.ok && { empty_miles: empty.miles }),
+  }
+  if (Object.keys(miles).length) {
+    await supabase
+      .from("loads")
+      .update(miles)
+      .eq("organization_id", organizationId)
+      .eq("id", loadId)
   }
   refresh()
   return { ok: true }
@@ -710,7 +809,9 @@ export async function sendToDriver(
       supabase.from("loads").select("reference").eq("id", loadId).single(),
       supabase
         .from("load_stops")
-        .select("kind, location, appointment_start, appointment_end")
+        .select(
+          "kind, facility, location, appointment_type, appointment_start, appointment_end"
+        )
         .eq("load_id", loadId)
         .order("position"),
     ])
@@ -721,8 +822,14 @@ export async function sendToDriver(
       reference: load?.reference ?? "",
       stops: (stops ?? []).map((stop) => ({
         kind: stop.kind as "pickup" | "delivery",
-        location: stop.location,
-        when: formatStopWindow(stop.appointment_start, stop.appointment_end),
+        location: stop.facility
+          ? `${stop.facility}, ${stop.location}`
+          : stop.location,
+        when: formatStopWindow(
+          stop.appointment_start,
+          stop.appointment_end,
+          stop.appointment_type
+        ),
       })),
       link,
       resent: data.resent,
@@ -1168,7 +1275,9 @@ export async function saveAssignment(
     if (data.email_to) {
       const { data: stops } = await supabase
         .from("load_stops")
-        .select("kind, location, appointment_start, appointment_end")
+        .select(
+          "kind, facility, location, appointment_type, appointment_start, appointment_end"
+        )
         .eq("load_id", loadId)
         .order("position")
       const problem = await sendDispatchEmail({
@@ -1178,8 +1287,14 @@ export async function saveAssignment(
         reference,
         stops: (stops ?? []).map((stop) => ({
           kind: stop.kind as "pickup" | "delivery",
-          location: stop.location,
-          when: formatStopWindow(stop.appointment_start, stop.appointment_end),
+          location: stop.facility
+            ? `${stop.facility}, ${stop.location}`
+            : stop.location,
+          when: formatStopWindow(
+            stop.appointment_start,
+            stop.appointment_end,
+            stop.appointment_type
+          ),
         })),
         link: `${await appUrl()}/dispatch/${data.token}`,
         resent: false,

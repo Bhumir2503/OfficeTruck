@@ -11,12 +11,10 @@ import {
   saveAssignment,
   sendToDriver,
 } from "@/app/org/[slug]/loads/actions"
-import {
-  DriverSelect,
-  formatMiles,
-  handleMilesInput,
-} from "@/components/loads/driver-select"
+import { DriverSelect } from "@/components/loads/driver-select"
 import { LocalTime } from "@/components/loads/local-time"
+import { EmptyMilesField } from "@/components/loads/empty-miles-field"
+import { RouteMilesField } from "@/components/loads/route-miles-field"
 import { TruckSelect } from "@/components/loads/truck-select"
 import {
   SettingsCard,
@@ -29,7 +27,6 @@ import {
   FieldError,
   FieldLabel,
 } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
 import { useZodForm } from "@/hooks/use-zod-form"
 import {
   offerResend,
@@ -47,37 +44,8 @@ import type { TruckOption } from "@/lib/trucks"
 
 const NO_CONFLICTS: AssignmentConflicts = { driver: [], truck: [] }
 
-function MilesField({
-  name,
-  label,
-  value,
-  errors,
-}: {
-  name: "miles" | "empty_miles"
-  label: string
-  value: number | null
-  errors?: { message: string }[]
-}) {
-  const id = `load-${name.replace("_", "-")}`
-  return (
-    <Field data-invalid={!!errors}>
-      <FieldLabel htmlFor={id}>{label}</FieldLabel>
-      <Input
-        id={id}
-        name={name}
-        inputMode="numeric"
-        placeholder={name === "miles" ? "e.g. 1,240" : "e.g. 85"}
-        defaultValue={value === null ? undefined : formatMiles(String(value))}
-        aria-invalid={!!errors}
-        onChange={handleMilesInput}
-      />
-      <FieldError errors={errors} />
-    </Field>
-  )
-}
-
 /** "Ana Torres is also on 8824118 at the same time." */
-function Conflict({
+export function Conflict({
   who,
   loads,
   loadsBase,
@@ -390,17 +358,22 @@ export function LoadAssignmentForm({
           )}
 
           <div className="grid gap-5 sm:grid-cols-2">
-            <MilesField
-              name="miles"
-              label="Loaded miles"
-              value={load.miles}
+            <RouteMilesField
+              // Re-estimated when the stops are saved: show the new number.
+              key={`miles-${load.miles}`}
+              organizationId={organizationId}
+              defaultValue={load.miles}
               errors={errors.miles}
             />
-            <MilesField
-              name="empty_miles"
-              label="Empty miles"
-              value={load.empty_miles}
+            <EmptyMilesField
+              // Re-estimated when the stops are saved: show the new number.
+              key={`empty-${load.empty_miles}`}
+              organizationId={organizationId}
+              truckId={truckId}
+              loadId={load.id}
+              defaultValue={load.empty_miles}
               errors={errors.empty_miles}
+              trucksBase={trucksBase}
             />
           </div>
 

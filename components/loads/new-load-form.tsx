@@ -24,12 +24,11 @@ import { BrokerFields } from "@/components/loads/broker-fields"
 import { DocumentLink } from "@/components/loads/document-viewer"
 import { ChargesEditor } from "@/components/loads/charges-editor"
 import { FreightFields, LoadTextField } from "@/components/loads/freight-fields"
+import { EmptyMilesField } from "@/components/loads/empty-miles-field"
+import { RouteMilesField } from "@/components/loads/route-miles-field"
 import { StopsEditor } from "@/components/loads/stops-editor"
 import { TruckSelect } from "@/components/loads/truck-select"
-import {
-  DriverSelect,
-  handleMilesInput,
-} from "@/components/loads/driver-select"
+import { DriverSelect } from "@/components/loads/driver-select"
 import { useZodForm } from "@/hooks/use-zod-form"
 import type { BrokerOption } from "@/lib/brokers"
 import type { DriverOption } from "@/lib/drivers"
@@ -60,52 +59,11 @@ const LOAD_FIELDS: FilledField[] = [
 const BROKER_FIELDS: FilledField[] = ["broker", "rate_con_from"]
 const CHARGE_FIELDS: FilledField[] = ["charges", "detention"]
 
-const FILLED_LABELS: Record<FilledField, string> = {
-  reference: "load number",
-  reference_numbers: "reference numbers",
-  equipment: "equipment",
-  commodity: "commodity",
-  weight_lbs: "weight",
-  trailer_number: "trailer number",
-  broker: "broker",
-  rate_con_from: "sender",
-  stops: "stops, appointments and numbers",
-  charges: "charges",
-  detention: "detention terms",
-}
-
 /** The person's local date, "YYYY-MM-DD", for rate con dates with no year. */
 function localToday() {
   const now = new Date()
   const pad = (value: number) => String(value).padStart(2, "0")
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
-}
-
-/**
- * A card's description once AI has filled some of it in: which fields, so
- * the person checks them. Falls back to the usual description.
- */
-function FilledNote({
-  fill,
-  fields,
-  children,
-}: {
-  fill: RateConFill | null
-  fields: FilledField[]
-  children: React.ReactNode
-}) {
-  const filled = fields.filter((field) => fill?.filled.includes(field))
-  if (!filled.length) return <>{children}</>
-  const labels = filled.map((field) => FILLED_LABELS[field])
-  const list =
-    labels.length > 1
-      ? `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)}`
-      : labels[0]
-  return (
-    <span className="text-violet-700 dark:text-violet-300">
-      AI filled in the {list} from the rate con. Check them before saving.
-    </span>
-  )
 }
 
 function FilledBadge({
@@ -154,6 +112,7 @@ export function NewLoadForm({
 }) {
   const router = useRouter()
   const [driverId, setDriverId] = useState<string | null>(null)
+  const [truckId, setTruckId] = useState<string | null>(null)
   const [driverPicked, setDriverPicked] = useState(false)
   // The rate con, held here until the load is saved, and a local link to
   // open it while filling in the form.
@@ -186,6 +145,27 @@ export function NewLoadForm({
   // Which read is current, so a replaced or removed file's result is ignored.
   const readId = useRef(0)
   const formRef = useRef<HTMLFormElement>(null)
+  // Bumped when stops change, so loaded miles are worked out again.
+  const [stopsVersion, setStopsVersion] = useState(0)
+  const stopsChanged = () => setStopsVersion((version) => version + 1)
+  /** The first stop in the form: where empty miles end. */
+  const firstPickup = () => {
+    const field = (name: string) =>
+      formRef.current?.querySelector<HTMLInputElement>(
+        `input[name="stops.0.${name}"]`
+      )?.value ?? ""
+    return {
+      location: field("location"),
+      start: field("appointment_start") || null,
+    }
+  }
+  /** The stop addresses in the form, in order. */
+  const stopAddresses = () =>
+    Array.from(
+      formRef.current?.querySelectorAll<HTMLInputElement>(
+        'input[name^="stops."][name$=".location"]'
+      ) ?? []
+    ).map((input) => input.value)
 
   async function readFile(file: File) {
     const id = ++readId.current
@@ -223,6 +203,8 @@ export function NewLoadForm({
           } else {
             setFill(next)
             setFillKey((key) => key + 1)
+            // A fill brings new stops: work the miles out from them.
+            stopsChanged()
             setFilledFrom(file)
           }
         }
@@ -326,11 +308,7 @@ export function NewLoadForm({
           >
             <SettingsCard
               title="Load"
-              description={
-                <FilledNote fill={fill} fields={LOAD_FIELDS}>
-                  From the rate con.
-                </FilledNote>
-              }
+              description="From the rate con."
               action={<FilledBadge fill={fill} fields={LOAD_FIELDS} />}
               contentClassName="grid gap-5 sm:grid-cols-6"
             >
@@ -365,11 +343,7 @@ export function NewLoadForm({
 
             <SettingsCard
               title="Broker"
-              description={
-                <FilledNote fill={fill} fields={BROKER_FIELDS}>
-                  Who booked it, and who sent the rate con.
-                </FilledNote>
-              }
+              description="Who booked it, and who sent the rate con."
               action={<FilledBadge fill={fill} fields={BROKER_FIELDS} />}
               contentClassName="grid gap-5 sm:grid-cols-6"
             >
@@ -387,31 +361,26 @@ export function NewLoadForm({
 
             <SettingsCard
               title="Stops"
-              description={
-                <FilledNote fill={fill} fields={["stops"]}>
-                  Every pickup and delivery, with its appointment and number.
-                </FilledNote>
-              }
+              description="Every pickup and delivery, with its appointment and number."
               action={<FilledBadge fill={fill} fields={["stops"]} />}
             >
               <StopsEditor
                 key={`stops-${fillKey}`}
                 defaultStops={
-                  fill?.stops ?? [{ kind: "pickup" }, { kind: "delivery" }]
+                  fill?.stops ?? [
+                    { kind: "pickup", appointment_type: "appointment" },
+                    { kind: "delivery", appointment_type: "appointment" },
+                  ]
                 }
                 errors={errors}
                 onUpdate={update}
+                onStopsChange={stopsChanged}
               />
             </SettingsCard>
 
             <SettingsCard
               title="Charges"
-              description={
-                <FilledNote fill={fill} fields={CHARGE_FIELDS}>
-                  From the rate con. Accessorials run up on the road are added
-                  to the load later.
-                </FilledNote>
-              }
+              description="From the rate con. Accessorials run up on the road are added to the load later."
               action={<FilledBadge fill={fill} fields={CHARGE_FIELDS} />}
             >
               <ChargesEditor
@@ -440,6 +409,7 @@ export function NewLoadForm({
                   trucks={trucks}
                   invalid={!!errors.truck_id}
                   onPick={(truck) => {
+                    setTruckId(truck?.id ?? null)
                     // Prefill the truck's usual driver, unless one was picked by hand.
                     if (!driverPicked && truck?.default_driver_id) {
                       setDriverId(truck.default_driver_id)
@@ -486,21 +456,19 @@ export function NewLoadForm({
                   )
                 )}
               </Field>
-              <TextField
-                name="miles"
-                label="Loaded miles"
-                inputMode="numeric"
-                placeholder="e.g. 1,240"
-                errors={errors}
-                onChange={handleMilesInput}
+              <RouteMilesField
+                organizationId={organizationId}
+                addresses={stopAddresses}
+                stopsVersion={stopsVersion}
+                errors={errors.miles}
               />
-              <TextField
-                name="empty_miles"
-                label="Empty miles"
-                inputMode="numeric"
-                placeholder="e.g. 85"
-                errors={errors}
-                onChange={handleMilesInput}
+              <EmptyMilesField
+                organizationId={organizationId}
+                truckId={truckId}
+                pickup={firstPickup}
+                stopsVersion={stopsVersion}
+                errors={errors.empty_miles}
+                trucksBase={trucksHref}
               />
             </SettingsCard>
           </div>
@@ -662,9 +630,6 @@ export function NewLoadForm({
                 >
                   Cancel
                 </Link>
-                <p className="text-center text-xs text-muted-foreground">
-                  The rate con is saved with the load.
-                </p>
               </div>
               {formError && (
                 <p role="alert" className="mt-3 text-sm text-destructive">

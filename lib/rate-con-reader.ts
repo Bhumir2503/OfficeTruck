@@ -7,8 +7,9 @@ import { z } from "zod"
 
 import type { RateConExtraction } from "@/lib/rate-con-format"
 import {
-  RATE_CON_CHARGE_KINDS,
+  APPOINTMENT_TYPES,
   EQUIPMENT_TYPES,
+  RATE_CON_CHARGE_KINDS,
   STOP_KINDS,
 } from "@/lib/schemas/load"
 
@@ -62,17 +63,35 @@ const extractionSchema = z.object({
     .array(
       z.object({
         kind: z.enum(STOP_KINDS),
-        address: text(
-          'The stop\'s facility name and full address on one line, like "Acme DC, 120 Main St, Dayton, OH 45402".'
+        facility: text(
+          'The shipper or receiver\'s name at this stop, like "Walmart DC 6094". Not the broker.'
         ),
+        address: text(
+          'The street address on one line, without the facility name, like "120 Main St, Dayton, OH 45402".'
+        ),
+        appointment_type: z
+          .enum(APPOINTMENT_TYPES)
+          .nullable()
+          .describe(
+            '"appointment" for a set time, "window" for a range of times (including FCFS or open hours), "tbd" when the time isn\'t set yet (appointment TBD, to be scheduled, call to schedule). null if not shown.'
+          ),
         appointment_start: text(
           'The appointment, or the start of the window, as local wall-clock time at the stop: "YYYY-MM-DDTHH:mm", 24-hour, no time zone. If only a date is shown, "YYYY-MM-DD".'
         ),
         appointment_end: text(
-          "The end of the appointment window, same format. null for a set appointment time."
+          "The end of the window, same format. null unless it's a window."
         ),
         number: text(
           "The pickup or delivery number (PU #, delivery #, appointment #) for this stop."
+        ),
+        reference_numbers: z
+          .array(z.string())
+          .describe(
+            'PO or other numbers for this stop only, each with its label, like "PO 88213". Empty if none.'
+          ),
+        contact_phone: text("The shipper or receiver's phone number."),
+        notes: text(
+          "Instructions for the driver at this stop, in a short sentence or two: check-in rules, dock, lumper, hours, PPE. Leave out anything that isn't for the driver."
         ),
       })
     )

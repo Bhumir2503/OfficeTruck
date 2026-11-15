@@ -12,6 +12,10 @@ import {
 } from "@/app/org/[slug]/brokers/actions"
 import { FlagBadge, FmcsaBadge } from "@/components/brokers/broker-badges"
 import { SenderWarning } from "@/components/brokers/sender-warning"
+import {
+  AddBrokerDialog,
+  type NewBrokerDefaults,
+} from "@/components/brokers/add-broker-dialog"
 import { Button } from "@/components/ui/button"
 import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
@@ -24,6 +28,7 @@ import {
 } from "@/components/ui/select"
 import {
   checkSender,
+  emailDomain,
   fmcsaFlags,
   formatMc,
   formatTerms,
@@ -131,12 +136,10 @@ function FmcsaLookupResult({
   mc,
   lookup,
   typedName,
-  brokersHref,
 }: {
   mc: string
   lookup: Extract<McLookup, { ok: true }>
   typedName: string
-  brokersHref: string
 }) {
   const record = lookup.fmcsa
   if (!record) {
@@ -191,14 +194,7 @@ function FmcsaLookupResult({
         {record.city && record.state
           ? `, based in ${record.city}, ${record.state}`
           : ""}
-        . Not in your brokers yet.{" "}
-        <Link
-          href={`${brokersHref}/new`}
-          className="font-medium text-foreground underline"
-        >
-          Add them
-        </Link>{" "}
-        to save their terms and invoicing.
+        .
       </p>
     </div>
   )
@@ -336,6 +332,7 @@ export function BrokerFields({
   const [matchedByMc, setMatchedByMc] = useState(false)
   const lookupId = useRef(0)
   const [sender, setSender] = useState(defaults?.sender ?? "")
+  const [adding, setAdding] = useState(false)
   const hiddenRef = useRef<HTMLInputElement>(null)
   const firstRender = useRef(true)
 
@@ -423,6 +420,29 @@ export function BrokerFields({
     { value: OTHER, label: "Not in your list: type the name" },
   ]
   const nameErrors = errors.broker_name ?? errors.broker_id
+  const fmcsa = lookup.state === "done" ? lookup.result.fmcsa : null
+  const senderDomain = sender ? emailDomain(sender) : null
+  const newBrokerDefaults: NewBrokerDefaults = {
+    legal_name: fmcsa?.legal_name ?? (typedName.trim() || null),
+    // A short name typed on the load ("TQL") is kept as the DBA when FMCSA
+    // has the full legal name.
+    dba_name:
+      fmcsa?.dba_name ??
+      (fmcsa?.legal_name &&
+      typedName.trim() &&
+      nameKey(typedName) !== nameKey(fmcsa.legal_name)
+        ? typedName.trim()
+        : null),
+    mc_number: cleanMc(mc),
+    dot_number: fmcsa?.dot_number,
+    phone: fmcsa?.phone,
+    address_line1: fmcsa?.street,
+    city: fmcsa?.city,
+    state: fmcsa?.state,
+    postal_code: fmcsa?.postal_code?.slice(0, 5),
+    email_domains:
+      senderDomain && !isFreeEmailDomain(senderDomain) ? [senderDomain] : [],
+  }
   const senderCheck = broker ? checkSender(sender, broker.email_domains) : null
   const checkedMc =
     lookup.state === "done" || lookup.state === "checking" ? lookup.mc : null
@@ -556,6 +576,7 @@ export function BrokerFields({
       {(broker ||
         lookup.state === "checking" ||
         lookup.state === "done" ||
+        (choice === OTHER && (typedName.trim() || cleanMc(mc))) ||
         (sender && choice !== OTHER)) && (
         <div className="flex flex-col gap-3 sm:col-span-6">
           {broker && matchedByMc && (
@@ -606,11 +627,44 @@ export function BrokerFields({
               mc={lookup.mc}
               lookup={lookup.result}
               typedName={typedName}
-              brokersHref={brokersHref}
             />
+          )}
+          {choice === OTHER && (typedName.trim() || cleanMc(mc)) && (
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg border border-dashed px-4 py-3">
+              <p className="min-w-0 text-sm text-muted-foreground">
+                <span className="font-medium text-foreground">
+                  {typedName.trim() || formatMc(cleanMc(mc))}
+                </span>{" "}
+                isn&apos;t in your brokers. Add them to save their terms and
+                where invoices go.
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="shrink-0"
+                onClick={() => setAdding(true)}
+              >
+                <Plus />
+                Add to my brokers
+              </Button>
+            </div>
           )}
         </div>
       )}
+      <AddBrokerDialog
+        open={adding}
+        onOpenChange={setAdding}
+        organizationId={organizationId}
+        defaults={newBrokerDefaults}
+        onAdded={(added) => {
+          // Picked on this load straight away; the list refreshes with it.
+          lookupId.current++
+          setLookup({ state: "idle" })
+          setMatchedByMc(false)
+          setChoice(added.id)
+        }}
+      />
     </>
   )
 }
