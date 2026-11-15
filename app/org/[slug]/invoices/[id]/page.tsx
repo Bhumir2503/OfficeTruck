@@ -5,6 +5,7 @@ import { notFound } from "next/navigation"
 
 import { InvoicePreview } from "@/components/invoices/invoice-preview"
 import {
+  InvoiceDetails,
   InvoiceSidePanel,
   type PacketItem,
 } from "@/components/invoices/invoice-side-panel"
@@ -126,7 +127,9 @@ export default async function InvoicePage({
               </p>
             )}
           </div>
-          <aside className="flex flex-col gap-6 xl:sticky xl:top-6 xl:max-h-[calc(100svh-3rem)] xl:overflow-y-auto">
+          {/* Only sending (or the payment) sits beside the invoice; on a
+              phone it comes right after it. */}
+          <aside className="xl:sticky xl:top-6 xl:row-span-2 xl:max-h-[calc(100svh-3rem)] xl:overflow-y-auto">
             <InvoiceSidePanel
               organizationId={organization.id}
               invoice={invoice}
@@ -134,12 +137,20 @@ export default async function InvoicePage({
               total={page.total}
               dueOn={page.due_on}
               billTo={billTo(load.broker_name, detail.broker, detail.factoring)}
-              packet={packet}
+              missing={packet.filter((item) => item.required && !item.files)}
               packetHref={`${base}/${invoice.id}/packet`}
               invoicesBase={base}
               today={today}
             />
           </aside>
+          <div className="min-w-0">
+            <InvoiceDetails
+              organizationId={organization.id}
+              invoice={invoice}
+              packet={packet}
+              packetHref={`${base}/${invoice.id}/packet`}
+            />
+          </div>
         </div>
       </div>
     </div>

@@ -353,8 +353,8 @@ function DraftForm({
 }
 
 /**
- * Beside the invoice: what to do with it next, what's in the packet, and
- * the draft's terms and notes.
+ * Beside the invoice: the one thing to do with it next (send it, record the
+ * payment) or where it stands, then deleting the draft or voiding it.
  */
 export function InvoiceSidePanel({
   organizationId,
@@ -363,7 +363,7 @@ export function InvoiceSidePanel({
   total,
   dueOn,
   billTo,
-  packet,
+  missing,
   packetHref,
   invoicesBase,
   today,
@@ -375,21 +375,21 @@ export function InvoiceSidePanel({
   /** "YYYY-MM-DD": when it's due, or would be if sent today. */
   dueOn: string
   billTo: BillTo
-  packet: PacketItem[]
+  /** Required documents the packet is still missing. */
+  missing: PacketItem[]
   /** /org/<slug>/invoices/<id>/packet */
   packetHref: string
-  /** /org/<slug>/invoices */
+  /** /org/<slug>/invoices, where deleting a draft goes back to. */
   invoicesBase: string
   today: string
 }) {
   const router = useRouter()
   const [paying, setPaying] = useState(false)
-  const [voiding, setVoiding] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [voiding, setVoiding] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [emailInstead, setEmailInstead] = useState(false)
 
-  const missing = packet.filter((item) => item.required && item.files === 0)
   const portal = billTo.method === "portal" && !emailInstead
 
   async function markSent(via: "portal" | "other") {
@@ -419,7 +419,6 @@ export function InvoiceSidePanel({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Next step */}
       <section className="overflow-hidden rounded-xl border bg-card text-card-foreground shadow-xs">
         <div className="px-5 pt-4 pb-5">
           <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
@@ -584,92 +583,41 @@ export function InvoiceSidePanel({
         </div>
       </section>
 
-      {/* Packet */}
-      <Panel title="Packet">
-        <ul className="flex flex-col divide-y">
-          <li className="flex items-center gap-2 py-2 text-sm first:pt-0">
-            <FileText className="size-4 text-muted-foreground" />
-            <span className="font-medium">Invoice {invoice.number}</span>
-          </li>
-          {packet.map((item) => (
-            <li
-              key={item.label}
-              className="flex items-center justify-between gap-3 py-2 text-sm last:pb-0"
-            >
-              <span className="flex items-center gap-2">
-                {item.files ? (
-                  <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
-                ) : (
-                  <Circle className="size-4 text-muted-foreground" />
-                )}
-                <span
-                  className={cn(
-                    "font-medium",
-                    !item.files && "text-muted-foreground"
-                  )}
-                >
-                  {item.label}
-                </span>
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {item.files > 1
-                  ? `${item.files} files`
-                  : item.files
-                    ? "Attached"
-                    : item.required
-                      ? "Missing"
-                      : "None"}
-              </span>
-            </li>
-          ))}
-        </ul>
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <a
-            href={packetHref}
-            target="_blank"
-            rel="noreferrer"
-            className={buttonVariants({ variant: "outline", size: "sm" })}
-          >
-            <ExternalLink />
-            View
-          </a>
-          <a
-            href={`${packetHref}?download=1`}
-            className={buttonVariants({ variant: "outline", size: "sm" })}
-          >
-            <Download />
-            Download
-          </a>
-        </div>
-      </Panel>
-
       {invoice.status === "draft" && (
-        <Panel title="Terms and notes">
-          <DraftForm organizationId={organizationId} invoice={invoice} />
+        <Panel title="Delete draft">
+          <p className="text-sm text-muted-foreground">
+            The load goes back to Ready to invoice. Number {invoice.number}{" "}
+            won&apos;t be used again.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-3 w-full text-destructive hover:text-destructive"
+            onClick={() => setDeleting(true)}
+          >
+            <Trash2 />
+            Delete draft
+          </Button>
         </Panel>
       )}
 
-      {invoice.status === "draft" ? (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-destructive hover:text-destructive"
-          onClick={() => setDeleting(true)}
-        >
-          <Trash2 />
-          Delete draft
-        </Button>
-      ) : invoice.status !== "void" ? (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-destructive hover:text-destructive"
-          onClick={() => setVoiding(true)}
-        >
-          <Ban />
-          Void invoice
-        </Button>
-      ) : null}
+      {(invoice.status === "sent" || invoice.status === "paid") && (
+        <Panel title="Void invoice">
+          <p className="text-sm text-muted-foreground">
+            For a mistake. It stays on record as void, and the load goes back to
+            delivered so you can bill it again.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-3 w-full text-destructive hover:text-destructive"
+            onClick={() => setVoiding(true)}
+          >
+            <Ban />
+            Void invoice
+          </Button>
+        </Panel>
+      )}
 
       <Dialog open={paying} onOpenChange={setPaying}>
         <DialogContent className="sm:max-w-md">
@@ -734,6 +682,97 @@ export function InvoiceSidePanel({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+/**
+ * Under the invoice: what goes out with it, and the draft's terms and notes.
+ */
+export function InvoiceDetails({
+  organizationId,
+  invoice,
+  packet,
+  packetHref,
+}: {
+  organizationId: string
+  invoice: Invoice
+  packet: PacketItem[]
+  /** /org/<slug>/invoices/<id>/packet */
+  packetHref: string
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      <div
+        className={cn(
+          "grid items-start gap-4",
+          invoice.status === "draft" && "md:grid-cols-2"
+        )}
+      >
+        <Panel title="Packet">
+          <ul className="flex flex-col divide-y">
+            <li className="flex items-center gap-2 py-2 text-sm first:pt-0">
+              <FileText className="size-4 text-muted-foreground" />
+              <span className="font-medium">Invoice {invoice.number}</span>
+            </li>
+            {packet.map((item) => (
+              <li
+                key={item.label}
+                className="flex items-center justify-between gap-3 py-2 text-sm last:pb-0"
+              >
+                <span className="flex items-center gap-2">
+                  {item.files ? (
+                    <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+                  ) : (
+                    <Circle className="size-4 text-muted-foreground" />
+                  )}
+                  <span
+                    className={cn(
+                      "font-medium",
+                      !item.files && "text-muted-foreground"
+                    )}
+                  >
+                    {item.label}
+                  </span>
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {item.files > 1
+                    ? `${item.files} files`
+                    : item.files
+                      ? "Attached"
+                      : item.required
+                        ? "Missing"
+                        : "None"}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <a
+              href={packetHref}
+              target="_blank"
+              rel="noreferrer"
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <ExternalLink />
+              View
+            </a>
+            <a
+              href={`${packetHref}?download=1`}
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <Download />
+              Download
+            </a>
+          </div>
+        </Panel>
+
+        {invoice.status === "draft" && (
+          <Panel title="Terms and notes">
+            <DraftForm organizationId={organizationId} invoice={invoice} />
+          </Panel>
+        )}
+      </div>
     </div>
   )
 }
