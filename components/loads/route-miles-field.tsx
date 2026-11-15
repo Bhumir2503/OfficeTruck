@@ -17,7 +17,7 @@ import type { RouteMiles } from "@/lib/route-miles"
 type Status =
   | { state: "idle" }
   | { state: "working" }
-  | { state: "done"; hours: number }
+  | { state: "done" }
   | { state: "error"; message: string }
 
 /**
@@ -76,7 +76,7 @@ export function RouteMilesField({
       return
     }
     setValue(formatMiles(String(result.miles)))
-    setStatus({ state: "done", hours: result.hours })
+    setStatus({ state: "done" })
   }
 
   // Estimate again when the stops change, unless the miles were typed in.
@@ -122,17 +122,12 @@ export function RouteMilesField({
           {status.message} Enter the miles yourself.
         </p>
       ) : (
-        <FieldDescription>
-          {status.state === "working"
-            ? "Estimating from the stops…"
-            : status.state === "done"
-              ? `Estimated by Google Maps: about ${status.hours} hours of driving. Routed for a car, so a truck route can run a little longer.`
-              : typed && live
-                ? "Typed in. Clear it to estimate from the stops again."
-                : live
-                  ? "Estimated from the stops by Google Maps once every address is in."
-                  : "Estimated from the stops by Google Maps when they're saved. Change it if you know better."}
-        </FieldDescription>
+        typed &&
+        live && (
+          <FieldDescription>
+            Typed in. Clear it to estimate from the stops again.
+          </FieldDescription>
+        )
       )}
     </Field>
   )

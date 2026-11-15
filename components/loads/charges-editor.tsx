@@ -36,8 +36,7 @@ export type ChargeDefaults = {
 
 type Row = ChargeDefaults & { key: number }
 
-let nextKey = 0
-const toRow = (charge: ChargeDefaults): Row => ({ ...charge, key: nextKey++ })
+const toRow = (charge: ChargeDefaults, key: number): Row => ({ ...charge, key })
 
 const amountText = (amount: number | null | undefined) =>
   amount === null || amount === undefined
@@ -74,7 +73,10 @@ export function ChargesEditor({
   errors: Errors
   onUpdate: (form: HTMLFormElement | null) => void
 }) {
+  // Keys count from 0 on every render of the page, so the server and the
+  // browser give the inputs the same ids.
   const [rows, setRows] = useState(() => defaultCharges.map(toRow))
+  const nextKey = useRef(defaultCharges.length)
   const [total, setTotal] = useState(() =>
     defaultCharges.reduce((sum, charge) => sum + Number(charge.amount ?? 0), 0)
   )
@@ -220,7 +222,9 @@ export function ChargesEditor({
             variant="outline"
             size="sm"
             disabled={rows.length >= 20}
-            onClick={() => setRows([...rows, toRow({ kind: "other" })])}
+            onClick={() =>
+              setRows([...rows, toRow({ kind: "other" }, nextKey.current++)])
+            }
           >
             <Plus />
             Add line

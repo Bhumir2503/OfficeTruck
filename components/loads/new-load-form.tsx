@@ -61,52 +61,11 @@ const LOAD_FIELDS: FilledField[] = [
 const BROKER_FIELDS: FilledField[] = ["broker", "rate_con_from"]
 const CHARGE_FIELDS: FilledField[] = ["charges", "detention"]
 
-const FILLED_LABELS: Record<FilledField, string> = {
-  reference: "load number",
-  reference_numbers: "reference numbers",
-  equipment: "equipment",
-  commodity: "commodity",
-  weight_lbs: "weight",
-  trailer_number: "trailer number",
-  broker: "broker",
-  rate_con_from: "sender",
-  stops: "stops, appointments and numbers",
-  charges: "charges",
-  detention: "detention terms",
-}
-
 /** The person's local date, "YYYY-MM-DD", for rate con dates with no year. */
 function localToday() {
   const now = new Date()
   const pad = (value: number) => String(value).padStart(2, "0")
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
-}
-
-/**
- * A card's description once AI has filled some of it in: which fields, so
- * the person checks them. Falls back to the usual description.
- */
-function FilledNote({
-  fill,
-  fields,
-  children,
-}: {
-  fill: RateConFill | null
-  fields: FilledField[]
-  children: React.ReactNode
-}) {
-  const filled = fields.filter((field) => fill?.filled.includes(field))
-  if (!filled.length) return <>{children}</>
-  const labels = filled.map((field) => FILLED_LABELS[field])
-  const list =
-    labels.length > 1
-      ? `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)}`
-      : labels[0]
-  return (
-    <span className="text-violet-700 dark:text-violet-300">
-      AI filled in the {list} from the rate con. Check them before saving.
-    </span>
-  )
 }
 
 function FilledBadge({
@@ -339,11 +298,7 @@ export function NewLoadForm({
           >
             <SettingsCard
               title="Load"
-              description={
-                <FilledNote fill={fill} fields={LOAD_FIELDS}>
-                  From the rate con.
-                </FilledNote>
-              }
+              description="From the rate con."
               action={<FilledBadge fill={fill} fields={LOAD_FIELDS} />}
               contentClassName="grid gap-5 sm:grid-cols-6"
             >
@@ -378,11 +333,7 @@ export function NewLoadForm({
 
             <SettingsCard
               title="Broker"
-              description={
-                <FilledNote fill={fill} fields={BROKER_FIELDS}>
-                  Who booked it, and who sent the rate con.
-                </FilledNote>
-              }
+              description="Who booked it, and who sent the rate con."
               action={<FilledBadge fill={fill} fields={BROKER_FIELDS} />}
               contentClassName="grid gap-5 sm:grid-cols-6"
             >
@@ -400,11 +351,7 @@ export function NewLoadForm({
 
             <SettingsCard
               title="Stops"
-              description={
-                <FilledNote fill={fill} fields={["stops"]}>
-                  Every pickup and delivery, with its appointment and number.
-                </FilledNote>
-              }
+              description="Every pickup and delivery, with its appointment and number."
               action={<FilledBadge fill={fill} fields={["stops"]} />}
             >
               <StopsEditor
@@ -424,12 +371,7 @@ export function NewLoadForm({
 
             <SettingsCard
               title="Charges"
-              description={
-                <FilledNote fill={fill} fields={CHARGE_FIELDS}>
-                  From the rate con. Accessorials run up on the road are added
-                  to the load later.
-                </FilledNote>
-              }
+              description="From the rate con. Accessorials run up on the road are added to the load later."
               action={<FilledBadge fill={fill} fields={CHARGE_FIELDS} />}
             >
               <ChargesEditor
