@@ -253,6 +253,7 @@ export async function recordInvoicePayment(
     ...values,
     amount: String(values.amount),
     reference: values.reference ?? "",
+    close_out: values.close_out,
   })
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message }
@@ -263,6 +264,24 @@ export async function recordInvoicePayment(
     paid: parsed.data.paid_on,
     amount: parsed.data.amount,
     reference: parsed.data.reference ?? "",
+    close_out: parsed.data.close_out,
+  })
+  if (error) {
+    return { error: rpcError(error) }
+  }
+  refresh()
+  return { ok: true }
+}
+
+/** Takes back a payment recorded by mistake. */
+export async function undoInvoicePayment(
+  organizationId: string,
+  paymentId: string
+): Promise<ActionResult> {
+  if (!(await isMember(organizationId))) return NOT_MEMBER
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("undo_invoice_payment", {
+    target_payment: paymentId,
   })
   if (error) {
     return { error: rpcError(error) }

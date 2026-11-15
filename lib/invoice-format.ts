@@ -8,12 +8,16 @@ import type { ChargeKind } from "@/lib/schemas/load"
 export const INVOICE_STATUSES = ["draft", "sent", "paid", "void"] as const
 export type InvoiceStatus = (typeof INVOICE_STATUSES)[number]
 
-/** What the list shows: a sent invoice past its due date is overdue. */
-export type InvoiceState = InvoiceStatus | "overdue"
+/**
+ * What the list shows: a sent invoice past its due date is overdue, and
+ * one with some of its money in is partly paid.
+ */
+export type InvoiceState = InvoiceStatus | "partial" | "overdue"
 
 export const INVOICE_STATE_LABELS: Record<InvoiceState, string> = {
   draft: "Draft",
   sent: "Sent",
+  partial: "Partly paid",
   overdue: "Overdue",
   paid: "Paid",
   void: "Void",
@@ -22,6 +26,7 @@ export const INVOICE_STATE_LABELS: Record<InvoiceState, string> = {
 export const INVOICE_STATE_STYLES: Record<InvoiceState, string> = {
   draft: "bg-muted text-muted-foreground",
   sent: "bg-violet-500/10 text-violet-700 dark:text-violet-300",
+  partial: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
   overdue: "bg-red-500/10 text-red-700 dark:text-red-300",
   paid: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
   void: "bg-muted text-muted-foreground line-through",
@@ -48,15 +53,34 @@ export function localToday(today = new Date()) {
   return `${today.getFullYear()}-${month}-${day}`
 }
 
-/** A sent invoice is overdue the day after it's due. */
+/**
+ * A sent invoice is overdue the day after it's due, even partly paid;
+ * before then, one with money in is partly paid.
+ */
 export function invoiceState(
-  invoice: { status: InvoiceStatus; due_on: string | null },
+  invoice: {
+    status: InvoiceStatus
+    due_on: string | null
+    paid_amount?: number | string | null
+  },
   today: string
 ): InvoiceState {
   if (invoice.status === "sent" && invoice.due_on && invoice.due_on < today) {
     return "overdue"
   }
+  if (invoice.status === "sent" && Number(invoice.paid_amount ?? 0) > 0) {
+    return "partial"
+  }
   return invoice.status
+}
+
+/** What's still owed: the total less what's been paid, never below 0. */
+export function balanceDue(
+  total: number | string | null,
+  paid: number | string | null
+) {
+  const left = Math.round((Number(total ?? 0) - Number(paid ?? 0)) * 100) / 100
+  return Math.max(0, left)
 }
 
 /** Whole days from `from` to `to`, both "YYYY-MM-DD". */

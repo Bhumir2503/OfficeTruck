@@ -38,11 +38,22 @@ export type Invoice = {
   created_at: string
 }
 
+/** One payment on an invoice; a broker may pay in parts. */
+export type InvoicePayment = {
+  id: string
+  /** "YYYY-MM-DD" */
+  paid_on: string
+  amount: number
+  reference: string | null
+  created_at: string
+}
+
 const INVOICE_COLUMNS =
   "id, load_id, number, status, notes, terms_days, invoice_date, due_on, factored, lines, total, sent_at, sent_via, sent_to, paid_on, paid_amount, payment_reference, voided_at, void_reason, created_at"
 
-/** An invoice in the list, with the load it bills. */
+/** An invoice in the list, with the load it bills and its payments. */
 export type InvoiceListItem = Invoice & {
+  payments: Pick<InvoicePayment, "paid_on" | "amount">[]
   load: {
     id: string
     reference: string
@@ -61,7 +72,7 @@ export async function getInvoices(
   const { data, error } = await supabase
     .from("invoices")
     .select(
-      `${INVOICE_COLUMNS}, load:loads!invoices_organization_id_load_id_fkey (id, reference, broker_name, rate, status, delivery_start)`
+      `${INVOICE_COLUMNS}, load:loads!invoices_organization_id_load_id_fkey (id, reference, broker_name, rate, status, delivery_start), payments:invoice_payments (paid_on, amount)`
     )
     .eq("organization_id", organizationId)
     .order("number", { ascending: false })
@@ -198,7 +209,7 @@ export async function getInvoiceDetail(organizationId: string, id: string) {
   }
   const invoice = data as unknown as Invoice
 
-  const [detail, documents, expenses, company, factoring, voided] =
+  const [detail, documents, expenses, company, factoring, voided, payments] =
     await Promise.all([
       getLoadDetail(organizationId, invoice.load_id),
       getLoadDocuments(organizationId, invoice.load_id),
@@ -214,7 +225,17 @@ export async function getInvoiceDetail(organizationId: string, id: string) {
         .eq("status", "void")
         .neq("id", id)
         .order("number"),
+      supabase
+        .from("invoice_payments")
+        .select("id, paid_on, amount, reference, created_at")
+        .eq("organization_id", organizationId)
+        .eq("invoice_id", id)
+        .order("paid_on")
+        .order("created_at"),
     ])
+  if (payments.error) {
+    throw payments.error
+  }
   if (!detail) {
     return null
   }
@@ -241,6 +262,7 @@ export async function getInvoiceDetail(organizationId: string, id: string) {
     broker,
     company,
     factoring,
+    payments: payments.data as InvoicePayment[],
     voided: (voided.data ?? []) as {
       id: string
       number: number

@@ -46,8 +46,16 @@ export type MarkSentValues = z.output<typeof markSentSchema>
 
 export const paymentSchema = z.object({
   paid_on: z.string().regex(DATE, "Enter the date it was paid."),
-  amount: money("Enter the amount paid."),
+  amount: money("Enter the amount paid.").refine(
+    (amount) => (amount ?? 0) > 0,
+    "Enter an amount over $0."
+  ),
   reference: optional(100),
+  /** Short-paid, and no more is coming: mark it paid anyway. */
+  close_out: z.preprocess(
+    (value) => value === "on" || value === true,
+    z.boolean()
+  ),
 })
 export type PaymentValues = z.output<typeof paymentSchema>
 

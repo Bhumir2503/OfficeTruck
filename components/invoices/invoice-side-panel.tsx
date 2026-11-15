@@ -11,6 +11,7 @@ import {
   Loader2,
   Mail,
   Trash2,
+  Undo2,
   Wallet,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
@@ -22,6 +23,7 @@ import {
   emailInvoice,
   markInvoiceSent,
   recordInvoicePayment,
+  undoInvoicePayment,
   updateInvoiceDraft,
   voidInvoice,
 } from "@/app/org/[slug]/invoices/actions"
@@ -45,6 +47,7 @@ import {
   handleCurrencyKeyDown,
 } from "@/lib/currency"
 import {
+  balanceDue,
   type BillTo,
   daysBetween,
   formatInvoiceDate,
@@ -52,7 +55,7 @@ import {
   type InvoiceState,
   SENT_VIA_LABELS,
 } from "@/lib/invoice-format"
-import type { Invoice } from "@/lib/invoices"
+import type { Invoice, InvoicePayment } from "@/lib/invoices"
 import { formatRate } from "@/lib/load-format"
 import {
   emailInvoiceSchema,
@@ -166,17 +169,19 @@ function EmailForm({
 function PaymentForm({
   organizationId,
   invoice,
-  total,
+  balance,
   today,
   onDone,
 }: {
   organizationId: string
   invoice: Invoice
-  total: number
+  /** What's still owed; the amount starts here. */
+  balance: number
   today: string
   onDone: () => void
 }) {
   const formRef = useRef<HTMLFormElement>(null)
+  const [amount, setAmount] = useState(balance)
   const { errors, formError, pending, formProps, revalidate } = useZodForm(
     paymentSchema,
     async (values) => {
@@ -188,10 +193,17 @@ function PaymentForm({
       if ("error" in result) {
         return result.error
       }
-      toast.success(`Invoice ${invoice.number} marked paid.`)
+      const paid = values.amount ?? 0
+      const left = balanceDue(balance, paid)
+      toast.success(
+        left === 0 || values.close_out
+          ? `Invoice ${invoice.number} paid.`
+          : `${formatRate(paid)} recorded. ${formatRate(left)} still owed on invoice ${invoice.number}.`
+      )
       onDone()
     }
   )
+  const short = amount > 0 && amount < balance
 
   return (
     <form ref={formRef} {...formProps} autoComplete="off">
@@ -209,14 +221,19 @@ function PaymentForm({
           label="Amount paid"
           prefix="$"
           inputMode="decimal"
-          defaultValue={total.toFixed(2)}
+          defaultValue={balance.toFixed(2)}
           errors={errors}
           hint={
             invoice.factored
               ? "What the factoring company funded, or what the broker paid them."
-              : "Less than the total if it was short-paid or a quick-pay fee came off."
+              : `${formatRate(balance)} is still owed. Enter less if they paid part of it.`
           }
-          onChange={handleCurrencyInput}
+          onChange={(event) => {
+            handleCurrencyInput(event)
+            setAmount(
+              Number(event.currentTarget.value.replace(/[$,\s]/g, "")) || 0
+            )
+          }}
           onKeyDown={handleCurrencyKeyDown}
           onBlur={handleCurrencyBlur}
         />
@@ -226,6 +243,22 @@ function PaymentForm({
           placeholder="Optional"
           errors={errors}
         />
+        {short && (
+          <label className="flex items-start gap-3 rounded-lg border px-3 py-2.5 text-sm">
+            <input
+              type="checkbox"
+              name="close_out"
+              className="mt-0.5 size-4 accent-primary"
+            />
+            <span>
+              <span className="font-medium">No more is coming</span>
+              <span className="block text-muted-foreground">
+                Mark it paid anyway, {formatRate(balance - amount)} short. Leave
+                this off to keep it open for the rest.
+              </span>
+            </span>
+          </label>
+        )}
         <DialogFooter className="items-center">
           {formError && (
             <p className="mr-auto text-sm text-destructive">{formError}</p>
@@ -234,7 +267,7 @@ function PaymentForm({
             Cancel
           </Button>
           <Button type="submit" disabled={pending}>
-            {pending ? "Saving…" : "Mark paid"}
+            {pending ? "Saving…" : "Record payment"}
           </Button>
         </DialogFooter>
       </fieldset>
@@ -328,7 +361,7 @@ function DraftForm({
           inputMode="numeric"
           defaultValue={String(invoice.terms_days)}
           errors={errors}
-          hint="From the broker's payment terms. 0 is due on receipt."
+          hint="From the broker's payment terms."
         />
         <Field data-invalid={!!errors.notes}>
           <FieldLabel htmlFor="invoice-notes">Notes on the invoice</FieldLabel>
@@ -366,6 +399,7 @@ export function InvoiceSidePanel({
   missing,
   packetHref,
   invoicesBase,
+  payments,
   today,
 }: {
   organizationId: string
@@ -381,6 +415,8 @@ export function InvoiceSidePanel({
   packetHref: string
   /** /org/<slug>/invoices, where deleting a draft goes back to. */
   invoicesBase: string
+  /** Payments in, oldest first. */
+  payments: InvoicePayment[]
   today: string
 }) {
   const router = useRouter()
@@ -415,7 +451,77 @@ export function InvoiceSidePanel({
     router.push(invoicesBase)
   }
 
+  async function undo(payment: InvoicePayment) {
+    setBusy(`undo:${payment.id}`)
+    const result = await undoInvoicePayment(organizationId, payment.id)
+    setBusy(null)
+    if ("error" in result) {
+      toast.error(result.error)
+    } else {
+      toast.success(
+        `${formatRate(payment.amount)} payment undone. Invoice ${invoice.number} is open again.`
+      )
+    }
+  }
+
   const daysLate = daysBetween(dueOn, today)
+  const received = Number(invoice.paid_amount ?? 0)
+  const balance = balanceDue(total, received)
+  const lastPayment = payments.at(-1)
+
+  // Total, paid and what's left, with each payment and a way to take it back.
+  const ledger = payments.length > 0 && (
+    <div className="mt-4 border-t pt-3">
+      <ul className="flex flex-col gap-1.5">
+        {payments.map((payment) => (
+          <li
+            key={payment.id}
+            className="flex items-center justify-between gap-2 text-sm"
+          >
+            <span className="min-w-0 truncate text-muted-foreground">
+              {formatInvoiceDate(payment.paid_on)}
+              {payment.reference && ` · ${payment.reference}`}
+            </span>
+            <span className="flex shrink-0 items-center gap-1">
+              <span className="tabular-nums">{formatRate(payment.amount)}</span>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={`Undo the ${formatRate(payment.amount)} payment from ${formatInvoiceDate(payment.paid_on)}`}
+                title="Undo this payment"
+                disabled={busy !== null}
+                onClick={() => void undo(payment)}
+              >
+                {busy === `undo:${payment.id}` ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <Undo2 />
+                )}
+              </Button>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <dl className="mt-3 flex flex-col gap-1 border-t pt-3 text-sm">
+        <div className="flex justify-between">
+          <dt className="text-muted-foreground">Invoice total</dt>
+          <dd className="tabular-nums">{formatRate(total)}</dd>
+        </div>
+        <div className="flex justify-between">
+          <dt className="text-muted-foreground">Paid</dt>
+          <dd className="tabular-nums">{formatRate(received)}</dd>
+        </div>
+        <div className="flex justify-between font-semibold">
+          <dt>
+            {invoice.status === "paid" && balance > 0
+              ? "Written off"
+              : "Still owed"}
+          </dt>
+          <dd className="tabular-nums">{formatRate(balance)}</dd>
+        </div>
+      </dl>
+    </div>
+  )
 
   return (
     <div className="flex flex-col gap-4">
@@ -526,7 +632,9 @@ export function InvoiceSidePanel({
               >
                 {state === "overdue"
                   ? `Overdue ${daysLate} ${daysLate === 1 ? "day" : "days"}`
-                  : "Waiting for payment"}
+                  : state === "partial"
+                    ? `Partly paid · ${formatRate(balance)} left`
+                    : "Waiting for payment"}
               </h4>
               <p className="mt-1 text-sm text-muted-foreground">
                 {invoice.sent_via ? SENT_VIA_LABELS[invoice.sent_via] : "Sent"}
@@ -538,13 +646,14 @@ export function InvoiceSidePanel({
                 {invoice.factored &&
                   " Factored: the broker pays your factoring company."}
               </p>
+              {ledger}
               <Button
                 size="lg"
                 className="mt-4 w-full"
                 onClick={() => setPaying(true)}
               >
                 <Wallet />
-                Record payment
+                {payments.length ? "Record another payment" : "Record payment"}
               </Button>
             </>
           )}
@@ -556,15 +665,13 @@ export function InvoiceSidePanel({
                 Paid
               </h4>
               <p className="mt-1 text-sm text-muted-foreground">
-                {formatRate(invoice.paid_amount ?? 0)} on{" "}
-                {invoice.paid_on && formatInvoiceDate(invoice.paid_on)}
-                {invoice.payment_reference &&
-                  `, ref ${invoice.payment_reference}`}
-                .
-                {invoice.paid_amount !== null &&
-                  Number(invoice.paid_amount) < total &&
-                  ` Short ${formatRate(total - Number(invoice.paid_amount))}.`}
+                {balance > 0
+                  ? `Closed out ${formatRate(balance)} short`
+                  : "Paid in full"}
+                {invoice.paid_on && ` on ${formatInvoiceDate(invoice.paid_on)}`}
+                {payments.length > 1 && `, in ${payments.length} payments`}.
               </p>
+              {ledger}
             </>
           )}
 
@@ -601,7 +708,31 @@ export function InvoiceSidePanel({
         </Panel>
       )}
 
-      {(invoice.status === "sent" || invoice.status === "paid") && (
+      {invoice.status === "paid" && lastPayment && (
+        <Panel title="Undo payment">
+          <p className="text-sm text-muted-foreground">
+            Recorded by mistake? Takes back the {formatRate(lastPayment.amount)}{" "}
+            from {formatInvoiceDate(lastPayment.paid_on)}, and the invoice is
+            open again.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-3 w-full"
+            disabled={busy !== null}
+            onClick={() => void undo(lastPayment)}
+          >
+            {busy === `undo:${lastPayment.id}` ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <Undo2 />
+            )}
+            Undo payment
+          </Button>
+        </Panel>
+      )}
+
+      {invoice.status === "sent" && payments.length === 0 && (
         <Panel title="Void invoice">
           <p className="text-sm text-muted-foreground">
             For a mistake. It stays on record as void, and the load goes back to
@@ -628,13 +759,13 @@ export function InvoiceSidePanel({
             <DialogDescription>
               {invoice.factored
                 ? "The load stays factored. This records that the money came in."
-                : "The load moves to paid."}
+                : "Once it's paid in full, the load moves to paid."}
             </DialogDescription>
           </DialogHeader>
           <PaymentForm
             organizationId={organizationId}
             invoice={invoice}
-            total={total}
+            balance={balance}
             today={today}
             onDone={() => setPaying(false)}
           />

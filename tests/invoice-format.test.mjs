@@ -3,6 +3,7 @@ import { describe, it } from "node:test"
 
 import {
   addressLines,
+  balanceDue,
   billTo,
   daysBetween,
   formatInvoiceDate,
@@ -25,6 +26,33 @@ describe("invoiceState", () => {
         status
       )
     }
+  })
+})
+
+describe("part payments", () => {
+  it("calls a sent invoice with money in partly paid", () => {
+    assert.equal(
+      invoiceState({ status: "sent", due_on: "2026-12-15", paid_amount: "500.00" }, "2026-12-01"),
+      "partial"
+    )
+    assert.equal(
+      invoiceState({ status: "sent", due_on: "2026-12-15", paid_amount: 0 }, "2026-12-01"),
+      "sent"
+    )
+  })
+
+  it("still calls it overdue once it's late", () => {
+    assert.equal(
+      invoiceState({ status: "sent", due_on: "2026-12-15", paid_amount: 500 }, "2026-12-16"),
+      "overdue"
+    )
+  })
+
+  it("works out what's left without going below zero", () => {
+    assert.equal(balanceDue("2122.50", "1000.00"), 1122.5)
+    assert.equal(balanceDue(1000, 1200), 0)
+    assert.equal(balanceDue(0.3, 0.1), 0.2)
+    assert.equal(balanceDue(null, null), 0)
   })
 })
 

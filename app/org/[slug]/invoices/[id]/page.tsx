@@ -153,6 +153,7 @@ export default async function InvoicePage({
               missing={packet.filter((item) => item.required && !item.files)}
               packetHref={`${base}/${invoice.id}/packet`}
               invoicesBase={base}
+              payments={detail.payments}
               today={today}
             />
           </aside>

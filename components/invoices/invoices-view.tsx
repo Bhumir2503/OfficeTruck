@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/table"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import {
+  balanceDue,
   daysBetween,
   formatInvoiceDate,
   INVOICE_STATE_LABELS,
@@ -42,7 +43,18 @@ import type { InvoiceListItem, ReadyLoad } from "@/lib/invoices"
 import { DOCUMENT_LABELS } from "@/lib/load-document-format"
 import { formatRate, formatStopDate } from "@/lib/load-format"
 
-const FILTERS: InvoiceState[] = ["draft", "sent", "overdue", "paid", "void"]
+const FILTERS: InvoiceState[] = [
+  "draft",
+  "sent",
+  "partial",
+  "overdue",
+  "paid",
+  "void",
+]
+
+/** Sent and not paid off yet. */
+const isOpen = (state: InvoiceState) =>
+  state === "sent" || state === "partial" || state === "overdue"
 type Filter = InvoiceState | "open" | "all"
 
 /** What an invoice is for: its frozen total once sent, the load's rate while a draft. */
@@ -116,26 +128,29 @@ export function InvoicesView({
   )
 
   const totals = useMemo(() => {
-    const sum = (list: typeof rows) =>
-      list.reduce((total, row) => total + amountOf(row.invoice), 0)
-    const open = rows.filter(
-      (row) => row.state === "sent" || row.state === "overdue"
-    )
+    // What's still owed, not the whole invoice, once some has come in.
+    const owed = (list: typeof rows) =>
+      list.reduce(
+        (total, row) =>
+          total + balanceDue(row.invoice.total, row.invoice.paid_amount),
+        0
+      )
+    const open = rows.filter((row) => isOpen(row.state))
     const overdue = rows.filter((row) => row.state === "overdue")
-    const paid = rows.filter(
-      (row) =>
-        row.state === "paid" &&
-        row.invoice.paid_on &&
-        daysBetween(row.invoice.paid_on, today) <= 30
+    // Every payment in the last 30 days, part payments included.
+    const recent = rows.flatMap(({ invoice }) =>
+      invoice.payments
+        .filter((payment) => daysBetween(payment.paid_on, today) <= 30)
+        .map((payment) => ({ invoice: invoice.id, amount: payment.amount }))
     )
     return {
       ready: ready.reduce((total, load) => total + Number(load.rate), 0),
-      open: { n: open.length, amount: sum(open) },
-      overdue: { n: overdue.length, amount: sum(overdue) },
+      open: { n: open.length, amount: owed(open) },
+      overdue: { n: overdue.length, amount: owed(overdue) },
       paid: {
-        n: paid.length,
-        amount: paid.reduce(
-          (total, row) => total + Number(row.invoice.paid_amount ?? 0),
+        n: new Set(recent.map((payment) => payment.invoice)).size,
+        amount: recent.reduce(
+          (total, payment) => total + Number(payment.amount),
           0
         ),
       },
@@ -153,9 +168,7 @@ export function InvoicesView({
     return rows.filter(
       ({ invoice, state }) =>
         (filter === "all" ||
-          (filter === "open"
-            ? state === "sent" || state === "overdue"
-            : state === filter)) &&
+          (filter === "open" ? isOpen(state) : state === filter)) &&
         (String(invoice.number).includes(query) ||
           invoice.load.reference.toLowerCase().includes(query) ||
           invoice.load.broker_name.toLowerCase().includes(query))
@@ -405,6 +418,17 @@ export function InvoicesView({
                         <span className="font-medium text-destructive">
                           {count(daysBetween(invoice.due_on, today), "day")}{" "}
                           late
+                          {Number(invoice.paid_amount) > 0 &&
+                            ` · ${formatRate(balanceDue(invoice.total, invoice.paid_amount))} left`}
+                        </span>
+                      ) : state === "partial" ? (
+                        <span className="text-muted-foreground">
+                          {formatRate(
+                            balanceDue(invoice.total, invoice.paid_amount)
+                          )}{" "}
+                          left
+                          {invoice.due_on &&
+                            ` · due ${formatInvoiceDate(invoice.due_on)}`}
                         </span>
                       ) : state === "paid" && invoice.paid_on ? (
                         <span className="text-muted-foreground">
