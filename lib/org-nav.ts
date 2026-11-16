@@ -2,6 +2,7 @@ import {
   ChartColumnIcon,
   CircleUserRoundIcon,
   ContainerIcon,
+  FolderOpenIcon,
   HandshakeIcon,
   IdCardIcon,
   LayoutDashboardIcon,
@@ -99,6 +100,13 @@ export const ORG_NAV: { label?: string; items: OrgSection[] }[] = [
         icon: ShieldCheckIcon,
         description:
           "The calendar of filings like IFTA, UCR, 2290 and MCS-150, every driver's and truck's expiration dates with red, yellow and green status, and IFTA reports.",
+      },
+      {
+        title: "Documents",
+        path: "documents",
+        icon: FolderOpenIcon,
+        description:
+          "The company's authority, insurance and W-9 with expiration dates, and every load, driver and receipt file in one searchable place.",
       },
     ],
   },
