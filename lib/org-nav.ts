@@ -73,7 +73,7 @@ export const ORG_NAV: { label?: string; items: OrgSection[] }[] = [
         path: "drivers",
         icon: IdCardIcon,
         description:
-          "Each driver's profile, documents, assigned loads and, later, pay statements.",
+          "Each driver's profile, documents and assigned loads, and their weekly pay.",
       },
       {
         title: "Trucks",
