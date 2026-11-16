@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
+import { DriversTabs } from "@/components/drivers/drivers-tabs"
 import { PayWeek } from "@/components/pay/pay-week"
 import { SettingsEmptyState } from "@/components/settings/settings-card"
 import { today } from "@/lib/driver-format"
@@ -14,7 +15,7 @@ export const metadata: Metadata = { title: "Driver pay" }
 export default async function PayPage({
   params,
   searchParams,
-}: PageProps<"/org/[slug]/pay">) {
+}: PageProps<"/org/[slug]/drivers/pay">) {
   const organization = await getOrganization((await params).slug)
   if (!organization) {
     notFound()
@@ -28,6 +29,7 @@ export default async function PayPage({
       </div>
     )
   }
+  const driversBase = `/org/${organization.slug}/drivers`
 
   const thisWeek = weekOf(today())
   // Payroll usually covers the last full week.
@@ -35,12 +37,13 @@ export default async function PayPage({
   const settlements = await getPayWeek(organization.id, week)
 
   return (
-    <div className="px-4 py-6 lg:px-6 lg:py-8">
+    <div className="flex flex-col gap-6 px-4 py-6 lg:px-6 lg:py-8">
+      <DriversTabs base={driversBase} showPay />
       <PayWeek
         settlements={settlements}
         week={week}
         thisWeek={thisWeek}
-        base={`/org/${organization.slug}/pay`}
+        base={`${driversBase}/pay`}
       />
     </div>
   )

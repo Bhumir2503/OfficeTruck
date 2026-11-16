@@ -16,7 +16,7 @@ export const metadata: Metadata = { title: "Driver pay" }
 export default async function SettlementPage({
   params,
   searchParams,
-}: PageProps<"/org/[slug]/pay/[driverId]">) {
+}: PageProps<"/org/[slug]/drivers/pay/[driverId]">) {
   const { slug, driverId } = await params
   const organization = await getOrganization(slug)
   if (!organization || !canManage(organization)) {
@@ -35,11 +35,11 @@ export default async function SettlementPage({
       <div className="flex flex-col gap-6">
         <div className="flex flex-wrap items-center gap-3">
           <Link
-            href={`${base}/pay?week=${week}`}
+            href={`${base}/drivers/pay?week=${week}`}
             className={buttonVariants({ variant: "ghost", size: "sm" })}
           >
             <ChevronLeft />
-            All drivers
+            Pay
           </Link>
           <Link
             href={`${base}/drivers/${settlement.driver.id}`}

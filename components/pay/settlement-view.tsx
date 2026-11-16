@@ -11,7 +11,7 @@ import {
   markPaid,
   removeAdjustment,
   undoPaid,
-} from "@/app/org/[slug]/pay/actions"
+} from "@/app/org/[slug]/drivers/pay/actions"
 import {
   SettingsCard,
   SettingsCardFooter,

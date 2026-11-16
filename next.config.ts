@@ -10,6 +10,12 @@ const nextConfig: NextConfig = {
         destination: "/org/:slug/customers/:path*",
         permanent: true,
       },
+      // Driver pay moved into the Drivers section.
+      {
+        source: "/org/:slug/pay/:path*",
+        destination: "/org/:slug/drivers/pay/:path*",
+        permanent: true,
+      },
     ]
   },
   experimental: {
