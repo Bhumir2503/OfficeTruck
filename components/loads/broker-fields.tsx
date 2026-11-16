@@ -125,7 +125,7 @@ function BrokerSummary({
       </dl>
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <Wallet className="size-3.5" />
-        Payment history shows here once invoices are built.
+        Payment history is on the broker&apos;s page.
       </p>
     </div>
   )

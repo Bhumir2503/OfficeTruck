@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { ArrowLeft, Ban, Package, Wallet } from "lucide-react"
+import { ArrowLeft, Ban, Package } from "lucide-react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 
@@ -10,6 +10,7 @@ import {
   RecheckButton,
 } from "@/components/brokers/broker-actions"
 import { BrokerForm } from "@/components/brokers/broker-form"
+import { BrokerPaymentHistory } from "@/components/brokers/broker-payment-history"
 import { SenderWarning } from "@/components/brokers/sender-warning"
 import { LoadStatusBadge } from "@/components/loads/load-status-menu"
 import {
@@ -35,6 +36,8 @@ import {
 import { getBroker, getBrokerContacts, getBrokerLoads } from "@/lib/brokers"
 import { formatDate } from "@/lib/driver-format"
 import { getFactoringCompany } from "@/lib/factoring"
+import { localToday } from "@/lib/invoice-format"
+import { getBrokerInvoices } from "@/lib/invoices"
 import { formatRate, formatStopDate } from "@/lib/load-format"
 import { getOrganization } from "@/lib/organizations"
 import { formatPhone } from "@/lib/phone"
@@ -103,10 +106,11 @@ export default async function BrokerPage({
   const base = `/org/${organization.slug}/brokers`
   const none = <span className="text-muted-foreground">Not set</span>
   const factoringHref = `/org/${organization.slug}/settings/factoring`
-  const [contacts, loads, factoring] = await Promise.all([
+  const [contacts, loads, factoring, invoices] = await Promise.all([
     getBrokerContacts(organization.id, broker.id),
     getBrokerLoads(organization.id, broker.id),
     getFactoringCompany(organization.id),
+    getBrokerInvoices(organization.id, broker.id),
   ])
   const fmcsa = broker.fmcsa
   const flags = fmcsaFlags(fmcsa)
@@ -337,15 +341,12 @@ export default async function BrokerPage({
           )}
         </SettingsCard>
 
-        <SettingsCard
-          title="Payment history"
-          description={`Expected: paid within ${broker.payment_terms_days === 0 ? "a few days of invoicing" : `${broker.payment_terms_days} days`}.`}
-        >
-          <SettingsEmptyState icon={Wallet} title="Comes with invoices">
-            Average days to pay, open and overdue invoices, and the last payment
-            will be worked out from your invoices once Invoices is built.
-          </SettingsEmptyState>
-        </SettingsCard>
+        <BrokerPaymentHistory
+          invoices={invoices}
+          termsDays={broker.payment_terms_days}
+          today={localToday()}
+          invoicesBase={`/org/${organization.slug}/invoices`}
+        />
 
         <ContactsCard
           organizationId={organization.id}

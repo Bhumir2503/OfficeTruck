@@ -3,6 +3,7 @@
 import { cn } from "cn"
 import {
   Ban,
+  BellRing,
   CheckCircle2,
   Circle,
   Download,
@@ -13,6 +14,7 @@ import {
   Trash2,
   Undo2,
   Wallet,
+  Zap,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useRef, useState } from "react"
@@ -23,6 +25,7 @@ import {
   emailInvoice,
   markInvoiceSent,
   recordInvoicePayment,
+  sendInvoiceReminder,
   undoInvoicePayment,
   updateInvoiceDraft,
   voidInvoice,
@@ -42,6 +45,7 @@ import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Textarea } from "@/components/ui/textarea"
 import { useZodForm } from "@/hooks/use-zod-form"
 import {
+  formatCurrency,
   handleCurrencyBlur,
   handleCurrencyInput,
   handleCurrencyKeyDown,
@@ -61,6 +65,7 @@ import {
   emailInvoiceSchema,
   invoiceDraftSchema,
   paymentSchema,
+  reminderSchema,
   voidInvoiceSchema,
 } from "@/lib/schemas/invoice"
 
@@ -166,10 +171,112 @@ function EmailForm({
   )
 }
 
+/**
+ * A reminder about an unpaid invoice: emails the packet again with the
+ * balance and how late it is. Opens as a short form from its own card.
+ */
+function ReminderCard({
+  organizationId,
+  invoice,
+  billTo,
+  overdue,
+}: {
+  organizationId: string
+  invoice: Invoice
+  billTo: BillTo
+  overdue: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const { errors, formError, pending, formProps } = useZodForm(
+    reminderSchema,
+    async (values) => {
+      const result = await sendInvoiceReminder(
+        organizationId,
+        invoice.id,
+        values
+      )
+      if ("error" in result) {
+        return result.error
+      }
+      toast.success(`Reminder sent to ${values.to.join(", ")}.`)
+      setOpen(false)
+    }
+  )
+  // Back to whoever it went to, or the billing emails on file.
+  const recipients = invoice.sent_to.length ? invoice.sent_to : billTo.emails
+
+  return (
+    <Panel title={overdue ? "Chase payment" : "Send a reminder"}>
+      <p className="text-sm text-muted-foreground">
+        {invoice.last_reminded_at
+          ? `Last reminder ${formatInvoiceDate(invoice.last_reminded_at)}${invoice.reminder_count > 1 ? `, ${invoice.reminder_count} sent so far` : ""}.`
+          : overdue
+            ? "It's past due. Email them a reminder with the packet attached again."
+            : "Email them a reminder with the packet attached again."}
+      </p>
+      {open ? (
+        <form {...formProps} className="mt-3 flex flex-col gap-3">
+          <fieldset disabled={pending} className="flex flex-col gap-3">
+            <Field data-invalid={!!errors.to}>
+              <FieldLabel htmlFor="reminder-to">Send to</FieldLabel>
+              <Textarea
+                id="reminder-to"
+                name="to"
+                rows={2}
+                defaultValue={recipients.join("\n")}
+                placeholder="billing@broker.com"
+                aria-invalid={!!errors.to}
+              />
+              <FieldError errors={errors.to} />
+            </Field>
+            <Field data-invalid={!!errors.message}>
+              <FieldLabel htmlFor="reminder-message">Message</FieldLabel>
+              <Textarea
+                id="reminder-message"
+                name="message"
+                rows={2}
+                maxLength={2000}
+                placeholder="Optional, e.g. Can you share an ETA on payment?"
+              />
+              <FieldError errors={errors.message} />
+            </Field>
+            <FormError message={formError} />
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" size="sm" className="flex-1">
+                {pending ? <Loader2 className="animate-spin" /> : <BellRing />}
+                {pending ? "Sending…" : "Send reminder"}
+              </Button>
+            </div>
+          </fieldset>
+        </form>
+      ) : (
+        <Button
+          variant="outline"
+          size="sm"
+          className="mt-3 w-full"
+          onClick={() => setOpen(true)}
+        >
+          <BellRing />
+          Send reminder
+        </Button>
+      )}
+    </Panel>
+  )
+}
+
 function PaymentForm({
   organizationId,
   invoice,
   balance,
+  quickPayPercent,
   today,
   onDone,
 }: {
@@ -177,11 +284,30 @@ function PaymentForm({
   invoice: Invoice
   /** What's still owed; the amount starts here. */
   balance: number
+  /** The broker's quick-pay fee; offers a one-tap quick-pay amount. */
+  quickPayPercent: number | null
   today: string
   onDone: () => void
 }) {
   const formRef = useRef<HTMLFormElement>(null)
   const [amount, setAmount] = useState(balance)
+  const [closeOut, setCloseOut] = useState(false)
+  // Quick pay is the broker paying early less their fee; a factored invoice
+  // is paid by the factoring company instead.
+  const fee = invoice.factored ? null : quickPayPercent
+  const quickPay =
+    fee && fee > 0 ? Math.round(balance * (100 - fee)) / 100 : null
+
+  function applyQuickPay() {
+    if (quickPay === null) return
+    const input = formRef.current?.elements.namedItem("amount")
+    if (input instanceof HTMLInputElement) {
+      input.value = formatCurrency(quickPay.toFixed(2))
+    }
+    setAmount(quickPay)
+    setCloseOut(true)
+    revalidate(formRef.current)
+  }
   const { errors, formError, pending, formProps, revalidate } = useZodForm(
     paymentSchema,
     async (values) => {
@@ -237,6 +363,18 @@ function PaymentForm({
           onKeyDown={handleCurrencyKeyDown}
           onBlur={handleCurrencyBlur}
         />
+        {quickPay !== null && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="-mt-2 self-start"
+            onClick={applyQuickPay}
+          >
+            <Zap />
+            Quick pay: {formatRate(quickPay)} after their {fee}% fee
+          </Button>
+        )}
         <LoadTextField
           name="reference"
           label="Check or ACH number"
@@ -248,13 +386,16 @@ function PaymentForm({
             <input
               type="checkbox"
               name="close_out"
+              checked={closeOut}
+              onChange={(event) => setCloseOut(event.target.checked)}
               className="mt-0.5 size-4 accent-primary"
             />
             <span>
               <span className="font-medium">No more is coming</span>
               <span className="block text-muted-foreground">
-                Mark it paid anyway, {formatRate(balance - amount)} short. Leave
-                this off to keep it open for the rest.
+                Mark it paid anyway, {formatRate(balance - amount)} short
+                {closeOut && quickPay === amount ? " (the quick-pay fee)" : ""}.
+                Leave this off to keep it open for the rest.
               </span>
             </span>
           </label>
@@ -282,6 +423,7 @@ export function RecordPaymentDialog({
   organizationId,
   invoice,
   balance,
+  quickPayPercent,
   today,
 }: {
   open: boolean
@@ -290,6 +432,8 @@ export function RecordPaymentDialog({
   invoice: Invoice
   /** What's still owed. */
   balance: number
+  /** The broker's quick-pay fee, if they offer quick pay. */
+  quickPayPercent: number | null
   /** "YYYY-MM-DD" */
   today: string
 }) {
@@ -308,6 +452,7 @@ export function RecordPaymentDialog({
           organizationId={organizationId}
           invoice={invoice}
           balance={balance}
+          quickPayPercent={quickPayPercent}
           today={today}
           onDone={() => onOpenChange(false)}
         />
@@ -441,6 +586,9 @@ export function InvoiceSidePanel({
   packetHref,
   invoicesBase,
   payments,
+  noaMissing,
+  brokerName,
+  quickPayPercent,
   today,
 }: {
   organizationId: string
@@ -458,6 +606,11 @@ export function InvoiceSidePanel({
   invoicesBase: string
   /** Payments in, oldest first. */
   payments: InvoicePayment[]
+  /** A factored broker with no notice of assignment on file. */
+  noaMissing: boolean
+  brokerName: string
+  /** The broker's quick-pay fee, if they offer quick pay. */
+  quickPayPercent: number | null
   today: string
 }) {
   const router = useRouter()
@@ -593,6 +746,14 @@ export function InvoiceSidePanel({
                   Missing the {missing.map((item) => item.label).join(", ")}.
                   Brokers usually won&apos;t pay without it. Upload it on the
                   load first.
+                </p>
+              )}
+              {noaMissing && billTo.kind === "factoring" && (
+                <p className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
+                  There&apos;s no notice of assignment on file for {brokerName}.
+                  Send them {billTo.name}&apos;s NOA first, or they may pay you
+                  instead, and {billTo.name} won&apos;t be paid. Mark it on file
+                  on the broker once it&apos;s sent.
                 </p>
               )}
               <div className="mt-4 flex flex-col gap-2">
@@ -749,6 +910,15 @@ export function InvoiceSidePanel({
         </Panel>
       )}
 
+      {invoice.status === "sent" && (
+        <ReminderCard
+          organizationId={organizationId}
+          invoice={invoice}
+          billTo={billTo}
+          overdue={state === "overdue"}
+        />
+      )}
+
       {invoice.status === "paid" && lastPayment && (
         <Panel title="Undo payment">
           <p className="text-sm text-muted-foreground">
@@ -797,6 +967,7 @@ export function InvoiceSidePanel({
         organizationId={organizationId}
         invoice={invoice}
         balance={balance}
+        quickPayPercent={quickPayPercent}
         today={today}
       />
 

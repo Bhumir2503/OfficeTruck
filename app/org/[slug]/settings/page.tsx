@@ -5,6 +5,7 @@ import { CompanyProfileSection } from "@/components/settings/company-profile-for
 import { DispatchSettings } from "@/components/settings/dispatch-settings"
 import { DeleteOrganization } from "@/components/settings/delete-organization"
 import { LeaveOrganization } from "@/components/settings/leave-organization"
+import { LogoUpload } from "@/components/settings/logo-upload"
 import { OrganizationUrlForm } from "@/components/settings/organization-url-form"
 import { SettingsPage } from "@/components/settings/settings-card"
 import {
@@ -28,7 +29,7 @@ export default async function GeneralSettingsPage({
     await createClient()
   )
     .from("organizations")
-    .select("share_rate_with_drivers")
+    .select("share_rate_with_drivers, logo_url")
     .eq("id", organization.id)
     .single()
 
@@ -44,6 +45,11 @@ export default async function GeneralSettingsPage({
       description="Your company profile, shown on invoices and used for broker and compliance checks."
     >
       <CompanyProfileSection section="company" {...props} />
+      <LogoUpload
+        organizationId={organization.id}
+        logoUrl={org?.logo_url ?? null}
+        canEdit={canManage(organization)}
+      />
       <CompanyProfileSection section="contact" {...props} />
       <CompanyProfileSection section="address" {...props} />
       <DispatchSettings

@@ -39,6 +39,10 @@ export const emailInvoiceSchema = z.object({
 })
 export type EmailInvoiceValues = z.output<typeof emailInvoiceSchema>
 
+/** A reminder goes to the same kind of list as the invoice. */
+export const reminderSchema = emailInvoiceSchema
+export type ReminderValues = z.output<typeof reminderSchema>
+
 export const markSentSchema = z.object({
   via: z.enum(["portal", "other"], "Choose how it was sent."),
 })

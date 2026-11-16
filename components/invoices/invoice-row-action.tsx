@@ -64,6 +64,11 @@ export function InvoiceRowAction({
           organizationId={organizationId}
           invoice={invoice}
           balance={balanceDue(invoice.total, invoice.paid_amount)}
+          quickPayPercent={
+            invoice.load.broker?.quick_pay_fee_percent != null
+              ? Number(invoice.load.broker.quick_pay_fee_percent)
+              : null
+          }
           today={today}
         />
       </>

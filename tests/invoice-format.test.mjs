@@ -4,6 +4,7 @@ import { describe, it } from "node:test"
 import {
   addressLines,
   balanceDue,
+  brokerPaymentStats,
   billTo,
   daysBetween,
   formatInvoiceDate,
@@ -123,5 +124,38 @@ describe("billTo", () => {
     const to = billTo("Walk-in Broker", null, factoring)
     assert.equal(to.name, "Walk-in Broker")
     assert.deepEqual(to.emails, [])
+  })
+})
+
+describe("brokerPaymentStats", () => {
+  const base = { invoice_date: "2026-10-01", total: "1000.00", paid_amount: 0, payments: [], due_on: "2026-10-31", paid_on: null }
+
+  it("averages days to pay over paid invoices", () => {
+    const stats = brokerPaymentStats(
+      [
+        { ...base, status: "paid", paid_on: "2026-10-21", paid_amount: 1000, payments: [{ paid_on: "2026-10-21", amount: 1000 }] },
+        { ...base, status: "paid", paid_on: "2026-11-10", paid_amount: 1000, payments: [{ paid_on: "2026-11-10", amount: "1000.00" }] },
+      ],
+      "2026-11-15"
+    )
+    assert.equal(stats.avgDaysToPay, 30)
+    assert.equal(stats.paidCount, 2)
+    assert.deepEqual(stats.lastPayment, { paid_on: "2026-11-10", amount: 1000 })
+  })
+
+  it("adds up what's open and overdue by what's still owed", () => {
+    const stats = brokerPaymentStats(
+      [
+        { ...base, status: "sent", due_on: "2026-12-01", paid_amount: "250.00" },
+        { ...base, status: "sent", due_on: "2026-11-01" },
+        { ...base, status: "draft", invoice_date: null, due_on: null },
+        { ...base, status: "void" },
+      ],
+      "2026-11-15"
+    )
+    assert.deepEqual(stats.open, { count: 2, balance: 1750 })
+    assert.deepEqual(stats.overdue, { count: 1, balance: 1000 })
+    assert.equal(stats.avgDaysToPay, null)
+    assert.equal(stats.lastPayment, null)
   })
 })

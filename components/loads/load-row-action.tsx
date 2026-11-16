@@ -3,12 +3,16 @@
 import {
   AlertTriangle,
   Clock,
+  FilePlus2,
+  Loader2,
   MapPin,
   PackageCheck,
+  ReceiptText,
   Send,
   UserPlus,
 } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
 
@@ -17,9 +21,10 @@ import {
   updateLoadAssignment,
   markLoadComplete,
 } from "@/app/org/[slug]/loads/actions"
+import { createInvoice } from "@/app/org/[slug]/invoices/actions"
 import { DriverSelect } from "@/components/loads/driver-select"
 import { TruckSelect } from "@/components/loads/truck-select"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import {
   Dialog,
   DialogClose,
@@ -33,6 +38,7 @@ import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { useZodForm } from "@/hooks/use-zod-form"
 import { SCHEDULED_STATUSES, overlapping } from "@/lib/dispatch-format"
 import type { DriverOption } from "@/lib/drivers"
+import type { LoadInvoice } from "@/lib/invoices"
 import { formatStopDate, formatStopWindow } from "@/lib/load-format"
 import { LOAD_VIEW_LABELS, viewOf, type PaymentDue } from "@/lib/load-views"
 import type { Load } from "@/lib/loads"
@@ -49,6 +55,67 @@ export type RowActionContext = {
   orgBase: string
   /** Every load, to spot a driver already on the road at the same time. */
   loads: Load[]
+  /** Each load's live invoice, by load id. */
+  invoices: Record<string, LoadInvoice>
+}
+
+/**
+ * For a load that's done and needs billing: make its draft invoice, or open
+ * the one it has.
+ */
+function InvoiceAction({
+  load,
+  invoice,
+  context,
+}: {
+  load: Load
+  invoice: LoadInvoice | undefined
+  context: RowActionContext
+}) {
+  const router = useRouter()
+  const [pending, setPending] = useState(false)
+  const invoicesBase = `${context.orgBase}/invoices`
+
+  if (invoice) {
+    return (
+      <Link
+        href={`${invoicesBase}/${invoice.id}`}
+        className={buttonVariants({
+          size: "sm",
+          variant: invoice.status === "draft" ? "default" : "outline",
+          className: "whitespace-nowrap",
+        })}
+      >
+        <ReceiptText />
+        {invoice.status === "draft"
+          ? `Send invoice ${invoice.number}`
+          : `Invoice ${invoice.number}`}
+      </Link>
+    )
+  }
+
+  async function create() {
+    setPending(true)
+    const result = await createInvoice(context.organizationId, load.id)
+    if ("error" in result) {
+      setPending(false)
+      toast.error(result.error)
+      return
+    }
+    router.push(`${invoicesBase}/${result.id}`)
+  }
+
+  return (
+    <Button
+      size="sm"
+      className="whitespace-nowrap"
+      disabled={pending}
+      onClick={() => void create()}
+    >
+      {pending ? <Loader2 className="animate-spin" /> : <FilePlus2 />}
+      Create invoice
+    </Button>
+  )
 }
 
 /** The driver's other scheduled loads at the same time as this one. */
@@ -408,6 +475,21 @@ export function LoadRowAction({
 }) {
   const [open, setOpen] = useState(false)
   const action = actionFor(load)
+
+  // Delivered, or TONU and still to be billed for it.
+  if (
+    !action &&
+    (load.status === "delivered" ||
+      (load.status === "tonu" && context.invoices[load.id]?.status !== "paid"))
+  ) {
+    return (
+      <InvoiceAction
+        load={load}
+        invoice={context.invoices[load.id]}
+        context={context}
+      />
+    )
+  }
 
   if (!action) {
     const view = viewOf(load)

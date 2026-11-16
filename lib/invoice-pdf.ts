@@ -22,6 +22,8 @@ export type InvoicePage = {
   terms_days: number
   from: {
     name: string
+    /** The company logo's public URL, if there is one. */
+    logo_url: string | null
     lines: string[]
     /** "MC 123456 · USDOT 1234567" and the like. */
     ids: string | null
@@ -149,7 +151,12 @@ function block(
   return y
 }
 
-function drawInvoicePage(doc: PDFDocument, fonts: Fonts, data: InvoicePage) {
+async function drawInvoicePage(
+  doc: PDFDocument,
+  fonts: Fonts,
+  data: InvoicePage,
+  logo: Uint8Array | null
+) {
   const page = doc.addPage(PAGE)
   const [width, height] = PAGE
   const right = width - MARGIN
@@ -167,6 +174,25 @@ function drawInvoicePage(doc: PDFDocument, fonts: Fonts, data: InvoicePage) {
     })
   }
 
+  // The logo, top left, fitted in 180×56; From goes under it.
+  let fromTop = y
+  if (logo) {
+    try {
+      const image = await doc.embedPng(logo)
+      const scale = Math.min(180 / image.width, 56 / image.height, 1)
+      const h = image.height * scale
+      page.drawImage(image, {
+        x: MARGIN,
+        y: y - h + 8,
+        width: image.width * scale,
+        height: h,
+      })
+      fromTop = y - h - 12
+    } catch {
+      // An unreadable logo is left off rather than failing the packet.
+    }
+  }
+
   // From, on the left; the invoice number and dates on the right.
   const fromBottom = block(
     page,
@@ -179,7 +205,7 @@ function drawInvoicePage(doc: PDFDocument, fonts: Fonts, data: InvoicePage) {
       ...(data.from.ids ? [data.from.ids] : []),
     ],
     MARGIN,
-    y,
+    fromTop,
     contentWidth / 2 - 12
   )
 
@@ -384,7 +410,9 @@ export const MERGEABLE_TYPES = ["application/pdf", "image/png", "image/jpeg"]
  */
 export async function buildInvoicePacket(
   data: InvoicePage,
-  files: PacketFile[]
+  files: PacketFile[],
+  /** The company logo as PNG, if there is one. */
+  logo: Uint8Array | null = null
 ) {
   const doc = await PDFDocument.create()
   doc.setTitle(`Invoice ${data.number}`)
@@ -395,7 +423,7 @@ export async function buildInvoicePacket(
     regular: await doc.embedFont(StandardFonts.Helvetica),
     bold: await doc.embedFont(StandardFonts.HelveticaBold),
   }
-  drawInvoicePage(doc, fonts, data)
+  await drawInvoicePage(doc, fonts, data, logo)
 
   const separate: PacketFile[] = []
   for (const file of files) {

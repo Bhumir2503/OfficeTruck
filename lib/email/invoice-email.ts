@@ -35,6 +35,11 @@ export type InvoiceEmail = {
   factoringName: string | null
   /** A note typed by whoever sent it. */
   message: string | null
+  /**
+   * Set for a reminder about an unpaid invoice: what's still owed, and how
+   * many days late it is (0 or less when it isn't due yet).
+   */
+  reminder?: { balance: string; daysLate: number }
   attachments: { filename: string; content: Uint8Array }[]
 }
 
@@ -49,8 +54,14 @@ export async function sendInvoiceEmail(email: InvoiceEmail) {
   }
 
   const company = escapeHtml(email.companyName)
-  const subject = `Invoice ${email.number} for load ${email.reference} from ${email.companyName}`
-  const intro = `Attached is invoice ${email.number} for load ${email.reference}, with the rate confirmation and signed delivery paperwork.`
+  const reminder = email.reminder
+  const late = reminder && reminder.daysLate > 0
+  const subject = `${reminder ? (late ? "Past due: " : "Reminder: ") : ""}Invoice ${email.number} for load ${email.reference} from ${email.companyName}`
+  const intro = reminder
+    ? late
+      ? `Invoice ${email.number} for load ${email.reference} was due ${email.dueOn} and is ${reminder.daysLate} ${reminder.daysLate === 1 ? "day" : "days"} past due, with ${reminder.balance} still owed. A copy is attached with the paperwork.`
+      : `A reminder that invoice ${email.number} for load ${email.reference} is due ${email.dueOn}, with ${reminder.balance} still owed. A copy is attached with the paperwork.`
+    : `Attached is invoice ${email.number} for load ${email.reference}, with the rate confirmation and signed delivery paperwork.`
   const payTo = email.factoringName
     ? `This invoice has been assigned to ${email.factoringName}. Please pay ${email.factoringName} directly.`
     : `Please include invoice ${email.number} with your payment.`
@@ -58,7 +69,10 @@ export async function sendInvoiceEmail(email: InvoiceEmail) {
   const rows: [string, string][] = [
     ["Invoice", String(email.number)],
     ["Load", email.reference],
-    ["Amount due", email.total],
+    ["Invoice total", email.total],
+    ...(reminder && reminder.balance !== email.total
+      ? ([["Still owed", reminder.balance]] as [string, string][])
+      : []),
     ["Due", email.dueOn],
   ]
 
@@ -72,7 +86,7 @@ export async function sendInvoiceEmail(email: InvoiceEmail) {
             <tr>
               <td style="padding:32px;">
                 <p style="margin:0 0 24px;font-size:18px;font-weight:700;color:#171717;">${company}</p>
-                <h1 style="margin:0 0 12px;font-size:22px;line-height:1.3;color:#171717;">Invoice ${email.number}</h1>
+                <h1 style="margin:0 0 12px;font-size:22px;line-height:1.3;color:#171717;">${reminder ? (late ? "Past due: " : "Reminder: ") : ""}Invoice ${email.number}</h1>
                 ${
                   email.message
                     ? `<p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#171717;white-space:pre-line;">${escapeHtml(email.message)}</p>`

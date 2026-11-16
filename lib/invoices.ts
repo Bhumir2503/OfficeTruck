@@ -35,6 +35,9 @@ export type Invoice = {
   payment_reference: string | null
   voided_at: string | null
   void_reason: string | null
+  /** Reminders emailed while it was unpaid. */
+  reminder_count: number
+  last_reminded_at: string | null
   created_at: string
 }
 
@@ -49,7 +52,7 @@ export type InvoicePayment = {
 }
 
 const INVOICE_COLUMNS =
-  "id, load_id, number, status, notes, terms_days, invoice_date, due_on, factored, lines, total, sent_at, sent_via, sent_to, paid_on, paid_amount, payment_reference, voided_at, void_reason, created_at"
+  "id, load_id, number, status, notes, terms_days, invoice_date, due_on, factored, lines, total, sent_at, sent_via, sent_to, paid_on, paid_amount, payment_reference, voided_at, void_reason, reminder_count, last_reminded_at, created_at"
 
 /** An invoice in the list, with the load it bills and its payments. */
 export type InvoiceListItem = Invoice & {
@@ -61,6 +64,7 @@ export type InvoiceListItem = Invoice & {
     rate: number
     status: LoadStatus
     delivery_start: string
+    broker: { quick_pay_fee_percent: number | null } | null
   }
 }
 
@@ -72,9 +76,29 @@ export async function getInvoices(
   const { data, error } = await supabase
     .from("invoices")
     .select(
-      `${INVOICE_COLUMNS}, load:loads!invoices_organization_id_load_id_fkey (id, reference, broker_name, rate, status, delivery_start), payments:invoice_payments (paid_on, amount)`
+      `${INVOICE_COLUMNS}, load:loads!invoices_organization_id_load_id_fkey (id, reference, broker_name, rate, status, delivery_start, broker:brokers!loads_broker_fkey (quick_pay_fee_percent)), payments:invoice_payments (paid_on, amount)`
     )
     .eq("organization_id", organizationId)
+    .order("number", { ascending: false })
+  if (error) {
+    throw error
+  }
+  return data as unknown as InvoiceListItem[]
+}
+
+/** A broker's invoices, newest number first, with their payments. */
+export async function getBrokerInvoices(
+  organizationId: string,
+  brokerId: string
+): Promise<InvoiceListItem[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("invoices")
+    .select(
+      `${INVOICE_COLUMNS}, load:loads!invoices_organization_id_load_id_fkey!inner (id, reference, broker_name, broker_id, rate, status, delivery_start, broker:brokers!loads_broker_fkey (quick_pay_fee_percent)), payments:invoice_payments (paid_on, amount)`
+    )
+    .eq("organization_id", organizationId)
+    .eq("load.broker_id", brokerId)
     .order("number", { ascending: false })
   if (error) {
     throw error
@@ -158,6 +182,24 @@ export async function getLoadsToInvoice(
 
 export type LoadInvoice = Pick<Invoice, "id" | "number" | "status" | "due_on">
 
+/** Every load's live (not void) invoice, by load id. */
+export async function getLoadInvoices(
+  organizationId: string
+): Promise<Record<string, LoadInvoice>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("invoices")
+    .select("id, load_id, number, status, due_on")
+    .eq("organization_id", organizationId)
+    .neq("status", "void")
+  if (error) {
+    throw error
+  }
+  return Object.fromEntries(
+    data.map(({ load_id, ...invoice }) => [load_id, invoice as LoadInvoice])
+  )
+}
+
 /** The live (not void) invoice on a load, if there is one. */
 export async function getLoadInvoice(
   organizationId: string,
@@ -188,6 +230,7 @@ export type InvoiceBroker = BillingBroker & {
   state: string | null
   postal_code: string | null
   noa_on_file: boolean
+  quick_pay_fee_percent: number | null
 }
 
 /** Everything an invoice page, the PDF and the email need. */
@@ -209,30 +252,43 @@ export async function getInvoiceDetail(organizationId: string, id: string) {
   }
   const invoice = data as unknown as Invoice
 
-  const [detail, documents, expenses, company, factoring, voided, payments] =
-    await Promise.all([
-      getLoadDetail(organizationId, invoice.load_id),
-      getLoadDocuments(organizationId, invoice.load_id),
-      getLoadExpenses(organizationId, invoice.load_id),
-      getOrganizationProfile(organizationId),
-      getFactoringCompany(organizationId),
-      // Earlier invoices for this load that were voided, for the history.
-      supabase
-        .from("invoices")
-        .select("id, number, voided_at, void_reason")
-        .eq("organization_id", organizationId)
-        .eq("load_id", invoice.load_id)
-        .eq("status", "void")
-        .neq("id", id)
-        .order("number"),
-      supabase
-        .from("invoice_payments")
-        .select("id, paid_on, amount, reference, created_at")
-        .eq("organization_id", organizationId)
-        .eq("invoice_id", id)
-        .order("paid_on")
-        .order("created_at"),
-    ])
+  const [
+    detail,
+    documents,
+    expenses,
+    company,
+    factoring,
+    voided,
+    payments,
+    branding,
+  ] = await Promise.all([
+    getLoadDetail(organizationId, invoice.load_id),
+    getLoadDocuments(organizationId, invoice.load_id),
+    getLoadExpenses(organizationId, invoice.load_id),
+    getOrganizationProfile(organizationId),
+    getFactoringCompany(organizationId),
+    // Earlier invoices for this load that were voided, for the history.
+    supabase
+      .from("invoices")
+      .select("id, number, voided_at, void_reason")
+      .eq("organization_id", organizationId)
+      .eq("load_id", invoice.load_id)
+      .eq("status", "void")
+      .neq("id", id)
+      .order("number"),
+    supabase
+      .from("invoice_payments")
+      .select("id, paid_on, amount, reference, created_at")
+      .eq("organization_id", organizationId)
+      .eq("invoice_id", id)
+      .order("paid_on")
+      .order("created_at"),
+    supabase
+      .from("organizations")
+      .select("logo_url")
+      .eq("id", organizationId)
+      .single(),
+  ])
   if (payments.error) {
     throw payments.error
   }
@@ -245,7 +301,7 @@ export async function getInvoiceDetail(organizationId: string, id: string) {
     const { data: row, error: brokerError } = await supabase
       .from("brokers")
       .select(
-        "id, legal_name, dba_name, mc_number, address_line1, address_line2, city, state, postal_code, invoice_method, billing_emails, portal_url, factored, noa_on_file"
+        "id, legal_name, dba_name, mc_number, address_line1, address_line2, city, state, postal_code, invoice_method, billing_emails, portal_url, factored, noa_on_file, quick_pay_fee_percent"
       )
       .eq("organization_id", organizationId)
       .eq("id", detail.load.broker_id)
@@ -261,6 +317,7 @@ export async function getInvoiceDetail(organizationId: string, id: string) {
     expenses,
     broker,
     company,
+    logoUrl: (branding.data?.logo_url as string | null) ?? null,
     factoring,
     payments: payments.data as InvoicePayment[],
     voided: (voided.data ?? []) as {

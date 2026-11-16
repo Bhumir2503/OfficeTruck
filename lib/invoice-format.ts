@@ -186,3 +186,62 @@ export function packetFileName(number: number, reference: string) {
   const safe = reference.replace(/[^A-Za-z0-9-]+/g, "-").replace(/^-|-$/g, "")
   return `Invoice-${number}${safe ? `-Load-${safe}` : ""}.pdf`
 }
+
+/** How a broker pays, worked out from their invoices. */
+export type BrokerPaymentStats = {
+  /** Average days from invoice date to paid, over paid invoices; null with none. */
+  avgDaysToPay: number | null
+  /** How many paid invoices the average is over. */
+  paidCount: number
+  open: { count: number; balance: number }
+  overdue: { count: number; balance: number }
+  lastPayment: { paid_on: string; amount: number } | null
+}
+
+export function brokerPaymentStats(
+  invoices: {
+    status: InvoiceStatus
+    invoice_date: string | null
+    due_on: string | null
+    paid_on: string | null
+    total: number | string | null
+    paid_amount: number | string | null
+    payments: { paid_on: string; amount: number | string }[]
+  }[],
+  today: string
+): BrokerPaymentStats {
+  const paid = invoices.filter(
+    (invoice) =>
+      invoice.status === "paid" && invoice.invoice_date && invoice.paid_on
+  )
+  const days = paid.map((invoice) =>
+    Math.max(0, daysBetween(invoice.invoice_date!, invoice.paid_on!))
+  )
+  const open = invoices.filter((invoice) => invoice.status === "sent")
+  const overdue = open.filter(
+    (invoice) => invoiceState(invoice, today) === "overdue"
+  )
+  const owed = (list: typeof invoices) =>
+    list.reduce(
+      (sum, invoice) => sum + balanceDue(invoice.total, invoice.paid_amount),
+      0
+    )
+  const payments = invoices
+    .filter((invoice) => invoice.status !== "void")
+    .flatMap((invoice) => invoice.payments)
+    .sort((a, b) =>
+      a.paid_on < b.paid_on ? 1 : a.paid_on > b.paid_on ? -1 : 0
+    )
+
+  return {
+    avgDaysToPay: days.length
+      ? Math.round(days.reduce((sum, day) => sum + day, 0) / days.length)
+      : null,
+    paidCount: days.length,
+    open: { count: open.length, balance: owed(open) },
+    overdue: { count: overdue.length, balance: owed(overdue) },
+    lastPayment: payments[0]
+      ? { paid_on: payments[0].paid_on, amount: Number(payments[0].amount) }
+      : null,
+  }
+}

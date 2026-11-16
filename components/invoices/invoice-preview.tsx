@@ -62,15 +62,25 @@ export function InvoicePreview({
       )}
       <div className="relative flex flex-col gap-8">
         <div className="flex flex-col-reverse gap-6 sm:flex-row sm:justify-between">
-          <Block
-            label="From"
-            name={page.from.name}
-            lines={[
-              ...page.from.lines,
-              ...(page.from.contact ? [page.from.contact] : []),
-              ...(page.from.ids ? [page.from.ids] : []),
-            ]}
-          />
+          <div className="flex min-w-0 flex-col gap-4">
+            {page.from.logo_url && (
+              // eslint-disable-next-line @next/next/no-img-element -- a public storage URL, shown as is
+              <img
+                src={page.from.logo_url}
+                alt={page.from.name}
+                className="h-auto max-h-14 w-auto max-w-[180px] object-contain object-left"
+              />
+            )}
+            <Block
+              label="From"
+              name={page.from.name}
+              lines={[
+                ...page.from.lines,
+                ...(page.from.contact ? [page.from.contact] : []),
+                ...(page.from.ids ? [page.from.ids] : []),
+              ]}
+            />
+          </div>
           <div className="sm:text-right">
             <p className="text-3xl font-bold tracking-tight text-[#007a55]">
               INVOICE

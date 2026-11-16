@@ -3,6 +3,7 @@ import { notFound } from "next/navigation"
 
 import { LoadsTable } from "@/components/loads/loads-table"
 import { getDriverOptions } from "@/lib/drivers"
+import { getLoadInvoices } from "@/lib/invoices"
 import { getLoads, getPaymentsDue } from "@/lib/loads"
 import { getOrganization } from "@/lib/organizations"
 import { createClient } from "@/lib/supabase/server"
@@ -20,7 +21,7 @@ export default async function LoadsPage({
 
   const base = `/org/${organization.slug}/loads`
   const supabase = await createClient()
-  const [loads, drivers, trucks, { data: org }] = await Promise.all([
+  const [loads, drivers, trucks, { data: org }, invoices] = await Promise.all([
     getLoads(organization.id),
     getDriverOptions(organization.id),
     getTruckOptions(organization.id),
@@ -29,6 +30,7 @@ export default async function LoadsPage({
       .select("share_rate_with_drivers")
       .eq("id", organization.id)
       .single(),
+    getLoadInvoices(organization.id),
   ])
   const payments = await getPaymentsDue(organization.id, loads)
 
@@ -45,6 +47,7 @@ export default async function LoadsPage({
             shareRate: org?.share_rate_with_drivers ?? false,
             orgBase: `/org/${organization.slug}`,
             loads,
+            invoices,
           }}
           base={base}
         />

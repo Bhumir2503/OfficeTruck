@@ -154,6 +154,15 @@ export default async function InvoicePage({
               packetHref={`${base}/${invoice.id}/packet`}
               invoicesBase={base}
               payments={detail.payments}
+              noaMissing={
+                !!detail.broker?.factored && !detail.broker.noa_on_file
+              }
+              brokerName={detail.broker?.legal_name ?? load.broker_name}
+              quickPayPercent={
+                detail.broker?.quick_pay_fee_percent != null
+                  ? Number(detail.broker.quick_pay_fee_percent)
+                  : null
+              }
               today={today}
             />
           </aside>

@@ -80,6 +80,7 @@ export function invoicePageData(
     terms_days: invoice.terms_days,
     from: {
       name: company.legal_name || company.name,
+      logo_url: detail.logoUrl,
       lines: addressLines({
         line1: company.address_line1,
         line2: company.address_line2,
@@ -171,6 +172,18 @@ async function downloadFiles(
   return downloaded
 }
 
+/** The company logo's bytes, or null when there's none or it can't be read. */
+async function downloadLogo(url: string | null) {
+  if (!url) return null
+  try {
+    const response = await fetch(url, { cache: "no-store" })
+    if (!response.ok) return null
+    return new Uint8Array(await response.arrayBuffer())
+  } catch {
+    return null
+  }
+}
+
 /**
  * The packet: the invoice page with the documents behind it, as one PDF,
  * plus any photos that couldn't go in it.
@@ -179,10 +192,14 @@ export async function invoicePacket(
   organizationId: string,
   detail: InvoiceDetail
 ) {
-  const files = await downloadFiles(organizationId, detail.load.id)
+  const [files, logo] = await Promise.all([
+    downloadFiles(organizationId, detail.load.id),
+    downloadLogo(detail.logoUrl),
+  ])
   const { pdf, separate } = await buildInvoicePacket(
     invoicePageData(detail),
-    files
+    files,
+    logo
   )
   return {
     fileName: packetFileName(detail.invoice.number, detail.load.reference),
