@@ -1,23 +1,15 @@
 import { notFound } from "next/navigation"
 
-import { ActionCards } from "@/components/dashboard/action-cards"
 import { AttentionList } from "@/components/dashboard/attention-list"
 import { MonthSnapshot } from "@/components/dashboard/month-snapshot"
 import { MovingLoads } from "@/components/dashboard/moving-loads"
 import { OnboardingDialog } from "@/components/onboarding-dialog"
 import { getAttention, getMovingLoads } from "@/lib/dashboard"
-import { countActions } from "@/lib/dashboard-format"
 import { balanceDue } from "@/lib/invoice-format"
 import { canManage, getOrganization } from "@/lib/organizations"
 import { inPeriod, totals } from "@/lib/report-format"
 import { getReportLoads } from "@/lib/reports"
 
-const longDate = new Intl.DateTimeFormat("en-US", {
-  weekday: "long",
-  month: "long",
-  day: "numeric",
-  timeZone: "UTC",
-})
 const monthName = new Intl.DateTimeFormat("en-US", {
   month: "long",
   timeZone: "UTC",
@@ -56,14 +48,6 @@ export default async function DashboardPage({
 
   return (
     <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-      <div className="px-4 lg:px-6">
-        <h2 className="text-2xl font-semibold tracking-tight">Today</h2>
-        <p className="text-sm text-muted-foreground">
-          {longDate.format(date)}. Everything that needs your action, in one
-          place.
-        </p>
-      </div>
-      <ActionCards base={base} counts={countActions(items)} />
       <div className="grid grid-cols-1 gap-4 px-4 md:gap-6 lg:px-6 @5xl/main:grid-cols-3">
         <div className="flex flex-col gap-4 md:gap-6 @5xl/main:col-span-2">
           <AttentionList items={items} base={base} />

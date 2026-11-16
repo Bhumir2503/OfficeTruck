@@ -1,11 +1,7 @@
 import { cn } from "cn"
-import { TruckIcon } from "lucide-react"
 import Link from "next/link"
 
-import {
-  SettingsCard,
-  SettingsEmptyState,
-} from "@/components/settings/settings-card"
+import { SettingsCard } from "@/components/settings/settings-card"
 import {
   Table,
   TableBody,
@@ -34,13 +30,12 @@ export function MovingLoads({
   return (
     <SettingsCard
       title="On the road"
-      description="Loads in transit or dispatched, then booked loads picking up in the next two days."
-      contentClassName={loads.length ? "@container px-0 pb-0" : undefined}
+      contentClassName={loads.length ? "@container px-0 pb-0" : "pt-1 pb-5"}
     >
       {loads.length === 0 ? (
-        <SettingsEmptyState icon={TruckIcon} title="Nothing moving">
-          Dispatched loads and pickups in the next two days show up here.
-        </SettingsEmptyState>
+        <p className="text-sm text-muted-foreground">
+          Nothing in transit or picking up in the next two days.
+        </p>
       ) : (
         <Table className={TABLE}>
           <TableHeader className="bg-muted/40">

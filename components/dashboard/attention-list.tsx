@@ -17,7 +17,6 @@ import { useState } from "react"
 import {
   SettingsCard,
   SettingsCardFooter,
-  SettingsEmptyState,
 } from "@/components/settings/settings-card"
 import { Button } from "@/components/ui/button"
 import type { AttentionItem, AttentionKind } from "@/lib/dashboard-format"
@@ -56,12 +55,12 @@ export function AttentionList({
       title="To do"
       description={
         items.length === 0
-          ? "Nothing needs you right now."
+          ? undefined
           : late > 0
-            ? `${items.length} ${items.length === 1 ? "thing" : "things"} to do, ${late} already late.`
-            : `${items.length} ${items.length === 1 ? "thing" : "things"} to do, most pressing first.`
+            ? `${items.length} open, ${late} late`
+            : `${items.length} open`
       }
-      contentClassName={items.length ? "px-0 pb-0" : undefined}
+      contentClassName={items.length ? "px-0 pb-0" : "pt-1 pb-5"}
       footer={
         items.length > FIRST && (
           <SettingsCardFooter
@@ -83,10 +82,10 @@ export function AttentionList({
       }
     >
       {items.length === 0 ? (
-        <SettingsEmptyState icon={CircleCheckBig} title="All caught up">
-          Late payments, missing paperwork, loads without a driver and expiring
-          documents show up here.
-        </SettingsEmptyState>
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <CircleCheckBig className="size-4 text-emerald-600" />
+          All caught up.
+        </p>
       ) : (
         <ul className="divide-y border-t">
           {shown.map((item) => {

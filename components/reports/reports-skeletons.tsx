@@ -19,9 +19,8 @@ export function ReportsSkeleton() {
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
       <div className="flex flex-col gap-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-1">
-            <h2 className="text-2xl font-semibold tracking-tight">Reports</h2>
             <p className="text-sm text-muted-foreground">
               Delivered loads by delivery date. Profit is before fixed costs
               like insurance and truck payments.
