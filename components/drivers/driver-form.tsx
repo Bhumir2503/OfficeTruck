@@ -152,12 +152,25 @@ export function DriverForm({
     }
   )
 
+  // When editing, every card gets its own save bar so you don't have to
+  // scroll to the bottom. They all submit the same form.
+  const cardFooter = driver ? (
+    <SettingsCardFooter
+      hint={formError && <span className="text-destructive">{formError}</span>}
+    >
+      <Button type="submit" size="sm" disabled={pending}>
+        {pending ? "Saving…" : "Save changes"} <CornerDownLeft />
+      </Button>
+    </SettingsCardFooter>
+  ) : undefined
+
   return (
     <form {...formProps} autoComplete="off">
       <fieldset disabled={pending} className="flex flex-col gap-6">
         <SettingsCard
           title={driver ? "Driver details" : "Driver"}
           description="Name and how to reach them."
+          footer={cardFooter}
           contentClassName="grid gap-5 sm:grid-cols-6"
         >
           <TextField
@@ -197,6 +210,7 @@ export function DriverForm({
           className="scroll-mt-6"
           title="Compliance"
           description="You'll see a warning 60, 30 and 7 days before each one is due."
+          footer={cardFooter}
           contentClassName="grid gap-5 sm:grid-cols-6"
         >
           <TextField
@@ -276,6 +290,7 @@ export function DriverForm({
         <SettingsCard
           title="Pay"
           description="Used to work out profit per load."
+          footer={cardFooter}
           contentClassName="grid gap-5 sm:grid-cols-6"
         >
           <PayFields

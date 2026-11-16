@@ -135,11 +135,6 @@ export default async function DriverPage({
                 </span>
               ))}
             </p>
-            {driver.notes && (
-              <p className="mt-2 max-w-2xl rounded-lg bg-muted px-4 py-3 text-sm whitespace-pre-wrap">
-                {driver.notes}
-              </p>
-            )}
           </div>
           {manager && driver.status === "active" && (
             <DriverStatusButton

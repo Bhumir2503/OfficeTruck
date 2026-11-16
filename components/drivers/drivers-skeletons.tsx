@@ -305,7 +305,7 @@ export function DriverDetailSkeleton() {
           <aside className="flex flex-col gap-4 lg:row-span-2">
             <section className="overflow-hidden rounded-xl border bg-card px-5 pt-4 pb-5 shadow-xs">
               <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                Next step
+                Needs attention
               </p>
               <Skeleton className="mt-2 h-5 w-40" />
               <Line className="mt-2 w-full" />

@@ -28,7 +28,7 @@ import { formatRate } from "@/lib/load-format"
 
 const miles = new Intl.NumberFormat("en-US")
 
-/** Where the next step's "Update dates" button and the photo links go. */
+/** Where the "Needs attention" "Update dates" button and the photo links go. */
 export const DRIVER_DATES_ID = "compliance-dates"
 export const DRIVER_DOCUMENTS_ID = "documents"
 
@@ -107,24 +107,13 @@ export function DriverSidePanel({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Next step */}
-      <section
-        className={cn(
-          "overflow-hidden rounded-xl border bg-card text-card-foreground shadow-xs",
-          step.tone === "danger" && "border-destructive/40",
-          step.tone === "warning" && "border-amber-500/40"
-        )}
-      >
+      {/* Needs attention */}
+      <section className="overflow-hidden rounded-xl border bg-card text-card-foreground shadow-xs">
         <div className="px-5 pt-4 pb-5">
           <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Next step
+            Needs attention
           </p>
-          <h4
-            className={cn(
-              "mt-1 text-lg font-semibold tracking-tight",
-              step.tone === "danger" && "text-destructive"
-            )}
-          >
+          <h4 className="mt-1 text-lg font-semibold tracking-tight">
             {step.title}
           </h4>
           <p className="mt-1 text-sm text-muted-foreground">{step.detail}</p>
