@@ -42,6 +42,7 @@ export function OrganizationSwitcher({
         >
           <OrganizationAvatar
             name={current.name}
+            iconUrl={current.icon_url}
             className="size-8 rounded-lg"
           />
           <span className="truncate text-base font-semibold">
@@ -67,6 +68,7 @@ export function OrganizationSwitcher({
               >
                 <OrganizationAvatar
                   name={org.name}
+                  iconUrl={org.icon_url}
                   className="size-6 rounded text-xs"
                 />
                 <span className="truncate">{org.name}</span>

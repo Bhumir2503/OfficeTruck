@@ -285,7 +285,7 @@ export async function getInvoiceDetail(organizationId: string, id: string) {
       .order("created_at"),
     supabase
       .from("organizations")
-      .select("logo_url")
+      .select("icon_url")
       .eq("id", organizationId)
       .single(),
   ])
@@ -317,7 +317,7 @@ export async function getInvoiceDetail(organizationId: string, id: string) {
     expenses,
     broker,
     company,
-    logoUrl: (branding.data?.logo_url as string | null) ?? null,
+    iconUrl: (branding.data?.icon_url as string | null) ?? null,
     factoring,
     payments: payments.data as InvoicePayment[],
     voided: (voided.data ?? []) as {

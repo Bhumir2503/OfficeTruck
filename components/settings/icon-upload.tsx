@@ -10,34 +10,37 @@ import {
   SettingsCardFooter,
 } from "@/components/settings/settings-card"
 import { Button } from "@/components/ui/button"
-import { LOGO_TYPES, logoFileError, toLogoImage } from "@/lib/logo"
+import { ICON_TYPES, iconFileError, toIconImage } from "@/lib/organization-icon"
 import { createClient } from "@/lib/supabase/client"
 
+// Named for logos when it was made; icons live in <organization id>/icon/.
 const BUCKET = "organization-logos"
 
 /**
- * The company logo, shown on invoices and the packet PDF. Changes save
- * straight away. Owners and admins can change it.
+ * The organization's icon: a square picture shown in the sidebar, the
+ * organization lists and at the top of invoices and the packet PDF.
+ * Changes save straight away. Owners and admins can change it.
  */
-export function LogoUpload({
+export function IconUpload({
   organizationId,
-  logoUrl,
+  iconUrl,
   canEdit,
 }: {
   organizationId: string
-  logoUrl: string | null
+  iconUrl: string | null
   canEdit: boolean
 }) {
+  const folder = `${organizationId}/icon`
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
-  const [url, setUrl] = useState(logoUrl)
+  const [url, setUrl] = useState(iconUrl)
   const [pending, setPending] = useState<"upload" | "remove" | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   async function saveUrl(next: string | null) {
     const { data, error } = await createClient()
       .from("organizations")
-      .update({ logo_url: next })
+      .update({ icon_url: next })
       .eq("id", organizationId)
       .select("id")
     if (error) {
@@ -45,16 +48,18 @@ export function LogoUpload({
     }
     // Row-level security skips the update for members.
     if (!data.length) {
-      throw new Error("Only owners and admins can change the logo.")
+      throw new Error("Only owners and admins can change the icon.")
     }
   }
 
-  /** Deletes the organization's stored logos, except `keep`. */
+  /** Deletes this picture's stored files, except `keep`. */
   async function removeOldFiles(keep?: string) {
     const storage = createClient().storage.from(BUCKET)
-    const { data } = await storage.list(organizationId)
+    const { data } = await storage.list(folder)
     const old = (data ?? [])
-      .map((file) => `${organizationId}/${file.name}`)
+      // Listing a folder also returns its subfolders, which have no id.
+      .filter((file) => file.id)
+      .map((file) => `${folder}/${file.name}`)
       .filter((path) => path !== keep)
     if (old.length) {
       await storage.remove(old)
@@ -62,7 +67,7 @@ export function LogoUpload({
   }
 
   async function upload(file: File) {
-    const problem = logoFileError(file)
+    const problem = iconFileError(file)
     if (problem) {
       setError(problem)
       return
@@ -70,9 +75,9 @@ export function LogoUpload({
     setPending("upload")
     setError(null)
     try {
-      const image = await toLogoImage(file)
-      // A new name each time, so browsers and the CDN never show a stale logo.
-      const path = `${organizationId}/${crypto.randomUUID()}.png`
+      const image = await toIconImage(file)
+      // A new name each time, so browsers and the CDN never show a stale picture.
+      const path = `${folder}/${crypto.randomUUID()}.png`
       const storage = createClient().storage.from(BUCKET)
       const { error } = await storage.upload(path, image, {
         contentType: "image/png",
@@ -84,13 +89,15 @@ export function LogoUpload({
       await saveUrl(next)
       await removeOldFiles(path)
       setUrl(next)
-      toast.success("Logo updated. It shows on your invoices.")
+      toast.success(
+        "Icon updated. It shows in the sidebar and on your invoices."
+      )
       router.refresh()
     } catch (caught) {
       setError(
         caught instanceof Error
           ? caught.message
-          : "The logo couldn't be uploaded. Try again."
+          : "The icon couldn't be uploaded. Try again."
       )
     } finally {
       setPending(null)
@@ -104,13 +111,13 @@ export function LogoUpload({
       await saveUrl(null)
       await removeOldFiles()
       setUrl(null)
-      toast.success("Logo removed.")
+      toast.success("Icon removed.")
       router.refresh()
     } catch (caught) {
       setError(
         caught instanceof Error
           ? caught.message
-          : "The logo couldn't be removed. Try again."
+          : "The icon couldn't be removed. Try again."
       )
     } finally {
       setPending(null)
@@ -119,17 +126,17 @@ export function LogoUpload({
 
   return (
     <SettingsCard
-      title="Logo"
-      description="Shown at the top of your invoices and invoice packets."
+      title="Icon"
+      description="A square picture of your company. Shown in the sidebar, your organization lists, and at the top of your invoices and invoice packets."
       footer={
         <SettingsCardFooter
           hint={
             error ? (
               <span className="text-destructive">{error}</span>
             ) : canEdit ? (
-              "PNG, JPG or WebP. A wide logo on a clear or white background works best."
+              "PNG, JPG or WebP. Cropped to a square from the middle."
             ) : (
-              "Only owners and admins can change the logo."
+              "Only owners and admins can change the icon."
             )
           }
         >
@@ -162,7 +169,7 @@ export function LogoUpload({
                 ) : (
                   <Upload />
                 )}
-                {url ? "Replace logo" : "Upload logo"}
+                {url ? "Replace icon" : "Upload icon"}
               </Button>
             </>
           )}
@@ -172,7 +179,7 @@ export function LogoUpload({
       <input
         ref={inputRef}
         type="file"
-        accept={LOGO_TYPES.join(",")}
+        accept={ICON_TYPES.join(",")}
         className="hidden"
         onChange={(event) => {
           const file = event.currentTarget.files?.[0]
@@ -186,13 +193,13 @@ export function LogoUpload({
           // eslint-disable-next-line @next/next/no-img-element -- a public storage URL, shown as is
           <img
             src={url}
-            alt="Company logo"
-            className="max-h-20 max-w-full object-contain"
+            alt="Organization icon"
+            className="size-20 rounded-lg object-cover"
           />
         ) : (
           <span className="flex items-center gap-2 text-sm text-neutral-500">
             <ImageIcon className="size-4" />
-            No logo yet
+            No icon yet
           </span>
         )}
       </div>

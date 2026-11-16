@@ -1,7 +1,6 @@
 import "server-only"
 
 import {
-  degrees,
   PDFDocument,
   type PDFFont,
   type PDFPage,
@@ -15,6 +14,7 @@ import { formatRate } from "@/lib/load-format"
 /** What goes on the invoice page. Plain text; the caller has worked it out. */
 export type InvoicePage = {
   number: number
+  /** A draft: the on-screen preview marks it, the PDF never does. */
   draft: boolean
   /** "YYYY-MM-DD" */
   invoice_date: string
@@ -22,8 +22,8 @@ export type InvoicePage = {
   terms_days: number
   from: {
     name: string
-    /** The company logo's public URL, if there is one. */
-    logo_url: string | null
+    /** The organization icon's public URL, if there is one. */
+    icon_url: string | null
     lines: string[]
     /** "MC 123456 · USDOT 1234567" and the like. */
     ids: string | null
@@ -155,7 +155,7 @@ async function drawInvoicePage(
   doc: PDFDocument,
   fonts: Fonts,
   data: InvoicePage,
-  logo: Uint8Array | null
+  icon: Uint8Array | null
 ) {
   const page = doc.addPage(PAGE)
   const [width, height] = PAGE
@@ -163,23 +163,15 @@ async function drawInvoicePage(
   const contentWidth = width - MARGIN * 2
   let y = height - MARGIN
 
-  if (data.draft) {
-    page.drawText("DRAFT", {
-      x: 150,
-      y: 330,
-      size: 120,
-      font: fonts.bold,
-      color: rgb(0.93, 0.93, 0.93),
-      rotate: degrees(35),
-    })
-  }
+  // No DRAFT mark here: the packet is downloaded to upload to a portal or
+  // send by hand before it's marked sent. Only the on-screen preview shows it.
 
-  // The logo, top left, fitted in 180×56; From goes under it.
+  // The icon, top left, 52pt square; From goes under it.
   let fromTop = y
-  if (logo) {
+  if (icon) {
     try {
-      const image = await doc.embedPng(logo)
-      const scale = Math.min(180 / image.width, 56 / image.height, 1)
+      const image = await doc.embedPng(icon)
+      const scale = Math.min(52 / image.width, 52 / image.height, 1)
       const h = image.height * scale
       page.drawImage(image, {
         x: MARGIN,
@@ -189,7 +181,7 @@ async function drawInvoicePage(
       })
       fromTop = y - h - 12
     } catch {
-      // An unreadable logo is left off rather than failing the packet.
+      // An unreadable icon is left off rather than failing the packet.
     }
   }
 
@@ -411,8 +403,8 @@ export const MERGEABLE_TYPES = ["application/pdf", "image/png", "image/jpeg"]
 export async function buildInvoicePacket(
   data: InvoicePage,
   files: PacketFile[],
-  /** The company logo as PNG, if there is one. */
-  logo: Uint8Array | null = null
+  /** The organization icon as PNG, if there is one. */
+  icon: Uint8Array | null = null
 ) {
   const doc = await PDFDocument.create()
   doc.setTitle(`Invoice ${data.number}`)
@@ -423,7 +415,7 @@ export async function buildInvoicePacket(
     regular: await doc.embedFont(StandardFonts.Helvetica),
     bold: await doc.embedFont(StandardFonts.HelveticaBold),
   }
-  await drawInvoicePage(doc, fonts, data, logo)
+  await drawInvoicePage(doc, fonts, data, icon)
 
   const separate: PacketFile[] = []
   for (const file of files) {

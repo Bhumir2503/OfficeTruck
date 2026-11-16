@@ -63,12 +63,12 @@ export function InvoicePreview({
       <div className="relative flex flex-col gap-8">
         <div className="flex flex-col-reverse gap-6 sm:flex-row sm:justify-between">
           <div className="flex min-w-0 flex-col gap-4">
-            {page.from.logo_url && (
+            {page.from.icon_url && (
               // eslint-disable-next-line @next/next/no-img-element -- a public storage URL, shown as is
               <img
-                src={page.from.logo_url}
+                src={page.from.icon_url}
                 alt={page.from.name}
-                className="h-auto max-h-14 w-auto max-w-[180px] object-contain object-left"
+                className="size-14 rounded-lg object-cover"
               />
             )}
             <Block
