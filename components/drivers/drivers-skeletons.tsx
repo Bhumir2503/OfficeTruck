@@ -225,31 +225,6 @@ export function NewDriverSkeleton() {
   )
 }
 
-function DetailSkeleton({
-  label,
-  width,
-  lines = 1,
-}: {
-  label: string
-  width: string
-  /** 2 for the yearly checks, which add a "Last done" line. */
-  lines?: 1 | 2
-}) {
-  return (
-    <div>
-      <div className="text-sm text-muted-foreground">{label}</div>
-      <div className="mt-1">
-        <Line className={width} />
-        {lines === 2 && (
-          <div className="mt-0.5">
-            <Line className="w-32" />
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
 /** A card-shaped photo slot with its label and buttons. */
 function PhotoSkeleton({ label }: { label: string }) {
   return (
@@ -265,57 +240,83 @@ function PhotoSkeleton({ label }: { label: string }) {
  * Most people opening a driver can edit them, so this shows the edit form
  * below the summary; members see the summary on its own.
  */
+/** A side-panel box: a title, then rows of label and value. */
+function PanelSkeleton({
+  title,
+  rows,
+  tall,
+}: {
+  title: string
+  rows: number
+  tall?: boolean
+}) {
+  return (
+    <section className="overflow-hidden rounded-xl border bg-card shadow-xs">
+      <div className="px-5 pt-4">
+        <h4 className="font-semibold">{title}</h4>
+      </div>
+      <div className="flex flex-col gap-3 px-5 pt-3 pb-4">
+        {Array.from({ length: rows }, (_, index) => (
+          <div key={index} className="flex items-center justify-between">
+            <Line className="w-28" />
+            <Line className="w-16" />
+          </div>
+        ))}
+        {tall && <Line className="h-3 w-48" />}
+      </div>
+    </section>
+  )
+}
+
 export function DriverDetailSkeleton() {
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
-      <div className="mx-auto flex max-w-5xl flex-col gap-4">
+      <div className="mx-auto flex max-w-7xl flex-col gap-6">
         {/* The "All drivers" link: a small ghost button. */}
         <Skeleton className="h-8 w-28 rounded-md" />
-        <section className="overflow-hidden rounded-xl border bg-card shadow-xs">
-          <div className="flex items-start justify-between gap-4 px-6 pt-5">
-            <div className="space-y-1">
-              <div className="flex h-6 items-center">
-                <Skeleton className="h-4 w-36" />
+        <div className="flex flex-col gap-1">
+          <div className="flex h-8 items-center gap-3">
+            <Skeleton className="h-6 w-44" />
+            <Skeleton className="h-6 w-14 rounded-full" />
+          </div>
+          <Line className="w-64" />
+        </div>
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
+          <div className="flex min-w-0 flex-col gap-6">
+            <SettingsCard
+              title="Loads"
+              description="Driver pay uses the rate locked on each load when they were assigned."
+              contentClassName="space-y-3"
+            >
+              <Skeleton className="h-9 w-full" />
+              <Skeleton className="h-9 w-full" />
+              <Skeleton className="h-9 w-full" />
+            </SettingsCard>
+            <SettingsCard
+              title="CDL and medical card"
+              description="Photos or PDFs, kept private to your organization."
+            >
+              <div className="grid gap-6 sm:grid-cols-2">
+                <PhotoSkeleton label="CDL" />
+                <PhotoSkeleton label="Medical card" />
               </div>
-              <Line className="h-3.5 w-28" />
-            </div>
-            <Skeleton className="h-6 w-16 rounded-full" />
+            </SettingsCard>
           </div>
-          <div className="grid gap-5 px-6 pt-5 pb-6 sm:grid-cols-2">
-            <DetailSkeleton label="CDL expires" width="w-24" />
-            <DetailSkeleton label="Medical card expires" width="w-24" />
-            <DetailSkeleton label="Annual review due" width="w-24" lines={2} />
-            <DetailSkeleton
-              label="Clearinghouse query due"
-              width="w-24"
-              lines={2}
-            />
-            <DetailSkeleton label="Pay" width="w-28" />
+          <aside className="flex flex-col gap-4 lg:row-span-2">
+            <section className="overflow-hidden rounded-xl border bg-card px-5 pt-4 pb-5 shadow-xs">
+              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                Next step
+              </p>
+              <Skeleton className="mt-2 h-5 w-40" />
+              <Line className="mt-2 w-full" />
+              <Skeleton className="mt-4 h-10 w-full rounded-md" />
+            </section>
+            <PanelSkeleton title="Compliance" rows={6} />
+            <PanelSkeleton title="Pay" rows={4} tall />
+          </aside>
+          <div className="min-w-0">
+            <DriverFormSkeleton editing />
           </div>
-          <div className="flex min-h-14 flex-col gap-3 border-t bg-muted/40 px-6 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <Skeleton className="h-4 w-80 max-w-full bg-foreground/10" />
-            <Skeleton className="h-8 w-32 rounded-md bg-foreground/10" />
-          </div>
-        </section>
-        <SettingsCard
-          title="CDL and medical card"
-          description="Photos or PDFs, kept private to your organization."
-        >
-          <div className="grid gap-6 sm:grid-cols-2">
-            <PhotoSkeleton label="CDL" />
-            <PhotoSkeleton label="Medical card" />
-          </div>
-        </SettingsCard>
-        <SettingsCard
-          title="Loads"
-          description="Driver pay uses their current rate."
-          contentClassName="space-y-3"
-        >
-          <Skeleton className="h-9 w-full" />
-          <Skeleton className="h-9 w-full" />
-        </SettingsCard>
-        <div className="mt-2">
-          <DriverFormSkeleton editing />
         </div>
       </div>
     </div>
