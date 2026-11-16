@@ -3,6 +3,7 @@ import { AlertTriangle, Clock } from "lucide-react"
 
 import {
   formatDate,
+  inDays,
   needsAction,
   type ComplianceItem,
 } from "@/lib/driver-format"
@@ -38,10 +39,6 @@ const TONES = {
   urgent: "bg-orange-500/15 text-orange-700 dark:text-orange-300",
   soon: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
   upcoming: "bg-muted text-foreground",
-}
-
-function inDays(days: number) {
-  return days === 0 ? "today" : `in ${days} ${days === 1 ? "day" : "days"}`
 }
 
 /**

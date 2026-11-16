@@ -192,6 +192,9 @@ export function DriverForm({
         </SettingsCard>
 
         <SettingsCard
+          // The driver page's "Update dates" button jumps here.
+          id="compliance-dates"
+          className="scroll-mt-6"
           title="Compliance"
           description="You'll see a warning 60, 30 and 7 days before each one is due."
           contentClassName="grid gap-5 sm:grid-cols-6"

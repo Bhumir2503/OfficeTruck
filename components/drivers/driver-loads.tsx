@@ -19,6 +19,7 @@ import { overlapping, SCHEDULED_STATUSES } from "@/lib/dispatch-format"
 import { loadDriverPay } from "@/lib/driver-format"
 import type { DriverLoad } from "@/lib/drivers"
 import { formatRate, formatStopDate } from "@/lib/load-format"
+import { isFallenThrough } from "@/lib/schemas/load"
 
 const miles = new Intl.NumberFormat("en-US")
 
@@ -57,8 +58,9 @@ export function DriverLoads({
       .filter(([, others]) => others.length > 0)
   )
 
-  // Cancelled loads stay in the list but don't count towards the totals.
-  const counted = loads.filter((load) => load.status !== "cancelled")
+  // Cancelled and TONU loads stay in the list but weren't driven, so they
+  // don't count towards the totals.
+  const counted = loads.filter((load) => !isFallenThrough(load.status))
   const totalMiles = counted.reduce((sum, load) => sum + (load.miles ?? 0), 0)
   const revenue = counted.reduce((sum, load) => sum + Number(load.rate), 0)
   const pays = counted.map((load) => loadDriverPay(load))
@@ -88,7 +90,9 @@ export function DriverLoads({
           <TableRow>
             <TableHead>Load</TableHead>
             <TableHead className="hidden sm:table-cell">Pickup</TableHead>
-            <TableHead className="text-right">Miles</TableHead>
+            <TableHead className="hidden text-right sm:table-cell">
+              Miles
+            </TableHead>
             <TableHead className="text-right">Revenue</TableHead>
             <TableHead className="hidden text-right sm:table-cell">
               Driver pay
@@ -98,7 +102,7 @@ export function DriverLoads({
         <TableBody>
           {loads.map((load) => {
             const pay = loadDriverPay(load)
-            const cancelled = load.status === "cancelled"
+            const cancelled = isFallenThrough(load.status)
             return (
               <TableRow key={load.id}>
                 <TableCell className="max-w-64 py-3">
@@ -132,7 +136,7 @@ export function DriverLoads({
                 <TableCell className="hidden text-muted-foreground sm:table-cell">
                   {formatStopDate(load.pickup_start)}
                 </TableCell>
-                <TableCell className="text-right tabular-nums">
+                <TableCell className="hidden text-right tabular-nums sm:table-cell">
                   {load.miles === null ? (
                     <span className="text-muted-foreground">—</span>
                   ) : (

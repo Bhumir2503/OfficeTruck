@@ -26,6 +26,7 @@ import {
 import { createInvoice } from "@/app/org/[slug]/invoices/actions"
 import { AssignDialog } from "@/components/loads/assign-dialog"
 import { DocumentLink } from "@/components/loads/document-viewer"
+import { MoneyLine, Panel } from "@/components/side-panel"
 import { Button } from "@/components/ui/button"
 import type { LoadDispatch } from "@/lib/dispatch"
 import { formatInvoiceDate, INVOICE_STATE_LABELS } from "@/lib/invoice-format"
@@ -215,58 +216,6 @@ function nextStep(
         action: null,
       }
   }
-}
-
-function Panel({
-  title,
-  aside,
-  children,
-  className,
-}: {
-  title: string
-  aside?: React.ReactNode
-  children: React.ReactNode
-  className?: string
-}) {
-  return (
-    <section
-      className={cn(
-        "overflow-hidden rounded-xl border bg-card text-card-foreground shadow-xs",
-        className
-      )}
-    >
-      <div className="flex items-center justify-between gap-3 px-5 pt-4">
-        <h4 className="font-semibold">{title}</h4>
-        {aside}
-      </div>
-      <div className="px-5 pt-3 pb-4">{children}</div>
-    </section>
-  )
-}
-
-function MoneyLine({
-  label,
-  children,
-  strong,
-  muted,
-}: {
-  label: string
-  children: React.ReactNode
-  strong?: boolean
-  muted?: boolean
-}) {
-  return (
-    <div
-      className={cn(
-        "flex items-baseline justify-between gap-3 text-sm",
-        strong && "text-base font-semibold",
-        muted && "text-muted-foreground"
-      )}
-    >
-      <dt>{label}</dt>
-      <dd className="text-right tabular-nums">{children}</dd>
-    </div>
-  )
 }
 
 /**

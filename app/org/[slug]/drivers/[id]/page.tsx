@@ -3,23 +3,20 @@ import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 
-import {
-  DriverStatusBadge,
-  ExpiryDate,
-} from "@/components/drivers/driver-badges"
+import { DriverStatusBadge } from "@/components/drivers/driver-badges"
 import { DriverForm } from "@/components/drivers/driver-form"
 import { DriverLoads } from "@/components/drivers/driver-loads"
 import { DriverPhotos } from "@/components/drivers/driver-photos"
 import { DriverRateNotice } from "@/components/drivers/driver-rate-notice"
-import { DriverStatusButton } from "@/components/drivers/driver-status-button"
 import {
-  SettingsCard,
-  SettingsCardFooter,
-} from "@/components/settings/settings-card"
+  DRIVER_DOCUMENTS_ID,
+  DriverSidePanel,
+} from "@/components/drivers/driver-side-panel"
+import { DriverStatusButton } from "@/components/drivers/driver-status-button"
+import { SettingsCard } from "@/components/settings/settings-card"
 import { buttonVariants } from "@/components/ui/button"
 import {
   complianceItems,
-  formatDate,
   formatPay,
   today as getToday,
 } from "@/lib/driver-format"
@@ -43,25 +40,6 @@ export async function generateMetadata({
   return { title: driver ? driver.full_name : "Driver not found" }
 }
 
-function Detail({
-  label,
-  className,
-  children,
-}: {
-  label: string
-  className?: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className={className}>
-      <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="mt-1 text-sm font-medium whitespace-pre-wrap">
-        {children}
-      </dd>
-    </div>
-  )
-}
-
 export default async function DriverPage({
   params,
 }: PageProps<"/org/[slug]/drivers/[id]">) {
@@ -73,8 +51,7 @@ export default async function DriverPage({
   const base = `/org/${organization.slug}/drivers`
   const manager = canManage(organization)
   const today = getToday()
-  const warn = driver.status === "active"
-  const none = <span className="text-muted-foreground">Not set</span>
+  const loadsBase = `/org/${organization.slug}/loads`
   const items = complianceItems(driver, today)
   const currentRate = formatPay(driver.pay_type, driver.pay_rate)
   const [loads, photoUrls] = await Promise.all([
@@ -95,9 +72,29 @@ export default async function DriverPage({
         formatPay(load.driver_pay_type, load.driver_pay_rate) ?? "no rate",
     }))
 
+  const contact = [
+    driver.cdl_number
+      ? `CDL ${driver.cdl_number}${driver.cdl_state ? ` · ${driver.cdl_state}` : ""}`
+      : "No CDL on file",
+    driver.phone && (
+      <a key="phone" href={`tel:${driver.phone}`} className="hover:underline">
+        {formatPhone(driver.phone)}
+      </a>
+    ),
+    driver.email && (
+      <a
+        key="email"
+        href={`mailto:${driver.email}`}
+        className="hover:underline"
+      >
+        {driver.email}
+      </a>
+    ),
+  ].filter(Boolean)
+
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
-      <div className="mx-auto flex max-w-5xl flex-col gap-4">
+      <div className="mx-auto flex max-w-7xl flex-col gap-6">
         <Link
           href={base}
           className={buttonVariants({
@@ -109,125 +106,101 @@ export default async function DriverPage({
           <ArrowLeft />
           All drivers
         </Link>
-        <SettingsCard
-          title={driver.full_name}
-          description={
-            driver.cdl_number
-              ? `CDL ${driver.cdl_number}${driver.cdl_state ? ` · ${driver.cdl_state}` : ""}`
-              : "No CDL on file"
-          }
-          action={<DriverStatusBadge status={driver.status} />}
-          footer={
-            manager && (
-              <SettingsCardFooter
-                hint={
-                  driver.status === "active"
-                    ? "Inactive drivers stay on record but drop off the active list."
-                    : "This driver is inactive. Mark them active to put them back on the list."
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="text-2xl font-semibold tracking-tight">
+                {driver.full_name}
+              </h2>
+              <DriverStatusBadge
+                status={driver.status}
+                className={
+                  driver.status === "active" ? "bg-emerald-500/15" : undefined
                 }
-              >
-                <DriverStatusButton
-                  organizationId={organization.id}
-                  driver={driver}
-                />
-              </SettingsCardFooter>
-            )
-          }
-        >
-          <dl className="grid gap-5 sm:grid-cols-2">
-            {items.map((item) => (
-              <Detail
-                key={item.key}
-                label={
-                  item.kind === "expires"
-                    ? `${item.label} expires`
-                    : `${item.label} due`
-                }
-              >
-                <ExpiryDate item={item} warn={warn} />
-                {item.kind === "due" && (
-                  <span className="mt-0.5 block font-normal text-muted-foreground">
-                    {item.last
-                      ? `Last done ${formatDate(item.last)}`
-                      : "Not done yet"}
-                  </span>
-                )}
-              </Detail>
-            ))}
-            <Detail label="Pay">
-              {formatPay(driver.pay_type, driver.pay_rate) ?? none}
-            </Detail>
-            {!manager && (
-              <>
-                <Detail label="Phone">
-                  {driver.phone ? (
-                    <a href={`tel:${driver.phone}`} className="hover:underline">
-                      {formatPhone(driver.phone)}
-                    </a>
-                  ) : (
-                    none
-                  )}
-                </Detail>
-                <Detail label="Email">
-                  {driver.email ? (
-                    <a
-                      href={`mailto:${driver.email}`}
-                      className="hover:underline"
-                    >
-                      {driver.email}
-                    </a>
-                  ) : (
-                    none
-                  )}
-                </Detail>
-                <Detail label="Notes" className="sm:col-span-2">
-                  {driver.notes ?? none}
-                </Detail>
-              </>
+              />
+            </div>
+            <p className="flex flex-wrap gap-x-1.5 text-sm text-muted-foreground">
+              {contact.map((part, index) => (
+                <span key={index}>
+                  {index > 0 && <span aria-hidden>· </span>}
+                  {part}
+                </span>
+              ))}
+            </p>
+            {driver.notes && (
+              <p className="mt-2 max-w-2xl rounded-lg bg-muted px-4 py-3 text-sm whitespace-pre-wrap">
+                {driver.notes}
+              </p>
             )}
-          </dl>
-        </SettingsCard>
-        {manager && staleLoads.length > 0 && currentRate && (
-          <DriverRateNotice
-            organizationId={organization.id}
-            driverId={driver.id}
-            driverName={driver.full_name}
-            currentRate={currentRate}
-            stale={staleLoads}
-          />
-        )}
-        <SettingsCard
-          title="CDL and medical card"
-          description={
-            manager
-              ? "Photos or PDFs, kept private to your organization."
-              : "Kept private to your organization."
-          }
-        >
-          <DriverPhotos
-            organizationId={organization.id}
-            driverId={driver.id}
-            urls={photoUrls}
-            paths={{
-              cdl: driver.cdl_photo_path,
-              medical_card: driver.medical_card_photo_path,
-            }}
-            canManage={manager}
-          />
-        </SettingsCard>
-        <DriverLoads
-          loads={loads}
-          loadsBase={`/org/${organization.slug}/loads`}
-        />
-        {manager && (
-          <div className="mt-2">
-            <DriverForm
-              organizationId={organization.id}
-              base={base}
-              driver={driver}
-            />
           </div>
-        )}
+          {manager && driver.status === "active" && (
+            <DriverStatusButton
+              organizationId={organization.id}
+              driver={{
+                id: driver.id,
+                full_name: driver.full_name,
+                status: driver.status,
+              }}
+            />
+          )}
+        </div>
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
+          <div className="flex min-w-0 flex-col gap-6">
+            {manager && staleLoads.length > 0 && currentRate && (
+              <DriverRateNotice
+                organizationId={organization.id}
+                driverId={driver.id}
+                driverName={driver.full_name}
+                currentRate={currentRate}
+                stale={staleLoads}
+              />
+            )}
+            <DriverLoads loads={loads} loadsBase={loadsBase} />
+            <SettingsCard
+              id={DRIVER_DOCUMENTS_ID}
+              className="scroll-mt-6"
+              title="CDL and medical card"
+              description={
+                manager
+                  ? "Photos or PDFs, kept private to your organization."
+                  : "Kept private to your organization."
+              }
+            >
+              <DriverPhotos
+                organizationId={organization.id}
+                driverId={driver.id}
+                urls={photoUrls}
+                paths={{
+                  cdl: driver.cdl_photo_path,
+                  medical_card: driver.medical_card_photo_path,
+                }}
+                canManage={manager}
+              />
+            </SettingsCard>
+          </div>
+          {/* Beside the cards, what's next stays in view; on a phone it
+              comes after them. */}
+          <aside className="flex flex-col gap-6 lg:sticky lg:top-6 lg:row-span-2 lg:max-h-[calc(100svh-3rem)] lg:overflow-y-auto">
+            <DriverSidePanel
+              organizationId={organization.id}
+              driver={driver}
+              items={items}
+              loads={loads}
+              manager={manager}
+              loadsBase={loadsBase}
+              today={today}
+            />
+          </aside>
+          {manager && (
+            <div className="min-w-0">
+              <DriverForm
+                organizationId={organization.id}
+                base={base}
+                driver={driver}
+              />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
