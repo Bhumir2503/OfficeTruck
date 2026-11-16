@@ -8,6 +8,7 @@ import {
   DriverStatusBadge,
   ExpiryBadge,
 } from "@/components/drivers/driver-badges"
+import { PayStatusBadge } from "@/components/drivers/driver-pay"
 import {
   SettingsCard,
   SettingsCardFooter,
@@ -33,6 +34,7 @@ import {
 } from "@/lib/driver-format"
 import type { Driver } from "@/lib/drivers"
 import { initials } from "@/lib/initials"
+import { formatRate } from "@/lib/load-format"
 import { formatPhone } from "@/lib/phone"
 import {
   DRIVER_STATUSES,
@@ -97,6 +99,7 @@ export function DriversTable({
   base,
   today,
   canManage,
+  pay,
 }: {
   drivers: Driver[]
   /** /org/<slug>/drivers */
@@ -104,6 +107,16 @@ export function DriversTable({
   /** "YYYY-MM-DD", from the server so both renders warn about the same dates. */
   today: string
   canManage: boolean
+  /** Last week's pay status by driver, for owners and admins; null otherwise. */
+  pay: {
+    week: string
+    /** "Nov 9 – 15, 2026" */
+    label: string
+    byDriver: Record<
+      string,
+      { status: "paid" | "to_pay" | "none"; net: number }
+    >
+  } | null
 }) {
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState<Filter>("active")
@@ -237,8 +250,13 @@ export function DriversTable({
         <TableHeader className="bg-muted/40">
           <TableRow>
             <TableHead>Driver</TableHead>
-            <TableHead className="hidden lg:table-cell">CDL</TableHead>
-            <TableHead className="hidden md:table-cell">Pay</TableHead>
+            <TableHead className="hidden 2xl:table-cell">CDL</TableHead>
+            <TableHead className="hidden xl:table-cell">Pay rate</TableHead>
+            {pay && (
+              <TableHead className="hidden md:table-cell" title={pay.label}>
+                Paid for {pay.label.replace(/, \d{4}$/, "")}
+              </TableHead>
+            )}
             <TableHead className="hidden sm:table-cell">Compliance</TableHead>
             <TableHead className="w-24">Status</TableHead>
           </TableRow>
@@ -247,7 +265,7 @@ export function DriversTable({
           {filtered.length === 0 && (
             <TableRow>
               <TableCell
-                colSpan={5}
+                colSpan={pay ? 6 : 5}
                 className="h-24 text-center text-muted-foreground"
               >
                 {search.trim() === "" && filter !== "all"
@@ -290,7 +308,7 @@ export function DriversTable({
                     </div>
                   </div>
                 </TableCell>
-                <TableCell className="hidden text-muted-foreground lg:table-cell">
+                <TableCell className="hidden text-muted-foreground 2xl:table-cell">
                   {driver.cdl_number ? (
                     <>
                       <span className="text-foreground">
@@ -302,11 +320,32 @@ export function DriversTable({
                     "Not set"
                   )}
                 </TableCell>
-                <TableCell className="hidden text-sm md:table-cell">
+                <TableCell className="hidden text-sm xl:table-cell">
                   {formatPay(driver.pay_type, driver.pay_rate) ?? (
                     <span className="text-muted-foreground">Not set</span>
                   )}
                 </TableCell>
+                {pay && (
+                  <TableCell className="hidden md:table-cell">
+                    {(() => {
+                      const entry = pay.byDriver[driver.id]
+                      if (!entry || entry.status === "none") {
+                        return <span className="text-muted-foreground">—</span>
+                      }
+                      return (
+                        <Link
+                          href={`${base}/${driver.id}?week=${pay.week}#pay`}
+                          className="flex items-center gap-2 hover:underline"
+                        >
+                          <PayStatusBadge status={entry.status} />
+                          <span className="text-sm tabular-nums">
+                            {formatRate(entry.net)}
+                          </span>
+                        </Link>
+                      )
+                    })()}
+                  </TableCell>
+                )}
                 <TableCell className="hidden max-w-80 text-sm whitespace-normal sm:table-cell">
                   <ComplianceSummary items={items} status={driver.status} />
                 </TableCell>

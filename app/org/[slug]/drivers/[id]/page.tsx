@@ -6,6 +6,7 @@ import { notFound } from "next/navigation"
 import { DriverStatusBadge } from "@/components/drivers/driver-badges"
 import { DriverForm } from "@/components/drivers/driver-form"
 import { DriverLoads } from "@/components/drivers/driver-loads"
+import { DriverPay } from "@/components/drivers/driver-pay"
 import { DriverPhotos } from "@/components/drivers/driver-photos"
 import { DriverRateNotice } from "@/components/drivers/driver-rate-notice"
 import {
@@ -23,6 +24,8 @@ import {
 import { getDriver, getDriverLoads, getDriverPhotoUrls } from "@/lib/drivers"
 import { canManage, getOrganization } from "@/lib/organizations"
 import { formatPhone } from "@/lib/phone"
+import { parseWeek, shiftWeek, weekOf } from "@/lib/settlement-format"
+import { getSettlement } from "@/lib/settlements"
 
 async function driverFor(
   params: PageProps<"/org/[slug]/drivers/[id]">["params"]
@@ -42,6 +45,7 @@ export async function generateMetadata({
 
 export default async function DriverPage({
   params,
+  searchParams,
 }: PageProps<"/org/[slug]/drivers/[id]">) {
   const { organization, driver } = await driverFor(params)
   if (!organization || !driver) {
@@ -54,9 +58,13 @@ export default async function DriverPage({
   const loadsBase = `/org/${organization.slug}/loads`
   const items = complianceItems(driver, today)
   const currentRate = formatPay(driver.pay_type, driver.pay_rate)
-  const [loads, photoUrls] = await Promise.all([
+  // Pay shows last week by default: the week payroll usually covers.
+  const thisWeek = weekOf(today)
+  const week = parseWeek((await searchParams).week) ?? shiftWeek(thisWeek, -1)
+  const [loads, photoUrls, settlement] = await Promise.all([
     getDriverLoads(organization.id, driver.id),
     getDriverPhotoUrls(driver),
+    manager ? getSettlement(organization.id, driver.id, week) : null,
   ])
   // Booked loads still locked at a rate other than the driver's current one.
   const staleLoads = loads
@@ -156,6 +164,20 @@ export default async function DriverPage({
               />
             )}
             <DriverLoads loads={loads} loadsBase={loadsBase} />
+            {settlement && (
+              <DriverPay
+                organizationId={organization.id}
+                settlement={settlement}
+                today={today}
+                loadsBase={loadsBase}
+                prevHref={`${base}/${driver.id}?week=${shiftWeek(week, -1)}#pay`}
+                nextHref={
+                  week < thisWeek
+                    ? `${base}/${driver.id}?week=${shiftWeek(week, 1)}#pay`
+                    : null
+                }
+              />
+            )}
             <SettingsCard
               id={DRIVER_DOCUMENTS_ID}
               className="scroll-mt-6"
