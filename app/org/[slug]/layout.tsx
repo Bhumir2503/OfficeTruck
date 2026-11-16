@@ -4,7 +4,8 @@ import { notFound, redirect } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
-import { getActionCounts, totalActions } from "@/lib/action-counts"
+import { getActionCounts } from "@/lib/dashboard"
+import { totalActions } from "@/lib/dashboard-format"
 import {
   getMyOrganizations,
   getOrganization,
