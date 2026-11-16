@@ -9,7 +9,7 @@ import {
   addBrokerDomain,
   lookupMc,
   type McLookup,
-} from "@/app/org/[slug]/brokers/actions"
+} from "@/app/org/[slug]/customers/actions"
 import { FlagBadge, FmcsaBadge } from "@/components/brokers/broker-badges"
 import { SenderWarning } from "@/components/brokers/sender-warning"
 import {
@@ -125,7 +125,7 @@ function BrokerSummary({
       </dl>
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <Wallet className="size-3.5" />
-        Payment history is on the broker&apos;s page.
+        Payment history is on the customer&apos;s page.
       </p>
     </div>
   )
@@ -290,7 +290,7 @@ export function BrokerFields({
 }: {
   organizationId: string
   brokers: BrokerOption[]
-  /** /org/<slug>/brokers */
+  /** /org/<slug>/customers */
   brokersHref: string
   /** Your factoring company, for factored brokers. */
   factoringName: string | null
@@ -463,7 +463,7 @@ export function BrokerFields({
         />
       )}
       <Field data-invalid={!!nameErrors} className="sm:col-span-3">
-        <FieldLabel htmlFor="load-broker-id">Broker</FieldLabel>
+        <FieldLabel htmlFor="load-broker-id">Customer</FieldLabel>
         {brokers.length > 0 && (
           <Select
             value={choice}

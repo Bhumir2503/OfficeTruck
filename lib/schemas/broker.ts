@@ -12,6 +12,14 @@ export const INVOICE_METHOD_LABELS: Record<InvoiceMethod, string> = {
   portal: "Their portal (manual upload)",
 }
 
+export const CUSTOMER_KINDS = ["broker", "shipper"] as const
+export type CustomerKind = (typeof CUSTOMER_KINDS)[number]
+
+export const CUSTOMER_KIND_LABELS: Record<CustomerKind, string> = {
+  broker: "Broker",
+  shipper: "Direct shipper",
+}
+
 export const CONTACT_ROLES = ["dispatch", "billing", "accounting"] as const
 export type ContactRole = (typeof CONTACT_ROLES)[number]
 
@@ -95,10 +103,11 @@ export const domain = z
 
 export const brokerSchema = z
   .object({
+    kind: z.enum(CUSTOMER_KINDS, "Choose broker or direct shipper."),
     legal_name: z
       .string()
       .trim()
-      .min(1, "Enter the broker's legal name.")
+      .min(1, "Enter the legal name.")
       .max(200, "Must be 200 characters or fewer."),
     dba_name: optional(max(200)),
     mc_number: docketNumber("MC number", cleanMcNumber),
@@ -169,10 +178,13 @@ export const brokerSchema = z
       })
     }
   })
-  // The notice of assignment only matters when the loads are factored.
-  .transform((broker) =>
-    broker.factored ? broker : { ...broker, noa_on_file: false }
-  )
+  // The notice of assignment only matters when the loads are factored, and
+  // a direct shipper has no broker authority, so no MC number.
+  .transform((broker) => ({
+    ...broker,
+    noa_on_file: broker.factored && broker.noa_on_file,
+    mc_number: broker.kind === "shipper" ? null : broker.mc_number,
+  }))
 
 export type BrokerInput = z.input<typeof brokerSchema>
 export type BrokerValues = z.output<typeof brokerSchema>

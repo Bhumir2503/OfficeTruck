@@ -5,11 +5,11 @@ import { BrokerForm } from "@/components/brokers/broker-form"
 import { getFactoringCompany } from "@/lib/factoring"
 import { getOrganization } from "@/lib/organizations"
 
-export const metadata: Metadata = { title: "Add broker" }
+export const metadata: Metadata = { title: "Add customer" }
 
 export default async function NewBrokerPage({
   params,
-}: PageProps<"/org/[slug]/brokers/new">) {
+}: PageProps<"/org/[slug]/customers/new">) {
   const organization = await getOrganization((await params).slug)
   if (!organization) {
     notFound()
@@ -20,7 +20,7 @@ export default async function NewBrokerPage({
       <div className="mx-auto max-w-5xl">
         <BrokerForm
           organizationId={organization.id}
-          base={`/org/${organization.slug}/brokers`}
+          base={`/org/${organization.slug}/customers`}
           factoring={await getFactoringCompany(organization.id)}
           factoringHref={`/org/${organization.slug}/settings/factoring`}
         />

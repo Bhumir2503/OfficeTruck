@@ -43,11 +43,11 @@ export const ORG_NAV: { label?: string; items: OrgSection[] }[] = [
           "Every load from rate confirmation to paid, filtered by booked, in transit, delivered, invoiced and paid. Uploading a rate confirmation starts a new load here.",
       },
       {
-        title: "Brokers",
-        path: "brokers",
+        title: "Customers",
+        path: "customers",
         icon: HandshakeIcon,
         description:
-          "Each broker's contact details, FMCSA authority check, payment history and average days to pay.",
+          "The brokers and direct shippers you haul for: contacts, billing, FMCSA checks for brokers, payment history and average days to pay.",
       },
       {
         title: "Invoices",

@@ -106,7 +106,7 @@ export function NewLoadForm({
   /** /org/<slug>/equipment */
   trucksHref: string
   brokers: BrokerOption[]
-  /** /org/<slug>/brokers */
+  /** /org/<slug>/customers */
   brokersHref: string
   factoringName: string | null
 }) {
@@ -342,7 +342,7 @@ export function NewLoadForm({
             </SettingsCard>
 
             <SettingsCard
-              title="Broker"
+              title="Customer"
               description="Who booked it, and who sent the rate con."
               action={<FilledBadge fill={fill} fields={BROKER_FIELDS} />}
               contentClassName="grid gap-5 sm:grid-cols-6"

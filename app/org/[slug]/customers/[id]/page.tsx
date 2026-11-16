@@ -43,7 +43,7 @@ import { getOrganization } from "@/lib/organizations"
 import { formatPhone } from "@/lib/phone"
 
 async function brokerFor(
-  params: PageProps<"/org/[slug]/brokers/[id]">["params"]
+  params: PageProps<"/org/[slug]/customers/[id]">["params"]
 ) {
   const { slug, id } = await params
   const organization = await getOrganization(slug)
@@ -53,9 +53,9 @@ async function brokerFor(
 
 export async function generateMetadata({
   params,
-}: PageProps<"/org/[slug]/brokers/[id]">): Promise<Metadata> {
+}: PageProps<"/org/[slug]/customers/[id]">): Promise<Metadata> {
   const { broker } = await brokerFor(params)
-  return { title: broker ? broker.legal_name : "Broker not found" }
+  return { title: broker ? broker.legal_name : "Customer not found" }
 }
 
 function Detail({
@@ -97,13 +97,13 @@ function YesNo({ value, no = "No" }: { value: boolean | null; no?: string }) {
 
 export default async function BrokerPage({
   params,
-}: PageProps<"/org/[slug]/brokers/[id]">) {
+}: PageProps<"/org/[slug]/customers/[id]">) {
   const { organization, broker } = await brokerFor(params)
   if (!organization || !broker) {
     notFound()
   }
 
-  const base = `/org/${organization.slug}/brokers`
+  const base = `/org/${organization.slug}/customers`
   const none = <span className="text-muted-foreground">Not set</span>
   const factoringHref = `/org/${organization.slug}/settings/factoring`
   const [contacts, loads, factoring, invoices] = await Promise.all([
@@ -146,13 +146,14 @@ export default async function BrokerPage({
           })}
         >
           <ArrowLeft />
-          All brokers
+          All customers
         </Link>
 
         <SettingsCard
           title={broker.legal_name}
           description={
             [
+              broker.kind === "shipper" && "Direct shipper",
               broker.dba_name && `DBA ${broker.dba_name}`,
               formatMc(broker.mc_number),
               broker.dot_number && `USDOT ${broker.dot_number}`,
@@ -265,81 +266,88 @@ export default async function BrokerPage({
           </dl>
         </SettingsCard>
 
-        <SettingsCard
-          title="FMCSA"
-          description={
-            fmcsa
-              ? `Last checked ${checkedFormat.format(new Date(fmcsa.checked_at))}. Checked again when a new load comes in from this broker.`
-              : broker.mc_number
-                ? "Not checked yet."
-                : "Add the MC number to check this broker with FMCSA."
-          }
-          footer={
-            <SettingsCardFooter hint="Public data, shared by every OfficeTruck customer.">
-              <RecheckButton
-                organizationId={organization.id}
-                brokerId={broker.id}
-                disabled={!broker.mc_number}
-              />
-            </SettingsCardFooter>
-          }
-        >
-          {fmcsa ? (
-            <div className="flex flex-col gap-5">
-              {flags.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {flags.map((flag) => (
-                    <FlagBadge key={flag.key} flag={flag} />
-                  ))}
-                </div>
-              )}
-              <dl className="grid gap-5 sm:grid-cols-3">
-                <Detail label="Broker authority">
-                  {fmcsa.broker_authority_active === null ? (
-                    <span className="text-muted-foreground">Not reported</span>
-                  ) : fmcsa.broker_authority_active ? (
-                    "Active"
-                  ) : (
-                    <span className="text-destructive">Not active</span>
-                  )}
-                </Detail>
-                <Detail label="Allowed to operate">
-                  <YesNo value={fmcsa.allowed_to_operate} />
-                </Detail>
-                <Detail label="Broker bond on file">
-                  <YesNo value={fmcsa.bond_on_file} />
-                </Detail>
-                <Detail label="Authority granted">
-                  {fmcsa.authority_granted_on ? (
-                    formatDate(fmcsa.authority_granted_on)
-                  ) : (
-                    <span className="text-muted-foreground">Not reported</span>
-                  )}
-                </Detail>
-                <Detail label="Name on file">
-                  {fmcsa.legal_name ?? none}
-                  {fmcsa.dba_name && (
-                    <span className="block font-normal text-muted-foreground">
-                      DBA {fmcsa.dba_name}
-                    </span>
-                  )}
-                </Detail>
-                <Detail label="Phone on file">
-                  {fmcsa.phone ? formatPhone(fmcsa.phone) : none}
-                </Detail>
-                <Detail label="Address on file" className="sm:col-span-3">
-                  {fmcsaAddress || none}
-                </Detail>
-              </dl>
-            </div>
-          ) : (
-            <SettingsEmptyState icon={Package} title="No FMCSA record">
-              {broker.mc_number
-                ? "Check this broker to see their authority, bond and any recent changes."
-                : "Brokers are checked by MC number."}
-            </SettingsEmptyState>
-          )}
-        </SettingsCard>
+        {/* Only brokers have operating authority to check. */}
+        {broker.kind === "broker" && (
+          <SettingsCard
+            title="FMCSA"
+            description={
+              fmcsa
+                ? `Last checked ${checkedFormat.format(new Date(fmcsa.checked_at))}. Checked again when a new load comes in from this broker.`
+                : broker.mc_number
+                  ? "Not checked yet."
+                  : "Add the MC number to check this broker with FMCSA."
+            }
+            footer={
+              <SettingsCardFooter hint="Public data, shared by every OfficeTruck customer.">
+                <RecheckButton
+                  organizationId={organization.id}
+                  brokerId={broker.id}
+                  disabled={!broker.mc_number}
+                />
+              </SettingsCardFooter>
+            }
+          >
+            {fmcsa ? (
+              <div className="flex flex-col gap-5">
+                {flags.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {flags.map((flag) => (
+                      <FlagBadge key={flag.key} flag={flag} />
+                    ))}
+                  </div>
+                )}
+                <dl className="grid gap-5 sm:grid-cols-3">
+                  <Detail label="Broker authority">
+                    {fmcsa.broker_authority_active === null ? (
+                      <span className="text-muted-foreground">
+                        Not reported
+                      </span>
+                    ) : fmcsa.broker_authority_active ? (
+                      "Active"
+                    ) : (
+                      <span className="text-destructive">Not active</span>
+                    )}
+                  </Detail>
+                  <Detail label="Allowed to operate">
+                    <YesNo value={fmcsa.allowed_to_operate} />
+                  </Detail>
+                  <Detail label="Broker bond on file">
+                    <YesNo value={fmcsa.bond_on_file} />
+                  </Detail>
+                  <Detail label="Authority granted">
+                    {fmcsa.authority_granted_on ? (
+                      formatDate(fmcsa.authority_granted_on)
+                    ) : (
+                      <span className="text-muted-foreground">
+                        Not reported
+                      </span>
+                    )}
+                  </Detail>
+                  <Detail label="Name on file">
+                    {fmcsa.legal_name ?? none}
+                    {fmcsa.dba_name && (
+                      <span className="block font-normal text-muted-foreground">
+                        DBA {fmcsa.dba_name}
+                      </span>
+                    )}
+                  </Detail>
+                  <Detail label="Phone on file">
+                    {fmcsa.phone ? formatPhone(fmcsa.phone) : none}
+                  </Detail>
+                  <Detail label="Address on file" className="sm:col-span-3">
+                    {fmcsaAddress || none}
+                  </Detail>
+                </dl>
+              </div>
+            ) : (
+              <SettingsEmptyState icon={Package} title="No FMCSA record">
+                {broker.mc_number
+                  ? "Check this broker to see their authority, bond and any recent changes."
+                  : "Brokers are checked by MC number."}
+              </SettingsEmptyState>
+            )}
+          </SettingsCard>
+        )}
 
         <BrokerPaymentHistory
           invoices={invoices}

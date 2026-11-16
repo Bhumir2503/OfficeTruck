@@ -303,11 +303,11 @@ export function NewLoadSkeleton() {
               />
             </SettingsCard>
             <SettingsCard
-              title="Broker"
+              title="Customer"
               description="Who booked it, and who sent the rate con."
               contentClassName="grid gap-5 sm:grid-cols-6"
             >
-              <FieldSkeleton label="Broker" className="sm:col-span-3" />
+              <FieldSkeleton label="Customer" className="sm:col-span-3" />
               <FieldSkeleton label="Rate con from" className="sm:col-span-3" />
             </SettingsCard>
             <SettingsCard
@@ -442,7 +442,7 @@ export function LoadDetailSkeleton() {
               </div>
             </SettingsCard>
             <SettingsCard
-              title="Broker"
+              title="Customer"
               description="Who booked it, and who sent the rate con."
               contentClassName="grid gap-5 sm:grid-cols-6"
               footer={
@@ -451,7 +451,7 @@ export function LoadDetailSkeleton() {
                 </SettingsCardFooter>
               }
             >
-              <FieldSkeleton label="Broker" className="sm:col-span-3" />
+              <FieldSkeleton label="Customer" className="sm:col-span-3" />
               <FieldSkeleton label="Rate con from" className="sm:col-span-3" />
             </SettingsCard>
             <SettingsCard

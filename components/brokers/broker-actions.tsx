@@ -10,7 +10,7 @@ import {
   runFmcsaCheck,
   setDoNotUse,
   updateContact,
-} from "@/app/org/[slug]/brokers/actions"
+} from "@/app/org/[slug]/customers/actions"
 import {
   SettingsCard,
   SettingsEmptyState,

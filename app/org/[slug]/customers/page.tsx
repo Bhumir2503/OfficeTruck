@@ -5,11 +5,11 @@ import { BrokersTable } from "@/components/brokers/brokers-table"
 import { getBrokers } from "@/lib/brokers"
 import { getOrganization } from "@/lib/organizations"
 
-export const metadata: Metadata = { title: "Brokers" }
+export const metadata: Metadata = { title: "Customers" }
 
 export default async function BrokersPage({
   params,
-}: PageProps<"/org/[slug]/brokers">) {
+}: PageProps<"/org/[slug]/customers">) {
   const organization = await getOrganization((await params).slug)
   if (!organization) {
     notFound()
@@ -19,7 +19,7 @@ export default async function BrokersPage({
     <div className="px-4 py-6 lg:px-6 lg:py-8">
       <BrokersTable
         brokers={await getBrokers(organization.id)}
-        base={`/org/${organization.slug}/brokers`}
+        base={`/org/${organization.slug}/customers`}
       />
     </div>
   )

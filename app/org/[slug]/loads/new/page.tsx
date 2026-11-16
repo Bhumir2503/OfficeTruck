@@ -43,7 +43,7 @@ export default async function NewLoadPage({
           trucks={await getTruckOptions(organization.id)}
           trucksHref={`/org/${organization.slug}/equipment`}
           brokers={await getBrokerOptions(organization.id)}
-          brokersHref={`/org/${organization.slug}/brokers`}
+          brokersHref={`/org/${organization.slug}/customers`}
           factoringName={
             (await getFactoringCompany(organization.id))?.name ?? null
           }

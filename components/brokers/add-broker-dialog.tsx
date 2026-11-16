@@ -4,7 +4,7 @@ import { CornerDownLeft } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
-import { createBroker } from "@/app/org/[slug]/brokers/actions"
+import { createBroker } from "@/app/org/[slug]/customers/actions"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -28,8 +28,11 @@ import { useZodForm } from "@/hooks/use-zod-form"
 import { formatPhone, handlePhoneInput, handlePhoneKeyDown } from "@/lib/phone"
 import {
   brokerSchema,
+  CUSTOMER_KIND_LABELS,
+  CUSTOMER_KINDS,
   INVOICE_METHOD_LABELS,
   INVOICE_METHODS,
+  type CustomerKind,
   type InvoiceMethod,
 } from "@/lib/schemas/broker"
 
@@ -141,6 +144,8 @@ function AddBrokerForm({
   onAdded: (broker: { id: string; name: string }) => void
   onCancel: () => void
 }) {
+  // From an MC lookup or rate con it's a broker; otherwise ask.
+  const [kind, setKind] = useState<CustomerKind>("broker")
   const [method, setMethod] = useState<InvoiceMethod>("email")
   const [factored, setFactored] = useState(false)
   const [noa, setNoa] = useState(false)
@@ -157,12 +162,13 @@ function AddBrokerForm({
           `${values.legal_name} added, but the FMCSA check didn't run: ${result.fmcsaError}`
         )
       } else {
-        toast.success(`${values.legal_name} added to your brokers.`)
+        toast.success(`${values.legal_name} added to your customers.`)
       }
       onAdded({ id: result.id, name: values.dba_name ?? values.legal_name })
     }
   )
 
+  const kindRef = useHiddenValue(kind, revalidate)
   const methodRef = useHiddenValue(method, revalidate)
   const factoredRef = useHiddenValue(factored, revalidate)
   const noaRef = useHiddenValue(noa, revalidate)
@@ -183,6 +189,7 @@ function AddBrokerForm({
       }}
       className="min-h-0"
     >
+      <input ref={kindRef} type="hidden" name="kind" value={kind} />
       <input
         ref={methodRef}
         type="hidden"
@@ -214,6 +221,22 @@ function AddBrokerForm({
       ))}
       <fieldset disabled={pending} className="flex flex-col gap-6">
         <div className="-m-1 flex max-h-[70vh] flex-col gap-6 overflow-y-auto p-1">
+          <ToggleGroup
+            aria-label="Customer type"
+            variant="outline"
+            size="sm"
+            spacing={1}
+            value={[kind]}
+            onValueChange={(value: string[]) => {
+              if (value[0]) setKind(value[0] as CustomerKind)
+            }}
+          >
+            {CUSTOMER_KINDS.map((key) => (
+              <ToggleGroupItem key={key} value={key}>
+                {CUSTOMER_KIND_LABELS[key]}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
           {/* Who they are. */}
           <div className="grid gap-5 sm:grid-cols-6">
             <TextField
@@ -232,15 +255,17 @@ function AddBrokerForm({
               errors={errors}
               className="sm:col-span-2"
             />
-            <TextField
-              name="mc_number"
-              label="MC number"
-              inputMode="numeric"
-              defaultValue={defaults.mc_number ?? undefined}
-              placeholder="e.g. 411443"
-              errors={errors}
-              className="sm:col-span-2"
-            />
+            {kind === "broker" && (
+              <TextField
+                name="mc_number"
+                label="MC number"
+                inputMode="numeric"
+                defaultValue={defaults.mc_number ?? undefined}
+                placeholder="e.g. 411443"
+                errors={errors}
+                className="sm:col-span-2"
+              />
+            )}
             <TextField
               name="phone"
               label="Main phone"
@@ -360,7 +385,7 @@ function AddBrokerForm({
             Cancel
           </Button>
           <Button type="submit" disabled={pending}>
-            {pending ? "Adding…" : "Add broker"} <CornerDownLeft />
+            {pending ? "Adding…" : "Add customer"} <CornerDownLeft />
           </Button>
         </DialogFooter>
       </fieldset>
@@ -389,7 +414,7 @@ export function AddBrokerDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Add to your brokers</DialogTitle>
+          <DialogTitle>Add a customer</DialogTitle>
           <DialogDescription>
             Saved once, picked from the list on every load after this. Contacts
             and notes go on the broker&apos;s page.

@@ -203,7 +203,7 @@ export type Breakdown = (typeof BREAKDOWNS)[number]
 export const BREAKDOWN_LABELS: Record<Breakdown, string> = {
   truck: "Truck",
   driver: "Driver",
-  broker: "Broker",
+  broker: "Customer",
   lane: "Lane",
 }
 

@@ -39,7 +39,7 @@ export function BrokersListSkeleton() {
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
       <SettingsCard
-        title="Brokers"
+        title="Customers"
         description="Search by name or MC number."
         action={<Skeleton className="h-8 w-28 rounded-md" />}
         contentClassName="px-0 pb-0"
@@ -61,7 +61,7 @@ export function BrokersListSkeleton() {
         <Table className="[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6">
           <TableHeader className="bg-muted/40">
             <TableRow>
-              <TableHead>Broker</TableHead>
+              <TableHead>Customer</TableHead>
               <TableHead className="hidden md:table-cell">Terms</TableHead>
               <TableHead className="hidden lg:table-cell">Invoices</TableHead>
               <TableHead className="text-right sm:text-left">FMCSA</TableHead>
