@@ -7,6 +7,8 @@ import {
 } from "@/lib/dashboard-format"
 import { complianceItems, expiry, today as getToday } from "@/lib/driver-format"
 import { getDrivers } from "@/lib/drivers"
+import { COMPANY_DOCUMENT_LABELS } from "@/lib/company-document-format"
+import { getCompanyDocuments } from "@/lib/documents"
 import { getInvoices, getLoadsToInvoice } from "@/lib/invoices"
 import { cityState } from "@/lib/report-format"
 import type { AppointmentType, LoadStatus } from "@/lib/schemas/load"
@@ -26,8 +28,8 @@ import { getTaxFilings, getTrucks } from "@/lib/trucks"
 export const getAttention = cache(async (organizationId: string) => {
   const today = getToday()
   const supabase = await createClient()
-  const [invoices, ready, booked, drivers, trucks, filings] = await Promise.all(
-    [
+  const [invoices, ready, booked, drivers, trucks, filings, papers] =
+    await Promise.all([
       getInvoices(organizationId),
       getLoadsToInvoice(organizationId),
       supabase
@@ -41,8 +43,8 @@ export const getAttention = cache(async (organizationId: string) => {
       getDrivers(organizationId),
       getTrucks(organizationId),
       getTaxFilings(organizationId),
-    ]
-  )
+      getCompanyDocuments(organizationId),
+    ])
   if (booked.error) {
     throw booked.error
   }
@@ -66,6 +68,21 @@ export const getAttention = cache(async (organizationId: string) => {
       }))
     ),
   ]
+  // The company's own papers that run out.
+  for (const paper of papers) {
+    if (!paper.expires_on) continue
+    documents.push({
+      owner: "Company",
+      item: {
+        key: `company_document_${paper.id}`,
+        label: paper.title ?? COMPANY_DOCUMENT_LABELS[paper.kind],
+        kind: "expires",
+        due: paper.expires_on,
+        expiry: expiry(paper.expires_on, today),
+      },
+      path: "documents",
+    })
+  }
   // The company's 2290, as the Compliance page shows it.
   if (activeTrucks.length > 0) {
     const taxYear = taxYearOf(today)

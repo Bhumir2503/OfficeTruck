@@ -172,3 +172,26 @@ describe("relativeDay", () => {
     assert.equal(relativeDay(-4), "4 days ago")
   })
 })
+
+describe("company documents", () => {
+  it("reads naturally on the to-do list", () => {
+    const [item] = buildAttention({
+      ...empty,
+      documents: [
+        doc("soon", 20, {
+          owner: "Company",
+          path: "documents",
+          item: {
+            key: "company_document_1",
+            label: "Insurance certificate",
+            kind: "expires",
+            due: "2026-12-06",
+            expiry: { state: "soon", days: 20 },
+          },
+        }),
+      ],
+    })
+    assert.equal(item.title, "The insurance certificate expires")
+    assert.equal(item.path, "documents")
+  })
+})

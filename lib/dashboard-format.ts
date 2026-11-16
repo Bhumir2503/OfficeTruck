@@ -212,7 +212,7 @@ export function buildAttention(input: AttentionInput): AttentionItem[] {
       tone: late ? "danger" : expiry.state === "urgent" ? "warning" : "default",
       title:
         owner === "Company"
-          ? `The ${item.label} ${verb}`
+          ? `The ${lowerFirst(item.label)} ${verb}`
           : `${possessive(owner)} ${lowerFirst(item.label)} ${verb}`,
       detail: late ? `Was due ${when}` : `Due ${when}`,
       path,
