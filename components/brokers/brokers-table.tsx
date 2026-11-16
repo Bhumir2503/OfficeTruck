@@ -24,10 +24,12 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { fmcsaFlags, formatMc, formatTerms } from "@/lib/broker-format"
 import type { BrokerWithFmcsa } from "@/lib/brokers"
 
-type Filter = "all" | "flagged" | "do_not_use"
+type Filter = "all" | "broker" | "shipper" | "flagged" | "do_not_use"
 
 const FILTER_LABELS: Record<Filter, string> = {
   all: "All",
+  broker: "Brokers",
+  shipper: "Shippers",
   flagged: "Flagged",
   do_not_use: "Do not use",
 }
@@ -46,7 +48,7 @@ export function BrokersTable({
   base,
 }: {
   brokers: BrokerWithFmcsa[]
-  /** /org/<slug>/brokers */
+  /** /org/<slug>/customers */
   base: string
 }) {
   const [search, setSearch] = useState("")
@@ -55,6 +57,8 @@ export function BrokersTable({
   const counts = useMemo(
     () => ({
       all: brokers.length,
+      broker: brokers.filter((broker) => broker.kind === "broker").length,
+      shipper: brokers.filter((broker) => broker.kind === "shipper").length,
       flagged: brokers.filter(isFlagged).length,
       do_not_use: brokers.filter((broker) => broker.do_not_use).length,
     }),
@@ -69,6 +73,7 @@ export function BrokersTable({
     return brokers.filter(
       (broker) =>
         (filter === "all" ||
+          filter === broker.kind ||
           (filter === "flagged" && isFlagged(broker)) ||
           (filter === "do_not_use" && broker.do_not_use)) &&
         [broker.legal_name, broker.dba_name, broker.mc_number].some((value) =>
@@ -80,16 +85,17 @@ export function BrokersTable({
   const addButton = (size: "sm" | "default") => (
     <Link href={`${base}/new`} className={buttonVariants({ size })}>
       <Building2 />
-      Add broker
+      Add customer
     </Link>
   )
 
   if (brokers.length === 0) {
     return (
-      <SettingsCard title="Brokers">
-        <SettingsEmptyState icon={Building2} title="No brokers yet">
-          Add the brokers you haul for. Look one up by MC number to check their
-          authority with FMCSA, and keep their billing details for invoices.
+      <SettingsCard title="Customers">
+        <SettingsEmptyState icon={Building2} title="No customers yet">
+          Add the brokers and shippers you haul for. Look a broker up by MC
+          number to check their authority with FMCSA, and keep everyone&apos;s
+          billing details for invoices.
         </SettingsEmptyState>
         <div className="mt-4 flex justify-center">{addButton("default")}</div>
       </SettingsCard>
@@ -100,16 +106,15 @@ export function BrokersTable({
 
   return (
     <SettingsCard
-      title="Brokers"
-      description="Search by name or MC number."
+      title="Customers"
       action={addButton("sm")}
       contentClassName="px-0 pb-0"
       footer={
         <SettingsCardFooter
           hint={
             filtering
-              ? `Showing ${filtered.length} of ${plural(brokers.length, "broker")}`
-              : plural(brokers.length, "broker")
+              ? `Showing ${filtered.length} of ${plural(brokers.length, "customer")}`
+              : plural(brokers.length, "customer")
           }
         />
       }
@@ -119,18 +124,18 @@ export function BrokersTable({
           <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search name or MC"
-            aria-label="Search brokers"
+            aria-label="Search customers"
             className="pl-7"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
         <ToggleGroup
-          aria-label="Filter brokers"
+          aria-label="Filter customers"
           variant="outline"
           size="sm"
           spacing={1}
-          className="shrink-0"
+          className="shrink-0 flex-wrap"
           value={[filter]}
           onValueChange={(value: string[]) =>
             setFilter((value[0] as Filter | undefined) ?? "all")
@@ -149,7 +154,7 @@ export function BrokersTable({
       <Table className="[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6">
         <TableHeader className="bg-muted/40">
           <TableRow>
-            <TableHead>Broker</TableHead>
+            <TableHead>Customer</TableHead>
             <TableHead className="hidden md:table-cell">Terms</TableHead>
             <TableHead className="hidden lg:table-cell">Invoices</TableHead>
             <TableHead className="text-right sm:text-left">FMCSA</TableHead>
@@ -163,8 +168,8 @@ export function BrokersTable({
                 className="h-24 text-center text-muted-foreground"
               >
                 {search.trim() === "" && filter !== "all"
-                  ? `No ${FILTER_LABELS[filter].toLowerCase()} brokers.`
-                  : "No brokers match your search."}
+                  ? `No ${FILTER_LABELS[filter].toLowerCase()} customers.`
+                  : "No customers match your search."}
               </TableCell>
             </TableRow>
           )}
@@ -182,11 +187,15 @@ export function BrokersTable({
                 </div>
                 <div className="truncate text-sm text-muted-foreground">
                   {[
+                    broker.kind === "shipper" && "Direct shipper",
                     formatMc(broker.mc_number),
                     broker.dba_name && `DBA ${broker.dba_name}`,
                   ]
                     .filter(Boolean)
-                    .join(" · ") || "No MC number"}
+                    .join(" · ") ||
+                    (broker.kind === "shipper"
+                      ? "Direct shipper"
+                      : "No MC number")}
                 </div>
               </TableCell>
               <TableCell className="hidden text-sm md:table-cell">
@@ -216,10 +225,14 @@ export function BrokersTable({
               </TableCell>
               <TableCell className="text-right sm:text-left">
                 <div className="flex justify-end sm:justify-start">
-                  <FmcsaBadge
-                    record={broker.fmcsa}
-                    hasMc={!!broker.mc_number}
-                  />
+                  {broker.kind === "shipper" ? (
+                    <span className="text-sm text-muted-foreground">—</span>
+                  ) : (
+                    <FmcsaBadge
+                      record={broker.fmcsa}
+                      hasMc={!!broker.mc_number}
+                    />
+                  )}
                 </div>
               </TableCell>
             </TableRow>

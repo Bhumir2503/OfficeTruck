@@ -11,7 +11,7 @@ import {
   lookupMc,
   updateBroker,
   type McLookup,
-} from "@/app/org/[slug]/brokers/actions"
+} from "@/app/org/[slug]/customers/actions"
 import { FlagBadge } from "@/components/brokers/broker-badges"
 import { ContactsDraft } from "@/components/brokers/contacts-draft"
 import {
@@ -41,10 +41,13 @@ import {
 import type { FmcsaRecord } from "@/lib/fmcsa"
 import {
   brokerSchema,
+  CUSTOMER_KIND_LABELS,
+  CUSTOMER_KINDS,
   INVOICE_METHODS,
   INVOICE_METHOD_LABELS,
   type BrokerInput,
   type ContactValues,
+  type CustomerKind,
   type InvoiceMethod,
 } from "@/lib/schemas/broker"
 
@@ -293,7 +296,7 @@ export function BrokerForm({
   factoringHref,
 }: {
   organizationId: string
-  /** /org/<slug>/brokers */
+  /** /org/<slug>/customers */
   base: string
   broker?: Broker
   /** Your factoring company, if it's set up. */
@@ -303,6 +306,8 @@ export function BrokerForm({
 }) {
   const router = useRouter()
   const [defaults, setDefaults] = useState<Defaults>(broker ?? {})
+  const [kind, setKind] = useState<CustomerKind>(broker?.kind ?? "broker")
+  const isBroker = kind === "broker"
   // Remounts the fields when a lookup fills them in.
   const [version, setVersion] = useState(0)
   const [method, setMethod] = useState<InvoiceMethod>(
@@ -348,13 +353,35 @@ export function BrokerForm({
     }
   )
 
+  const kindRef = useHiddenValue(kind, revalidate)
   const methodRef = useHiddenValue(method, revalidate)
   const factoredRef = useHiddenValue(factored, revalidate)
   const noaRef = useHiddenValue(noa, revalidate)
 
   return (
     <div className="flex flex-col gap-6">
-      {!broker && (
+      <SettingsCard
+        title="Customer type"
+        description="A broker arranges the load for a fee. A direct shipper owns the freight and pays you themselves."
+      >
+        <ToggleGroup
+          aria-label="Customer type"
+          variant="outline"
+          size="sm"
+          spacing={1}
+          value={[kind]}
+          onValueChange={(value: string[]) => {
+            if (value[0]) setKind(value[0] as CustomerKind)
+          }}
+        >
+          {CUSTOMER_KINDS.map((key) => (
+            <ToggleGroupItem key={key} value={key}>
+              {CUSTOMER_KIND_LABELS[key]}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </SettingsCard>
+      {!broker && isBroker && (
         <McLookupCard
           organizationId={organizationId}
           base={base}
@@ -379,6 +406,7 @@ export function BrokerForm({
       {/* The key goes before the spread: after it, React treats the children
           as a list and warns about missing keys. */}
       <form key={version} {...formProps} autoComplete="off">
+        <input ref={kindRef} type="hidden" name="kind" value={kind} />
         <input
           ref={methodRef}
           type="hidden"
@@ -399,8 +427,12 @@ export function BrokerForm({
         />
         <fieldset disabled={pending} className="flex flex-col gap-6">
           <SettingsCard
-            title="Broker"
-            description="As registered with FMCSA."
+            title={CUSTOMER_KIND_LABELS[kind]}
+            description={
+              isBroker
+                ? "As registered with FMCSA."
+                : "The company you bill for the load."
+            }
             contentClassName="grid gap-5 sm:grid-cols-6"
           >
             <TextField
@@ -419,17 +451,19 @@ export function BrokerForm({
               errors={errors}
               className="sm:col-span-3"
             />
-            <TextField
-              name="mc_number"
-              label="MC number"
-              inputMode="numeric"
-              placeholder="e.g. 411443"
-              defaultValue={defaults.mc_number ?? undefined}
-              errors={errors}
-              className="sm:col-span-3"
-              onChange={digitsOnly(8)}
-              hint="Used to check them with FMCSA."
-            />
+            {isBroker && (
+              <TextField
+                name="mc_number"
+                label="MC number"
+                inputMode="numeric"
+                placeholder="e.g. 411443"
+                defaultValue={defaults.mc_number ?? undefined}
+                errors={errors}
+                className="sm:col-span-3"
+                onChange={digitsOnly(8)}
+                hint="Used to check them with FMCSA."
+              />
+            )}
             <TextField
               name="dot_number"
               label="USDOT number"
@@ -706,8 +740,10 @@ export function BrokerForm({
                     <span className="text-destructive">{formError}</span>
                   ) : broker ? (
                     "Changes are saved for everyone in your organization."
-                  ) : (
+                  ) : isBroker ? (
                     "Brokers with an MC number are checked with FMCSA when saved."
+                  ) : (
+                    "Saved for everyone in your organization."
                   )
                 }
               >

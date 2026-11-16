@@ -1,10 +1,16 @@
 import { FMCSA_COLUMNS, type FmcsaRecord } from "@/lib/fmcsa"
-import type { ContactRole, InvoiceMethod } from "@/lib/schemas/broker"
+import type {
+  ContactRole,
+  CustomerKind,
+  InvoiceMethod,
+} from "@/lib/schemas/broker"
 import type { LoadStatus } from "@/lib/schemas/load"
 import { createClient } from "@/lib/supabase/server"
 
 export type Broker = {
   id: string
+  /** A broker, or a shipper booked directly. */
+  kind: CustomerKind
   legal_name: string
   dba_name: string | null
   mc_number: string | null
@@ -35,7 +41,7 @@ export type Broker = {
 export type BrokerWithFmcsa = Broker & { fmcsa: FmcsaRecord | null }
 
 const BROKER_COLUMNS =
-  "id, legal_name, dba_name, mc_number, dot_number, phone, address_line1, address_line2, city, state, postal_code, email_domains, invoice_method, billing_emails, portal_url, payment_terms_days, quick_pay_fee_percent, factored, noa_on_file, do_not_use, do_not_use_reason, notes, created_at, updated_at"
+  "id, kind, legal_name, dba_name, mc_number, dot_number, phone, address_line1, address_line2, city, state, postal_code, email_domains, invoice_method, billing_emails, portal_url, payment_terms_days, quick_pay_fee_percent, factored, noa_on_file, do_not_use, do_not_use_reason, notes, created_at, updated_at"
 
 /**
  * FMCSA records for these MC numbers, by MC number. The shared table has no

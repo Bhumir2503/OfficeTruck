@@ -30,7 +30,7 @@ export function LoadBrokerForm({
   organizationId: string
   load: Load
   brokers: BrokerOption[]
-  /** /org/<slug>/brokers */
+  /** /org/<slug>/customers */
   brokersHref: string
   factoringName: string | null
 }) {
@@ -51,7 +51,7 @@ export function LoadBrokerForm({
     <form {...formProps} autoComplete="off">
       <fieldset disabled={pending}>
         <SettingsCard
-          title="Broker"
+          title="Customer"
           description={
             unlinked
               ? `Booked as "${load.broker_name}". Pick the broker to link the load to them.`

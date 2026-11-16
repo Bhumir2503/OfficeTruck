@@ -167,7 +167,7 @@ function MonthlyChart({
 const recordPath: Record<Breakdown, string | null> = {
   truck: "equipment",
   driver: "drivers",
-  broker: "brokers",
+  broker: "customers",
   lane: null,
 }
 

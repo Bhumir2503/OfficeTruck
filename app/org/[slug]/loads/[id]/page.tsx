@@ -94,7 +94,7 @@ export default async function LoadPage({
               description={
                 load.broker ? (
                   <Link
-                    href={`/org/${organization.slug}/brokers/${load.broker.id}`}
+                    href={`/org/${organization.slug}/customers/${load.broker.id}`}
                     className="hover:underline"
                   >
                     {load.broker_name}
@@ -119,7 +119,7 @@ export default async function LoadPage({
               organizationId={organization.id}
               load={load}
               brokers={brokers}
-              brokersHref={`/org/${organization.slug}/brokers`}
+              brokersHref={`/org/${organization.slug}/customers`}
               factoringName={factoring?.name ?? null}
             />
             <LoadStopsCard
