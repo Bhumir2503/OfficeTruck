@@ -7,10 +7,13 @@ import {
   Circle,
   Loader2,
   Plus,
+  ReceiptText,
   Send,
   Upload,
   X,
 } from "lucide-react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useRef, useState } from "react"
 import { toast } from "sonner"
 
@@ -20,10 +23,13 @@ import {
   sendToDriver,
   updateLoadStatus,
 } from "@/app/org/[slug]/loads/actions"
+import { createInvoice } from "@/app/org/[slug]/invoices/actions"
 import { AssignDialog } from "@/components/loads/assign-dialog"
 import { DocumentLink } from "@/components/loads/document-viewer"
 import { Button } from "@/components/ui/button"
 import type { LoadDispatch } from "@/lib/dispatch"
+import { formatInvoiceDate, INVOICE_STATE_LABELS } from "@/lib/invoice-format"
+import type { LoadInvoice } from "@/lib/invoices"
 import type { DriverOption } from "@/lib/drivers"
 import { formatPay, loadDriverPay } from "@/lib/driver-format"
 import {
@@ -54,6 +60,8 @@ type Step = {
     | { type: "send" }
     | { type: "upload"; kind: DocumentKind }
     | { type: "status"; to: LoadStatus; label: string }
+    /** Make the draft invoice, or open the one there is. */
+    | { type: "invoice"; label: string }
     | null
   /** A second, quieter choice, e.g. factored instead of paid. */
   alternative?: { to: LoadStatus | "complete"; label: string }
@@ -65,7 +73,8 @@ const firstName = (name: string | null | undefined) => name?.split(" ")[0]
 function nextStep(
   load: Load,
   missing: DocumentKind[],
-  dispatch: LoadDispatch | null
+  dispatch: LoadDispatch | null,
+  invoice: LoadInvoice | null
 ): Step {
   const has = (kind: DocumentKind) => !missing.includes(kind)
   const upload = (kind: DocumentKind, detail: string): Step => ({
@@ -122,33 +131,86 @@ function nextStep(
           `Needed before the load can be invoiced. ${missing.length > 1 ? `${missing.length} documents are missing.` : ""}`.trim()
         )
       }
-      return {
-        title: "Invoice the broker",
-        detail:
-          "Every document is in. Draft invoices with the rate con and POD attached are coming next; for now, mark it invoiced once you've sent one.",
-        action: { type: "status", to: "invoiced", label: "Mark invoiced" },
-      }
+      return invoice
+        ? {
+            title: `Send invoice ${invoice.number}`,
+            detail:
+              "The draft is ready. Check it, then email it with the rate con, BOL and POD attached.",
+            action: {
+              type: "invoice",
+              label: `Open invoice ${invoice.number}`,
+            },
+          }
+        : {
+            title: "Invoice the broker",
+            detail:
+              "Every document is in. Make a draft invoice with your next number; it goes out with the paperwork attached.",
+            action: { type: "invoice", label: "Create invoice" },
+          }
     }
     case "invoiced":
+    case "factored":
+      if (invoice?.status === "sent") {
+        return {
+          title: load.status === "factored" ? "Factored" : "Wait for payment",
+          detail: invoice.due_on
+            ? `Invoice ${invoice.number} is due ${formatInvoiceDate(invoice.due_on)}. Record the payment on it when the money lands.`
+            : `Record the payment on invoice ${invoice.number} when the money lands.`,
+          action: { type: "invoice", label: `Open invoice ${invoice.number}` },
+        }
+      }
+      // Billed outside OfficeTruck, before invoices existed.
+      if (load.status === "invoiced") {
+        return {
+          title: "Wait for payment",
+          detail: load.broker?.payment_terms_days
+            ? `Terms are net ${load.broker.payment_terms_days}.`
+            : "Mark it paid when the money lands.",
+          action: { type: "status", to: "paid", label: "Mark paid" },
+          alternative: { to: "factored", label: "Factored instead" },
+        }
+      }
       return {
-        title: "Wait for payment",
-        detail: load.broker?.payment_terms_days
-          ? `Terms are net ${load.broker.payment_terms_days}.`
-          : "Mark it paid when the money lands.",
-        action: { type: "status", to: "paid", label: "Mark paid" },
-        alternative: { to: "factored", label: "Factored instead" },
+        title: "All done",
+        detail: "This load is factored. Nothing left to do.",
+        action: null,
       }
     case "paid":
-    case "factored":
       return {
         title: "All done",
         detail: `This load is ${LOAD_STATUS_LABELS[load.status].toLowerCase()}. Nothing left to do.`,
+        action: invoice
+          ? { type: "invoice", label: `Open invoice ${invoice.number}` }
+          : null,
+      }
+    case "tonu":
+      if (invoice?.status === "draft" || invoice?.status === "sent") {
+        return {
+          title:
+            invoice.status === "draft"
+              ? `Send invoice ${invoice.number}`
+              : "Wait for payment",
+          detail: "Bill the broker for the TONU.",
+          action: { type: "invoice", label: `Open invoice ${invoice.number}` },
+        }
+      }
+      if (!invoice) {
+        return {
+          title: "Bill the TONU",
+          detail:
+            "Make an invoice for the TONU charge, or reopen the load from the status menu to book it again.",
+          action: { type: "invoice", label: "Create invoice" },
+        }
+      }
+      return {
+        title: "TONU",
+        detail:
+          "The TONU is paid. Reopen it from the status menu to book it again.",
         action: null,
       }
     case "cancelled":
-    case "tonu":
       return {
-        title: load.status === "tonu" ? "TONU" : "Cancelled",
+        title: "Cancelled",
         detail: "Reopen it from the status menu to book it again.",
         action: null,
       }
@@ -224,6 +286,8 @@ export function LoadSidePanel({
   trucksBase,
   driversBase,
   loadsBase,
+  invoice,
+  invoicesBase,
 }: {
   organizationId: string
   load: Load
@@ -240,7 +304,12 @@ export function LoadSidePanel({
   driversBase: string
   /** /org/<slug>/loads */
   loadsBase: string
+  /** The load's live invoice, if it has one. */
+  invoice: LoadInvoice | null
+  /** /org/<slug>/invoices */
+  invoicesBase: string
 }) {
+  const router = useRouter()
   const [assigning, setAssigning] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -257,7 +326,7 @@ export function LoadSidePanel({
     ...(lumperReceipt ? [{ kind: "lumper_receipt" as const }] : []),
   ])
   const ready = missing.length === 0
-  const step = nextStep(load, missing, dispatch)
+  const step = nextStep(load, missing, dispatch, invoice)
   const invoiced = INVOICED_STATUSES.includes(load.status)
   const shown: DocumentKind[] = [
     ...required,
@@ -371,6 +440,21 @@ export function LoadSidePanel({
     }
   }
 
+  async function openInvoice() {
+    if (invoice) {
+      router.push(`${invoicesBase}/${invoice.id}`)
+      return
+    }
+    setBusy("invoice")
+    const result = await createInvoice(organizationId, load.id)
+    if ("error" in result) {
+      setBusy(null)
+      toast.error(result.error)
+      return
+    }
+    router.push(`${invoicesBase}/${result.id}`)
+  }
+
   async function move(to: LoadStatus) {
     setBusy(`status:${to}`)
     const result = await updateLoadStatus(organizationId, load.id, to)
@@ -442,11 +526,13 @@ export function LoadSidePanel({
                   onClick={() => {
                     if (action.type === "send") void send()
                     else if (action.type === "upload") pick(action.kind)
+                    else if (action.type === "invoice") void openInvoice()
                     else void move(action.to)
                   }}
                 >
                   {busy &&
                   (busy === "send" ||
+                    busy === "invoice" ||
                     busy.startsWith("status:") ||
                     (action.type === "upload" &&
                       busy === `upload:${action.kind}`)) ? (
@@ -455,6 +541,8 @@ export function LoadSidePanel({
                     <Send />
                   ) : action.type === "upload" ? (
                     <Upload />
+                  ) : action.type === "invoice" ? (
+                    <ReceiptText />
                   ) : null}
                   {action.type === "send"
                     ? `Notify ${firstName(load.driver?.full_name)}`
@@ -585,7 +673,9 @@ export function LoadSidePanel({
           })}
           <li className="flex items-center justify-between gap-3 py-2.5 text-sm last:pb-0">
             <span className="flex items-center gap-2">
-              {invoiced ? (
+              {invoiced ||
+              invoice?.status === "sent" ||
+              invoice?.status === "paid" ? (
                 <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
               ) : (
                 <Circle className="size-4 text-muted-foreground" />
@@ -599,9 +689,18 @@ export function LoadSidePanel({
                 Invoice
               </span>
             </span>
-            <span className="text-xs text-muted-foreground">
-              {invoiced ? "Sent" : "Once the documents are in"}
-            </span>
+            {invoice ? (
+              <Link
+                href={`${invoicesBase}/${invoice.id}`}
+                className="text-xs font-medium hover:underline"
+              >
+                #{invoice.number} · {INVOICE_STATE_LABELS[invoice.status]}
+              </Link>
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                {invoiced ? "Sent" : "Once the documents are in"}
+              </span>
+            )}
           </li>
         </ul>
       </Panel>

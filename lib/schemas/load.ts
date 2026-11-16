@@ -197,7 +197,7 @@ function required(label: string, max: number) {
 }
 
 /** Trims a text field and turns a blank one into null. */
-function optional(max: number) {
+export function optional(max: number) {
   return z.preprocess(
     (value) =>
       typeof value === "string" && value.trim() !== "" ? value.trim() : null,
@@ -231,7 +231,7 @@ const optionalDateTime = z.preprocess(
  * A dollar amount typed with or without "$" and commas, or a number when the
  * server re-checks parsed values. Blank is null when `optional`.
  */
-function money(message: string, { optional = false } = {}) {
+export function money(message: string, { optional = false } = {}) {
   const amount = z
     .string()
     .regex(/^\d{1,8}(\.\d{0,2})?$/, "Enter an amount like 2,450.00.")

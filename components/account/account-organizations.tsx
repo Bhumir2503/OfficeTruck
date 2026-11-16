@@ -29,7 +29,11 @@ export function AccountOrganizations({
               href={`/org/${organization.slug}`}
               className="group flex items-center gap-3 px-6 py-3 transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none"
             >
-              <OrganizationAvatar name={organization.name} className="size-8" />
+              <OrganizationAvatar
+                name={organization.name}
+                iconUrl={organization.icon_url}
+                className="size-8"
+              />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">
                   {organization.name}

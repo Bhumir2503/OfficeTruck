@@ -8,6 +8,8 @@ export type Organization = {
   id: string
   name: string
   slug: string
+  /** The square icon, if one's been uploaded. */
+  icon_url: string | null
   /** The signed-in user's role in this organization. */
   role: OrganizationRole
 }
@@ -51,7 +53,7 @@ export const getMyOrganizations = cache(async (): Promise<Organization[]> => {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from("organization_users")
-    .select("role, created_at, organizations (id, name, slug)")
+    .select("role, created_at, organizations (id, name, slug, icon_url)")
     .eq("user_id", user.sub)
     .order("created_at")
 

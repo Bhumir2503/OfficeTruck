@@ -192,8 +192,8 @@ export async function updateLoadStatus(
   // Canceling takes a reason, so it goes through cancelLoad, and TONU takes
   // its amount, so it goes through markLoadTonu. The rest of
   // the flow moves on its own (Save and notify, the BOL and POD,
-  // check-ins) or through Mark complete; invoicing and payments are manual
-  // until they're built.
+  // check-ins) or through Mark complete; invoiced, paid and factored come
+  // from the load's invoice, or by hand for a load billed elsewhere.
   if (parsed.data === "cancelled") {
     return { error: "Give a reason for canceling the load." }
   }
@@ -208,6 +208,21 @@ export async function updateLoadStatus(
   }
 
   const supabase = await createClient()
+
+  // Marking by hand is for loads billed outside OfficeTruck. One with an
+  // invoice moves with it, so the two can't disagree.
+  const { data: invoice } = await supabase
+    .from("invoices")
+    .select("number")
+    .eq("organization_id", organizationId)
+    .eq("load_id", loadId)
+    .neq("status", "void")
+    .maybeSingle()
+  if (invoice) {
+    return {
+      error: `This load has invoice ${invoice.number}. Send it, record its payment or void it from the invoice.`,
+    }
+  }
 
   // Truck and driver can stay empty until the load is dispatched.
   if (STATUSES_NEEDING_ASSIGNMENT.includes(parsed.data)) {

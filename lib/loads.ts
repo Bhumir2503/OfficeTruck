@@ -113,6 +113,23 @@ export async function getPaymentsDue(
   }
 
   const supabase = await createClient()
+  // An invoice sent from OfficeTruck knows its own due date.
+  const { data: invoices, error: invoicesError } = await supabase
+    .from("invoices")
+    .select("load_id, due_on")
+    .eq("organization_id", organizationId)
+    .eq("status", "sent")
+    .in(
+      "load_id",
+      waiting.map((load) => load.id)
+    )
+  if (invoicesError) {
+    throw invoicesError
+  }
+  const invoiceDue = new Map(
+    invoices.map((invoice) => [invoice.load_id, invoice.due_on as string])
+  )
+
   const { data, error } = await supabase
     .from("load_events")
     .select("load_id, created_at")
@@ -136,12 +153,14 @@ export async function getPaymentsDue(
   return Object.fromEntries(
     waiting.map((load) => [
       load.id,
-      paymentDue(
-        invoicedOn.get(load.id) ??
-          (load.delivery_end ?? load.delivery_start).slice(0, 10),
-        load.broker?.payment_terms_days ?? DEFAULT_TERMS_DAYS,
-        today
-      ),
+      invoiceDue.has(load.id)
+        ? paymentDue(invoiceDue.get(load.id)!, 0, today)
+        : paymentDue(
+            invoicedOn.get(load.id) ??
+              (load.delivery_end ?? load.delivery_start).slice(0, 10),
+            load.broker?.payment_terms_days ?? DEFAULT_TERMS_DAYS,
+            today
+          ),
     ])
   )
 }

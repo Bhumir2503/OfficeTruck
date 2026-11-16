@@ -19,7 +19,12 @@ export default async function DashboardPage({
           Everything that needs your action, in one place.
         </p>
       </div>
-      <ActionCards base={`/org/${slug}`} counts={await getActionCounts()} />
+      {organization && (
+        <ActionCards
+          base={`/org/${slug}`}
+          counts={await getActionCounts(organization.id)}
+        />
+      )}
       {/* Set when the organization was just created. */}
       {welcome && organization && canManage(organization) && (
         <OnboardingDialog

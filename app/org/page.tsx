@@ -50,7 +50,10 @@ export default async function OrganizationPickerPage() {
                     href={`/org/${org.slug}`}
                     className="flex items-center gap-3 px-4 py-3 transition-colors outline-none first:rounded-t-xl hover:bg-muted/60 focus-visible:bg-muted/60"
                   >
-                    <OrganizationAvatar name={org.name} />
+                    <OrganizationAvatar
+                      name={org.name}
+                      iconUrl={org.icon_url}
+                    />
                     <div className="min-w-0 flex-1">
                       <div className="truncate font-medium">{org.name}</div>
                       <div className="truncate text-sm text-muted-foreground">
