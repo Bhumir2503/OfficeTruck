@@ -11,6 +11,7 @@ import {
   Settings2Icon,
   ShieldCheckIcon,
   TruckIcon,
+  WalletIcon,
   type LucideIcon,
 } from "lucide-react"
 
@@ -72,8 +73,14 @@ export const ORG_NAV: { label?: string; items: OrgSection[] }[] = [
         title: "Drivers",
         path: "drivers",
         icon: IdCardIcon,
+        description: "Each driver's profile, documents and assigned loads.",
+      },
+      {
+        title: "Driver pay",
+        path: "pay",
+        icon: WalletIcon,
         description:
-          "Each driver's profile, documents, assigned loads and, later, pay statements.",
+          "Weekly settlements: each driver's delivered loads, money owed back, advances and bonuses, and what's been paid.",
       },
       {
         title: "Trucks",
