@@ -8,7 +8,6 @@ import {
   DriverStatusBadge,
   ExpiryBadge,
 } from "@/components/drivers/driver-badges"
-import { PayStatusBadge } from "@/components/drivers/driver-pay"
 import {
   SettingsCard,
   SettingsCardFooter,
@@ -253,8 +252,11 @@ export function DriversTable({
             <TableHead className="hidden 2xl:table-cell">CDL</TableHead>
             <TableHead className="hidden xl:table-cell">Pay rate</TableHead>
             {pay && (
-              <TableHead className="hidden md:table-cell" title={pay.label}>
-                Paid for {pay.label.replace(/, \d{4}$/, "")}
+              <TableHead
+                className="hidden md:table-cell"
+                title={`Still owed for ${pay.label}`}
+              >
+                Pay due
               </TableHead>
             )}
             <TableHead className="hidden sm:table-cell">Compliance</TableHead>
@@ -327,23 +329,17 @@ export function DriversTable({
                 </TableCell>
                 {pay && (
                   <TableCell className="hidden md:table-cell">
-                    {(() => {
-                      const entry = pay.byDriver[driver.id]
-                      if (!entry || entry.status === "none") {
-                        return <span className="text-muted-foreground">—</span>
-                      }
-                      return (
-                        <Link
-                          href={`${base}/${driver.id}?week=${pay.week}#pay`}
-                          className="flex items-center gap-2 hover:underline"
-                        >
-                          <PayStatusBadge status={entry.status} />
-                          <span className="text-sm tabular-nums">
-                            {formatRate(entry.net)}
-                          </span>
-                        </Link>
-                      )
-                    })()}
+                    {pay.byDriver[driver.id]?.status === "to_pay" ? (
+                      <Link
+                        href={`${base}/${driver.id}?week=${pay.week}#pay`}
+                        title={`${formatRate(pay.byDriver[driver.id].net)} for ${pay.label}`}
+                        className="inline-flex rounded-md bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-700 hover:underline dark:text-amber-300"
+                      >
+                        Yes
+                      </Link>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">No</span>
+                    )}
                   </TableCell>
                 )}
                 <TableCell className="hidden max-w-80 text-sm whitespace-normal sm:table-cell">
