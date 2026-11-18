@@ -14,6 +14,10 @@ import {
   updateDriver,
 } from "@/app/org/[slug]/drivers/actions"
 import { DateField } from "@/components/drivers/date-field"
+import {
+  type DocFiles,
+  DriverDocsCard,
+} from "@/components/drivers/driver-docs-card"
 import { PayFields } from "@/components/drivers/pay-fields"
 import {
   SettingsCard,
@@ -113,7 +117,6 @@ function saveButton(form: HTMLFormElement, card: DriverFormCard) {
   )
 }
 
-/** Uppercases as you type, keeping the caret where it was. */
 /**
  * The endorsements as checkboxes, kept in one hidden field ("H,N") so the
  * form sends them as a single value. `onUpdate` runs after a change, since
@@ -376,6 +379,7 @@ function CdlCopyField({
   )
 }
 
+/** Uppercases as you type, keeping the caret where it was. */
 function handleUppercaseInput(event: React.ChangeEvent<HTMLInputElement>) {
   const input = event.currentTarget
   const upper = input.value.toUpperCase()
@@ -430,6 +434,14 @@ export function DriverForm({
   // The values as loaded (or last saved), to tell which cards have changes.
   const baseline = useRef<Map<string, string> | null>(null)
   const [dirtyCards, setDirtyCards] = useState<Set<DriverFormCard>>(new Set())
+
+  // Adding a driver: the CDL and medical card attached beside the form,
+  // saved to their documents with the driver.
+  const [docFiles, setDocFiles] = useState<DocFiles>({
+    cdl: null,
+    medical_card: null,
+  })
+
   const { errors, formError, pending, formProps, revalidate } = useZodForm(
     driverSchema,
     async (values) => {
@@ -450,9 +462,34 @@ export function DriverForm({
         return result.error
       }
 
-      // The CDL copy is uploaded on the driver's page, so go there next.
-      toast.success(`${values.full_name} added. Upload their CDL here.`)
-      router.push(`${base}/${result.id}#${DRIVER_CDL_ID}`)
+      // The documents dropped in at the top go on as the driver's first.
+      const uploads = (["cdl", "medical_card"] as const).filter(
+        (kind) => docFiles[kind]
+      )
+      const failed: string[] = []
+      for (const kind of uploads) {
+        const problem = await uploadDriverDocument(organizationId, result.id, {
+          kind,
+          title: "",
+          expires_on: "",
+          file: docFiles[kind]!,
+        })
+        if (problem) {
+          failed.push(kind === "cdl" ? "CDL" : "medical card")
+        }
+      }
+      if (failed.length) {
+        toast.warning(
+          `${values.full_name} added, but the ${failed.join(" and ")} didn't upload. Add ${failed.length > 1 ? "them" : "it"} here.`
+        )
+      } else if (uploads.length) {
+        toast.success(`${values.full_name} added with their documents.`)
+      } else {
+        toast.success(`${values.full_name} added. Upload their CDL here.`)
+      }
+      // Without a CDL on file, land on the CDL card to upload one.
+      const cdlSaved = !!docFiles.cdl && !failed.includes("CDL")
+      router.push(`${base}/${result.id}${cdlSaved ? "" : `#${DRIVER_CDL_ID}`}`)
     }
   )
 
@@ -550,7 +587,15 @@ export function DriverForm({
     >
       <fieldset
         disabled={pending}
-        className={cardClassName ? "contents" : "flex flex-col gap-6"}
+        className={
+          cardClassName
+            ? "contents"
+            : driver
+              ? "flex flex-col gap-6"
+              : // Adding: the cards, with the documents and saving beside
+                // them in view.
+                "grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]"
+        }
       >
         {driver && (
           // Pay is saved from its own box; these carry it through the other
@@ -568,287 +613,310 @@ export function DriverForm({
             />
           </>
         )}
-        <SettingsCard
-          title={driver ? "Driver details" : "Driver"}
-          description="Name, how to reach them, and when they started."
-          id={DRIVER_CARD_IDS.details}
-          data-card="details"
-          className={cardClassName?.details}
-          footer={cardFooter("details")}
-          contentClassName="grid gap-5 sm:grid-cols-6"
+        <div
+          className={
+            driver
+              ? "contents"
+              : "flex min-w-0 flex-col gap-6 lg:col-start-1 lg:row-start-1"
+          }
         >
-          <TextField
-            name="full_name"
-            label="Full name"
-            placeholder="e.g. Marcus Hill"
-            defaultValue={driver?.full_name}
-            errors={errors}
-            className="sm:col-span-6"
-            autoFocus={!driver}
-          />
-          <TextField
-            name="phone"
-            label="Sign-in number"
-            type="tel"
-            placeholder="(555) 123-4567"
-            defaultValue={driver?.phone ? formatPhone(driver.phone) : undefined}
-            errors={errors}
-            className="sm:col-span-3"
-            onChange={handlePhoneInput}
-            onKeyDown={handlePhoneKeyDown}
-          />
-          <TextField
-            name="email"
-            label="Email"
-            type="email"
-            placeholder="marcus@example.com"
-            defaultValue={driver?.email ?? undefined}
-            errors={errors}
-            className="sm:col-span-3"
-          />
-          <DateField
-            id={fieldId("start_date")}
-            name="start_date"
-            label="Start date"
-            defaultValue={driver?.start_date}
-            errors={errors.start_date}
-            onUpdate={onUpdate}
-            className="sm:col-span-3"
-          />
-        </SettingsCard>
-
-        {/* On the driver page pay has its own box beside the form instead. */}
-        {!driver && (
           <SettingsCard
-            title="Pay"
-            description="How they're paid. It works out the driver's cut and your profit on each load."
-            data-card="pay"
+            title={driver ? "Driver details" : "Driver"}
+            description="Name, how to reach them, and when they started."
+            id={DRIVER_CARD_IDS.details}
+            data-card="details"
+            className={cardClassName?.details}
+            footer={cardFooter("details")}
             contentClassName="grid gap-5 sm:grid-cols-6"
           >
-            <PayFields
-              defaultType={null}
-              defaultRate={null}
+            <TextField
+              name="full_name"
+              label="Full name"
+              placeholder="e.g. Marcus Hill"
+              defaultValue={driver?.full_name}
               errors={errors}
+              className="sm:col-span-6"
+              autoFocus={!driver}
+            />
+            <TextField
+              name="phone"
+              label="Sign-in number"
+              type="tel"
+              placeholder="(555) 123-4567"
+              defaultValue={
+                driver?.phone ? formatPhone(driver.phone) : undefined
+              }
+              errors={errors}
+              className="sm:col-span-3"
+              onChange={handlePhoneInput}
+              onKeyDown={handlePhoneKeyDown}
+            />
+            <TextField
+              name="email"
+              label="Email"
+              type="email"
+              placeholder="marcus@example.com"
+              defaultValue={driver?.email ?? undefined}
+              errors={errors}
+              className="sm:col-span-3"
+            />
+            <DateField
+              id={fieldId("start_date")}
+              name="start_date"
+              label="Start date"
+              defaultValue={driver?.start_date}
+              errors={errors.start_date}
               onUpdate={onUpdate}
+              className="sm:col-span-3"
             />
           </SettingsCard>
-        )}
 
-        <SettingsCard
-          // The side panel's CDL links jump here.
-          id={DRIVER_CDL_ID}
-          className={cn("scroll-mt-6", cardClassName?.cdl)}
-          title="CDL"
-          description="The license as printed. You'll see a warning 60, 30 and 7 days before it expires."
-          data-card="cdl"
-          footer={cardFooter("cdl")}
-          contentClassName="grid gap-5 sm:grid-cols-6"
-        >
-          <TextField
-            name="cdl_number"
-            label="CDL number"
-            placeholder="e.g. 12345678"
-            defaultValue={driver?.cdl_number ?? undefined}
-            errors={errors}
-            className="sm:col-span-4"
-            onChange={handleUppercaseInput}
-          />
-          <TextField
-            name="cdl_state"
-            label="Issuing state"
-            placeholder="TX"
-            autoCapitalize="characters"
-            defaultValue={driver?.cdl_state ?? undefined}
-            errors={errors}
-            className="sm:col-span-2"
-            onChange={handleStateInput}
-          />
-          <fieldset className="grid gap-2 sm:col-span-6">
-            <legend className="mb-1 text-sm font-medium">Class</legend>
-            <div className="flex flex-wrap gap-2">
-              {CDL_CLASSES.map((value) => (
-                <label
-                  key={value}
-                  className="flex cursor-pointer items-center rounded-md border px-3 py-1.5 text-sm has-checked:border-brand has-checked:bg-brand/10 has-checked:text-brand-ink"
-                >
-                  <input
-                    type="radio"
-                    name="cdl_class"
-                    value={value}
-                    defaultChecked={driver?.cdl_class === value}
-                    className="sr-only"
-                  />
-                  {CDL_CLASS_LABELS[value]}
-                </label>
-              ))}
-            </div>
-            {errors.cdl_class && <FieldError errors={errors.cdl_class} />}
-          </fieldset>
-          <EndorsementsField
-            defaultValue={driver?.cdl_endorsements ?? []}
-            errors={errors.cdl_endorsements}
-            onUpdate={onUpdate}
-          />
-          <TextField
-            name="cdl_restrictions"
-            label="Restrictions"
-            placeholder="e.g. L, Z"
-            hint="The letters printed on the license, if any."
-            defaultValue={driver?.cdl_restrictions ?? undefined}
-            errors={errors}
-            className="sm:col-span-3"
-            onChange={handleUppercaseInput}
-          />
-          <DateField
-            id={fieldId("cdl_expires_on")}
-            name="cdl_expires_on"
-            label="CDL expires"
-            hint="The expiration date printed on the license."
-            defaultValue={driver?.cdl_expires_on}
-            errors={errors.cdl_expires_on}
-            onUpdate={onUpdate}
-            className="sm:col-span-3"
-          />
-          <TextField
-            name="prior_license_states"
-            label="Other states, past 3 years"
-            placeholder="e.g. OK, NM"
-            hint="Every other state that licensed them in the past 3 years. A hiring driving record is needed from each."
-            autoCapitalize="characters"
-            defaultValue={driver?.prior_license_states.join(", ") ?? undefined}
-            errors={errors}
-            className="sm:col-span-6"
-            onChange={handleUppercaseInput}
-          />
-          {driver && (
-            <CdlCopyField
-              organizationId={organizationId}
-              driverId={driver.id}
-              copy={cdlCopy ?? null}
-            />
+          {/* On the driver page pay has its own box beside the form instead. */}
+          {!driver && (
+            <SettingsCard
+              title="Pay"
+              description="How they're paid. It works out the driver's cut and your profit on each load."
+              data-card="pay"
+              contentClassName="grid gap-5 sm:grid-cols-6"
+            >
+              <PayFields
+                defaultType={null}
+                defaultRate={null}
+                errors={errors}
+                onUpdate={onUpdate}
+              />
+            </SettingsCard>
           )}
-        </SettingsCard>
 
-        <SettingsCard
-          className={cardClassName?.medical}
-          title="Medical card"
-          description="The DOT medical examiner's certificate. You'll see a warning 60, 30 and 7 days before it expires."
-          id={DRIVER_CARD_IDS.medical}
-          data-card="medical"
-          footer={cardFooter("medical")}
-          contentClassName="grid gap-5 sm:grid-cols-6"
-        >
-          <TextField
-            name="medical_examiner_name"
-            label="Medical examiner"
-            placeholder="e.g. Dr. Jane Lee"
-            defaultValue={driver?.medical_examiner_name ?? undefined}
-            errors={errors}
-            className="sm:col-span-3"
-          />
-          <TextField
-            name="medical_examiner_registry_number"
-            label="Examiner's registry number"
-            placeholder="e.g. 1234567890"
-            inputMode="numeric"
-            defaultValue={driver?.medical_examiner_registry_number ?? undefined}
-            errors={errors}
-            className="sm:col-span-3"
-          />
-          <DateField
-            id={fieldId("medical_exam_on")}
-            name="medical_exam_on"
-            label="Exam date"
-            defaultValue={driver?.medical_exam_on}
-            errors={errors.medical_exam_on}
-            onUpdate={onUpdate}
-            className="sm:col-span-3"
-          />
-          <DateField
-            id={fieldId("medical_card_expires_on")}
-            name="medical_card_expires_on"
-            label="Medical card expires"
-            defaultValue={driver?.medical_card_expires_on}
-            errors={errors.medical_card_expires_on}
-            onUpdate={onUpdate}
-            className="sm:col-span-3"
-          />
-          <label className="flex items-start gap-2 text-sm sm:col-span-6">
-            <input
-              type="checkbox"
-              name="holds_medical_variance"
-              defaultChecked={driver?.holds_medical_variance ?? false}
-              className="mt-0.5 size-4 accent-brand"
+          <SettingsCard
+            // The side panel's CDL links jump here.
+            id={DRIVER_CDL_ID}
+            className={cn("scroll-mt-6", cardClassName?.cdl)}
+            title="CDL"
+            description="The license as printed. You'll see a warning 60, 30 and 7 days before it expires."
+            data-card="cdl"
+            footer={cardFooter("cdl")}
+            contentClassName="grid gap-5 sm:grid-cols-6"
+          >
+            <TextField
+              name="cdl_number"
+              label="CDL number"
+              placeholder="e.g. 12345678"
+              defaultValue={driver?.cdl_number ?? undefined}
+              errors={errors}
+              className="sm:col-span-4"
+              onChange={handleUppercaseInput}
             />
-            <span>
-              Holds a medical variance, SPE certificate or exemption letter
-            </span>
-          </label>
-          {driver && (
-            <CdlCopyField
-              organizationId={organizationId}
-              driverId={driver.id}
-              copy={medicalCopy ?? null}
-              kind="medical_card"
-              label="Copy of the medical card"
+            <TextField
+              name="cdl_state"
+              label="Issuing state"
+              placeholder="TX"
+              autoCapitalize="characters"
+              defaultValue={driver?.cdl_state ?? undefined}
+              errors={errors}
+              className="sm:col-span-2"
+              onChange={handleStateInput}
             />
-          )}
-        </SettingsCard>
+            <fieldset className="grid gap-2 sm:col-span-6">
+              <legend className="mb-1 text-sm font-medium">Class</legend>
+              <div className="flex flex-wrap gap-2">
+                {CDL_CLASSES.map((value) => (
+                  <label
+                    key={value}
+                    className="flex cursor-pointer items-center rounded-md border px-3 py-1.5 text-sm has-checked:border-brand has-checked:bg-brand/10 has-checked:text-brand-ink"
+                  >
+                    <input
+                      type="radio"
+                      name="cdl_class"
+                      value={value}
+                      defaultChecked={driver?.cdl_class === value}
+                      className="sr-only"
+                    />
+                    {CDL_CLASS_LABELS[value]}
+                  </label>
+                ))}
+              </div>
+              {errors.cdl_class && <FieldError errors={errors.cdl_class} />}
+            </fieldset>
+            <EndorsementsField
+              defaultValue={driver?.cdl_endorsements ?? []}
+              errors={errors.cdl_endorsements}
+              onUpdate={onUpdate}
+            />
+            <TextField
+              name="cdl_restrictions"
+              label="Restrictions"
+              placeholder="e.g. L, Z"
+              hint="The letters printed on the license, if any."
+              defaultValue={driver?.cdl_restrictions ?? undefined}
+              errors={errors}
+              className="sm:col-span-3"
+              onChange={handleUppercaseInput}
+            />
+            <DateField
+              id={fieldId("cdl_expires_on")}
+              name="cdl_expires_on"
+              label="CDL expires"
+              hint="The expiration date printed on the license."
+              defaultValue={driver?.cdl_expires_on}
+              errors={errors.cdl_expires_on}
+              onUpdate={onUpdate}
+              className="sm:col-span-3"
+            />
+            <TextField
+              name="prior_license_states"
+              label="Other states, past 3 years"
+              placeholder="e.g. OK, NM"
+              hint="Every other state that licensed them in the past 3 years. A hiring driving record is needed from each."
+              autoCapitalize="characters"
+              defaultValue={
+                driver?.prior_license_states.join(", ") ?? undefined
+              }
+              errors={errors}
+              className="sm:col-span-6"
+              onChange={handleUppercaseInput}
+            />
+            {driver && (
+              <CdlCopyField
+                organizationId={organizationId}
+                driverId={driver.id}
+                copy={cdlCopy ?? null}
+              />
+            )}
+          </SettingsCard>
 
-        <SettingsCard
-          className={cardClassName?.annual}
-          title="Annual checks"
-          description="Each is due again a year after the last one. You'll see a warning 60, 30 and 7 days before."
-          id={DRIVER_CARD_IDS.annual}
-          data-card="annual"
-          footer={cardFooter("annual")}
-          contentClassName="grid gap-5 sm:grid-cols-6"
-        >
-          <DateField
-            id={fieldId("last_annual_review_on")}
-            name="last_annual_review_on"
-            label="Last annual review"
-            hint="When you last reviewed their driving record (MVR)."
-            defaultValue={driver?.last_annual_review_on}
-            errors={errors.last_annual_review_on}
-            onUpdate={onUpdate}
-            className="sm:col-span-3"
-          />
-          <DateField
-            id={fieldId("last_clearinghouse_query_on")}
-            name="last_clearinghouse_query_on"
-            label="Last Clearinghouse query"
-            hint="When you last ran their limited query."
-            defaultValue={driver?.last_clearinghouse_query_on}
-            errors={errors.last_clearinghouse_query_on}
-            onUpdate={onUpdate}
-            className="sm:col-span-3"
-          />
-        </SettingsCard>
+          <SettingsCard
+            className={cardClassName?.medical}
+            title="Medical card"
+            description="The DOT medical examiner's certificate. You'll see a warning 60, 30 and 7 days before it expires."
+            id={DRIVER_CARD_IDS.medical}
+            data-card="medical"
+            footer={cardFooter("medical")}
+            contentClassName="grid gap-5 sm:grid-cols-6"
+          >
+            <TextField
+              name="medical_examiner_name"
+              label="Medical examiner"
+              placeholder="e.g. Dr. Jane Lee"
+              defaultValue={driver?.medical_examiner_name ?? undefined}
+              errors={errors}
+              className="sm:col-span-3"
+            />
+            <TextField
+              name="medical_examiner_registry_number"
+              label="Examiner's registry number"
+              placeholder="e.g. 1234567890"
+              inputMode="numeric"
+              defaultValue={
+                driver?.medical_examiner_registry_number ?? undefined
+              }
+              errors={errors}
+              className="sm:col-span-3"
+            />
+            <DateField
+              id={fieldId("medical_exam_on")}
+              name="medical_exam_on"
+              label="Exam date"
+              defaultValue={driver?.medical_exam_on}
+              errors={errors.medical_exam_on}
+              onUpdate={onUpdate}
+              className="sm:col-span-3"
+            />
+            <DateField
+              id={fieldId("medical_card_expires_on")}
+              name="medical_card_expires_on"
+              label="Medical card expires"
+              defaultValue={driver?.medical_card_expires_on}
+              errors={errors.medical_card_expires_on}
+              onUpdate={onUpdate}
+              className="sm:col-span-3"
+            />
+            <label className="flex items-start gap-2 text-sm sm:col-span-6">
+              <input
+                type="checkbox"
+                name="holds_medical_variance"
+                defaultChecked={driver?.holds_medical_variance ?? false}
+                className="mt-0.5 size-4 accent-brand"
+              />
+              <span>
+                Holds a medical variance, SPE certificate or exemption letter
+              </span>
+            </label>
+            {driver && (
+              <CdlCopyField
+                organizationId={organizationId}
+                driverId={driver.id}
+                copy={medicalCopy ?? null}
+                kind="medical_card"
+                label="Copy of the medical card"
+              />
+            )}
+          </SettingsCard>
+
+          <SettingsCard
+            className={cardClassName?.annual}
+            title="Annual checks"
+            description="Each is due again a year after the last one. You'll see a warning 60, 30 and 7 days before."
+            id={DRIVER_CARD_IDS.annual}
+            data-card="annual"
+            footer={cardFooter("annual")}
+            contentClassName="grid gap-5 sm:grid-cols-6"
+          >
+            <DateField
+              id={fieldId("last_annual_review_on")}
+              name="last_annual_review_on"
+              label="Last annual review"
+              hint="When you last reviewed their driving record (MVR)."
+              defaultValue={driver?.last_annual_review_on}
+              errors={errors.last_annual_review_on}
+              onUpdate={onUpdate}
+              className="sm:col-span-3"
+            />
+            <DateField
+              id={fieldId("last_clearinghouse_query_on")}
+              name="last_clearinghouse_query_on"
+              label="Last Clearinghouse query"
+              hint="When you last ran their limited query."
+              defaultValue={driver?.last_clearinghouse_query_on}
+              errors={errors.last_clearinghouse_query_on}
+              onUpdate={onUpdate}
+              className="sm:col-span-3"
+            />
+          </SettingsCard>
+        </div>
 
         {!driver && (
-          // Adding a driver saves everything at once.
-          <div className="overflow-hidden rounded-xl border bg-card shadow-xs">
-            <SettingsCardFooter
-              hint={
-                formError ? (
-                  <span className="text-destructive">{formError}</span>
-                ) : (
-                  "New drivers start as active."
-                )
+          // Beside the cards, the documents and saving stay in view; on a
+          // phone they come after them, as on New load.
+          <aside className="lg:sticky lg:top-6 lg:col-start-2 lg:row-start-1">
+            <DriverDocsCard
+              files={docFiles}
+              onFilesChange={(kind, file) =>
+                setDocFiles((current) => ({ ...current, [kind]: file }))
               }
             >
+              {/* Adding a driver saves everything at once. */}
+              <Button
+                type="submit"
+                size="lg"
+                className="w-full"
+                disabled={pending}
+              >
+                {pending ? "Saving…" : "Save driver"} <CornerDownLeft />
+              </Button>
               <Link
                 href={base}
-                className={buttonVariants({ variant: "outline", size: "sm" })}
+                className={buttonVariants({ variant: "ghost", size: "sm" })}
               >
                 Cancel
               </Link>
-              <Button type="submit" size="sm" disabled={pending}>
-                {pending ? "Saving…" : "Save driver"} <CornerDownLeft />
-              </Button>
-            </SettingsCardFooter>
-          </div>
+              {formError && (
+                <p role="alert" className="text-sm text-destructive">
+                  {formError}
+                </p>
+              )}
+            </DriverDocsCard>
+          </aside>
         )}
       </fieldset>
     </form>

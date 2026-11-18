@@ -209,14 +209,6 @@ function DriverFormSkeleton({ editing = false }: { editing?: boolean }) {
           className="sm:col-span-3"
         />
       </SettingsCard>
-      {!editing && (
-        <div className="overflow-hidden rounded-xl border bg-card shadow-xs">
-          <SettingsCardFooter hint="New drivers start as active.">
-            <Skeleton className="h-8 w-16 rounded-md bg-foreground/10" />
-            <Skeleton className="h-8 w-28 rounded-md bg-foreground/10" />
-          </SettingsCardFooter>
-        </div>
-      )}
     </div>
   )
 }
@@ -224,8 +216,38 @@ function DriverFormSkeleton({ editing = false }: { editing?: boolean }) {
 export function NewDriverSkeleton() {
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
-      <div className="mx-auto max-w-5xl">
-        <DriverFormSkeleton />
+      <div className="mx-auto flex max-w-7xl flex-col gap-6">
+        {/* The "All drivers" link: a small ghost button. */}
+        <Skeleton className="h-8 w-28 rounded-md" />
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
+          <div className="min-w-0 lg:col-start-1 lg:row-start-1">
+            <DriverFormSkeleton />
+          </div>
+          <aside className="lg:col-start-2 lg:row-start-1">
+            <section className="overflow-hidden rounded-xl border bg-card shadow-xs">
+              <div className="px-5 pt-4 pb-5">
+                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                  New driver
+                </p>
+                <h4 className="mt-1 text-xl font-semibold tracking-tight">
+                  Their documents
+                </h4>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Attach their CDL and medical card. Both are saved to the
+                  driver&apos;s documents when you save.
+                </p>
+                <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                  <Skeleton className="h-36 w-full rounded-xl" />
+                  <Skeleton className="h-36 w-full rounded-xl" />
+                </div>
+                <div className="mt-5 flex flex-col gap-2 border-t pt-5">
+                  <Skeleton className="h-10 w-full rounded-md bg-foreground/10" />
+                  <Skeleton className="mx-auto h-8 w-16 rounded-md" />
+                </div>
+              </div>
+            </section>
+          </aside>
+        </div>
       </div>
     </div>
   )
