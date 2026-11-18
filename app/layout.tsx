@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { Geist, Geist_Mono, Inter } from "next/font/google"
+import { Geist_Mono, Inter, Space_Grotesk } from "next/font/google"
 
 import "./globals.css"
 import { Toaster } from "@/components/ui/sonner"
@@ -7,6 +7,12 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" })
+
+// Headings on the driver qualification file screens.
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-display",
+})
 
 const fontMono = Geist_Mono({
   subsets: ["latin"],
@@ -28,6 +34,7 @@ export default function RootLayout({
       className={cn(
         "antialiased",
         fontMono.variable,
+        spaceGrotesk.variable,
         "font-sans",
         inter.variable
       )}

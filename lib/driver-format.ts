@@ -11,6 +11,9 @@ const dateFormat = new Intl.DateTimeFormat("en-US", {
 })
 
 /** "2027-03-04" → "Mar 4, 2027" */
+/** Where the driver page's CDL card is, for links that jump to it. */
+export const DRIVER_CDL_ID = "cdl-details"
+
 export function formatDate(value: string) {
   return dateFormat.format(new Date(`${value}T00:00:00Z`))
 }
@@ -82,11 +85,65 @@ export function needsAction(state: ExpiryState) {
   )
 }
 
-type ComplianceDates = {
-  cdl_expires_on: string | null
-  medical_card_expires_on: string | null
-  annual_review_on: string | null
-  clearinghouse_query_on: string | null
+/** One of a driver's qualification file dates, as the side panel shows it. */
+export type DqDate = {
+  /** When it's due, or when the completed one runs out. */
+  due: string | null
+  /** When it was last done. */
+  last: string | null
+  /** The current one is done (so its date is an expiry, not a due date). */
+  done: boolean
+}
+
+/**
+ * The qualification file dates the driver page and lists show beside the
+ * CDL: medical proof, the annual review and the Clearinghouse query. Null
+ * when the file has no such item (it isn't set up yet).
+ */
+export type DqComplianceDates = {
+  medical: DqDate | null
+  annualReview: DqDate | null
+  clearinghouse: DqDate | null
+}
+
+type DqDateItem = {
+  template_code: string
+  cycle_number: number
+  completed_at: string | null
+  valid_until: string | null
+  due_date: string | null
+  not_applicable_reason: string | null
+}
+
+/** Picks those dates out of a driver's qualification file items. */
+export function dqComplianceDates(
+  items: readonly DqDateItem[]
+): DqComplianceDates {
+  const pick = (codes: string[]): DqDate | null => {
+    const mine = items.filter(
+      (item) =>
+        codes.includes(item.template_code) && !item.not_applicable_reason
+    )
+    if (!mine.length) return null
+    const current = mine.reduce((a, b) =>
+      b.cycle_number > a.cycle_number ? b : a
+    )
+    const last = mine
+      .filter((item) => item.completed_at)
+      .map((item) => item.completed_at!.slice(0, 10))
+      .sort()
+      .at(-1)
+    return {
+      due: current.completed_at ? current.valid_until : current.due_date,
+      last: last ?? null,
+      done: !!current.completed_at,
+    }
+  }
+  return {
+    medical: pick(["medical_proof_cdl", "medical_certificate"]),
+    annualReview: pick(["annual_review"]),
+    clearinghouse: pick(["clearinghouse_limited_query"]),
+  }
 }
 
 export type ComplianceItem = {
@@ -102,17 +159,30 @@ export type ComplianceItem = {
   expiry: Expiry
 }
 
-/** The four dates to keep up with, in the order they're shown. */
+/**
+ * The four dates to keep up with, in the order they're shown: the CDL from
+ * the driver, the rest from their qualification file (`dq`, or undefined
+ * when it isn't set up, which shows them as not set).
+ */
 export function complianceItems(
-  driver: ComplianceDates,
+  driver: { cdl_expires_on: string | null },
+  dq: DqComplianceDates | undefined,
   today: string
 ): ComplianceItem[] {
-  const reviewDue = driver.annual_review_on
-    ? addYear(driver.annual_review_on)
-    : null
-  const queryDue = driver.clearinghouse_query_on
-    ? addYear(driver.clearinghouse_query_on)
-    : null
+  const fromFile = (
+    key: string,
+    label: string,
+    date: DqDate | null | undefined,
+    kind: "expires" | "due"
+  ): ComplianceItem => ({
+    key,
+    label,
+    // An item not done yet is due, even if it runs out once it's done.
+    kind: date && !date.done ? "due" : kind,
+    due: date?.due ?? null,
+    last: date?.last ?? null,
+    expiry: expiry(date?.due ?? null, today),
+  })
   return [
     {
       key: "cdl",
@@ -121,29 +191,9 @@ export function complianceItems(
       due: driver.cdl_expires_on,
       expiry: expiry(driver.cdl_expires_on, today),
     },
-    {
-      key: "medical_card",
-      label: "Medical card",
-      kind: "expires",
-      due: driver.medical_card_expires_on,
-      expiry: expiry(driver.medical_card_expires_on, today),
-    },
-    {
-      key: "annual_review",
-      label: "Annual review",
-      kind: "due",
-      due: reviewDue,
-      last: driver.annual_review_on,
-      expiry: expiry(reviewDue, today),
-    },
-    {
-      key: "clearinghouse",
-      label: "Clearinghouse query",
-      kind: "due",
-      due: queryDue,
-      last: driver.clearinghouse_query_on,
-      expiry: expiry(queryDue, today),
-    },
+    fromFile("medical_card", "Medical card", dq?.medical, "expires"),
+    fromFile("annual_review", "Annual review", dq?.annualReview, "due"),
+    fromFile("clearinghouse", "Clearinghouse query", dq?.clearinghouse, "due"),
   ]
 }
 
@@ -305,7 +355,8 @@ export type DriverStep = {
   title: string
   detail: string
   action:
-    | { type: "edit"; label: string }
+    /** Where to fix it: the CDL card, or the qualification file. */
+    | { type: "edit"; label: string; target: "cdl" | "file" }
     | { type: "activate" }
     | { type: "load"; id: string; reference: string }
     | { type: "new_load" }
@@ -313,6 +364,15 @@ export type DriverStep = {
 }
 
 const firstName = (name: string) => name.split(" ")[0]
+
+/** How to fix an item: the CDL on its card, the rest in the file. */
+const fixWith = (item: ComplianceItem) =>
+  item.key === "cdl" ? "save the new date" : "add it to the qualification file"
+
+const editAction = (item: ComplianceItem): NonNullable<DriverStep["action"]> =>
+  item.key === "cdl"
+    ? { type: "edit", label: "Update the CDL", target: "cdl" }
+    : { type: "edit", label: "Open the qualification file", target: "file" }
 const day = (wallClock: string) => formatDate(wallClock.slice(0, 10))
 
 /**
@@ -342,8 +402,8 @@ export function driverNextStep(
     return {
       tone: "danger",
       title: `${item.label} ${item.kind === "expires" ? "expired" : "overdue"}`,
-      detail: `${item.kind === "expires" ? "Expired" : "Was due"} ${formatDate(item.due!)}. Keep ${name} off loads until it's renewed, then save the new date.${more ? ` ${more} more ${more === 1 ? "item is" : "items are"} late.` : ""}`,
-      action: { type: "edit", label: "Update dates" },
+      detail: `${item.kind === "expires" ? "Expired" : "Was due"} ${formatDate(item.due!)}. Keep ${name} off loads until it's renewed, then ${fixWith(item)}.${more ? ` ${more} more ${more === 1 ? "item is" : "items are"} late.` : ""}`,
+      action: editAction(item),
     }
   }
 
@@ -372,8 +432,8 @@ export function driverNextStep(
     return {
       tone: "warning",
       title: `${soon.label} ${soon.kind === "expires" ? "expires" : "due"} ${inDays(soon.expiry.days)}`,
-      detail: `${soon.kind === "expires" ? "Runs out" : "Due"} ${formatDate(soon.due!)}. Renew it before then and save the new date.`,
-      action: { type: "edit", label: "Update dates" },
+      detail: `${soon.kind === "expires" ? "Runs out" : "Due"} ${formatDate(soon.due!)}. Renew it before then and ${fixWith(soon)}.`,
+      action: editAction(soon),
     }
   }
 
@@ -385,7 +445,9 @@ export function driverNextStep(
       tone: "warning",
       title: `Add the ${unset.map((item) => item.label).join(" and ")} ${unset.length === 1 ? "date" : "dates"}`,
       detail: "You'll get a warning 60, 30 and 7 days before it runs out.",
-      action: { type: "edit", label: "Add dates" },
+      action: unset.some((item) => item.key === "cdl")
+        ? { type: "edit", label: "Add the CDL date", target: "cdl" }
+        : { type: "edit", label: "Set up the file", target: "file" },
     }
   }
 

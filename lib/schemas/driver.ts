@@ -14,6 +14,42 @@ export const DRIVER_STATUS_LABELS: Record<DriverStatus, string> = {
 
 export const driverStatusSchema = z.enum(DRIVER_STATUSES, "Choose a status.")
 
+export const CDL_CLASSES = ["A", "B", "C"] as const
+export type CdlClass = (typeof CDL_CLASSES)[number]
+
+export const CDL_CLASS_LABELS: Record<CdlClass, string> = {
+  A: "Class A",
+  B: "Class B",
+  C: "Class C",
+}
+
+/** Endorsements, by the letter printed on the license. */
+export const CDL_ENDORSEMENTS = ["H", "N", "P", "S", "T", "X"] as const
+export type CdlEndorsement = (typeof CDL_ENDORSEMENTS)[number]
+
+export const CDL_ENDORSEMENT_LABELS: Record<CdlEndorsement, string> = {
+  H: "Hazmat",
+  N: "Tank",
+  P: "Passenger",
+  S: "School bus",
+  T: "Doubles/triples",
+  X: "Tank and hazmat",
+}
+
+/**
+ * A list from the form ("H,N", or "OK, NM") or from a saved driver (an
+ * array), as an array of upper-cased codes.
+ */
+const codeList = (value: unknown) =>
+  Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value
+          .split(/[\s,]+/)
+          .map((part) => part.trim().toUpperCase())
+          .filter(Boolean)
+      : []
+
 export const PAY_TYPES = ["per_mile", "percent", "flat"] as const
 export type PayType = (typeof PAY_TYPES)[number]
 
@@ -57,15 +93,36 @@ export const driverSchema = z
       max(30).regex(/^[0-9+().\-\s]+$/, "Enter a valid phone number.")
     ),
     email: optional(z.email("Enter a valid email address.")),
+    // Their first day; the qualification file's due dates count from it.
+    start_date: optionalDate,
+    // A checkbox: "on" from the form when ticked, a boolean from a saved
+    // driver. Adds the medical variance item to the qualification file.
+    holds_medical_variance: z.preprocess(
+      (value) => value === true || value === "on",
+      z.boolean()
+    ),
     cdl_number: optional(max(30), (value) => value.toUpperCase()),
     cdl_state: optional(
       z.enum(US_STATES, "Use a 2-letter US state code, e.g. TX."),
       (value) => value.toUpperCase()
     ),
+    cdl_class: z.preprocess(
+      (value) => (value === "" || value === undefined ? null : value),
+      z.enum(CDL_CLASSES, "Choose the CDL class.").nullable()
+    ),
+    cdl_endorsements: z.preprocess(
+      codeList,
+      z.array(z.enum(CDL_ENDORSEMENTS, "Choose endorsements from the list."))
+    ),
+    cdl_restrictions: optional(max(60), (value) => value.toUpperCase()),
     cdl_expires_on: optionalDate,
-    medical_card_expires_on: optionalDate,
-    annual_review_on: optionalDate,
-    clearinghouse_query_on: optionalDate,
+    // Other states that licensed the driver in the past 3 years.
+    prior_license_states: z.preprocess(
+      codeList,
+      z
+        .array(z.enum(US_STATES, "Use 2-letter US state codes, e.g. OK, NM."))
+        .max(10, "List up to 10 states.")
+    ),
     pay_type: z.preprocess(
       (value) => (value === "" || value === undefined ? null : value),
       z.enum(PAY_TYPES, "Choose how the driver is paid.").nullable()

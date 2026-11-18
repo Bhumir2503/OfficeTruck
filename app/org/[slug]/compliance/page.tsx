@@ -26,6 +26,7 @@ import {
   today as getToday,
   type ComplianceItem,
 } from "@/lib/driver-format"
+import { getDqCalendar } from "@/lib/dq/fleet"
 import { getDrivers } from "@/lib/drivers"
 import { canManage, getOrganization } from "@/lib/organizations"
 import {
@@ -62,11 +63,13 @@ export default async function CompliancePage({
 
   const slug = organization.slug
   const today = getToday()
-  const [drivers, trucks, filings] = await Promise.all([
+  const [drivers, trucks, filings, dqItems] = await Promise.all([
     getDrivers(organization.id),
     getTrucks(organization.id),
     getTaxFilings(organization.id),
+    getDqCalendar(organization.id, today),
   ])
+  const driverNames = new Map(drivers.map((d) => [d.id, d.full_name]))
 
   const currentTaxYear = taxYearOf(today)
   const currentFiling = filings.find((f) => f.tax_year === currentTaxYear)
@@ -80,11 +83,15 @@ export default async function CompliancePage({
     ...drivers
       .filter((driver) => driver.status === "active")
       .flatMap((driver) =>
-        complianceItems(driver, today).map((item) => ({
-          item,
-          owner: driver.full_name,
-          href: `/org/${slug}/drivers/${driver.id}`,
-        }))
+        // Only the CDL here: the qualification file's items are added
+        // below, from the file itself.
+        complianceItems(driver, undefined, today)
+          .filter((item) => item.key === "cdl")
+          .map((item) => ({
+            item,
+            owner: driver.full_name,
+            href: `/org/${slug}/drivers/${driver.id}`,
+          }))
       ),
     ...activeTrucks.flatMap((truck) =>
       truckComplianceItems(truck, today).map((item) => ({
@@ -94,6 +101,23 @@ export default async function CompliancePage({
       }))
     ),
   ]
+  // Driver qualification file items: each driver's checklist, open or
+  // running out. Items with no date yet wait for the driver's start date.
+  upcoming.push(
+    ...dqItems
+      .filter((dq) => dq.date !== null)
+      .map((dq) => ({
+        item: {
+          key: `dq_${dq.itemId}`,
+          label: dq.title,
+          kind: dq.expires ? ("expires" as const) : ("due" as const),
+          due: dq.date,
+          expiry: expiry(dq.date, today),
+        },
+        owner: driverNames.get(dq.driverId) ?? "Driver",
+        href: `/org/${slug}/drivers/${dq.driverId}#qualification-file`,
+      }))
+  )
   // The company's 2290: due this tax year until it's filed, then next year.
   if (activeTrucks.length > 0) {
     const due = taxYearDueDate(
@@ -120,7 +144,7 @@ export default async function CompliancePage({
       <div className="mx-auto flex max-w-5xl flex-col gap-6">
         <SettingsCard
           title="Due soon"
-          description="Anything late or due in the next 60 days, for active drivers and trucks."
+          description="Anything late or due in the next 60 days, for active drivers and trucks, including driver qualification files."
           contentClassName={due.length ? "px-0 pb-0" : undefined}
           footer={
             due.length > 0 && (

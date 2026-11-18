@@ -12,24 +12,18 @@ import Link from "next/link"
 
 import { ExpiryBadge } from "@/components/drivers/driver-badges"
 import { DriverStatusButton } from "@/components/drivers/driver-status-button"
-import { MoneyLine, Panel } from "@/components/side-panel"
+import { Panel } from "@/components/side-panel"
 import { buttonVariants } from "@/components/ui/button"
 import {
-  driverEarnings,
+  DRIVER_CDL_ID,
   driverNextStep,
   formatDate,
-  formatPay,
   needsAction,
   type ComplianceItem,
-  type PayTotal,
 } from "@/lib/driver-format"
-import type { Driver, DriverLoad } from "@/lib/drivers"
-import { formatRate } from "@/lib/load-format"
+import type { Driver, DriverDocument, DriverLoad } from "@/lib/drivers"
 
-const miles = new Intl.NumberFormat("en-US")
-
-/** Where the "Needs attention" "Update dates" button and the photo links go. */
-export const DRIVER_DATES_ID = "compliance-dates"
+/** Where the document links go. */
 export const DRIVER_DOCUMENTS_ID = "documents"
 
 function ItemIcon({ item, warn }: { item: ComplianceItem; warn: boolean }) {
@@ -50,45 +44,27 @@ function ItemIcon({ item, warn }: { item: ComplianceItem; warn: boolean }) {
   )
 }
 
-function PayRow({ label, total }: { label: string; total: PayTotal }) {
-  return (
-    <MoneyLine
-      label={
-        <>
-          {label}
-          <span className="ml-1.5 text-muted-foreground">
-            {total.loads} {total.loads === 1 ? "load" : "loads"}
-          </span>
-        </>
-      }
-    >
-      {formatRate(total.pay)}
-    </MoneyLine>
-  )
-}
-
 /**
  * The right-hand side of the driver page: the one thing to do about them
- * now, whether their paperwork is current, and what they've earned.
+ * now and whether their paperwork is current.
  */
 export function DriverSidePanel({
   organizationId,
   driver,
   items,
+  documents,
   loads,
   manager,
   loadsBase,
-  today,
 }: {
   organizationId: string
   driver: Driver
   items: ComplianceItem[]
+  documents: Pick<DriverDocument, "kind">[]
   loads: DriverLoad[]
   manager: boolean
   /** /org/<slug>/loads */
   loadsBase: string
-  /** "YYYY-MM-DD" */
-  today: string
 }) {
   const step = driverNextStep(driver, items, loads)
   const action = step.action
@@ -96,14 +72,12 @@ export function DriverSidePanel({
   const warn = driver.status === "active"
   const current = items.every((item) => item.expiry.state === "ok")
   const photos = [
-    { label: "CDL photo", path: driver.cdl_photo_path },
-    { label: "Medical card photo", path: driver.medical_card_photo_path },
-  ]
-
-  const earnings = driverEarnings(loads, today)
-  const rate = formatPay(driver.pay_type, driver.pay_rate)
-  const unpriced = earnings.all.unpriced + earnings.ahead.unpriced
-  const year = earnings.year
+    { label: "CDL copy", kind: "cdl" },
+    { label: "Medical card copy", kind: "medical_card" },
+  ].map((photo) => ({
+    label: photo.label,
+    onFile: documents.some((doc) => doc.kind === photo.kind),
+  }))
 
   return (
     <div className="flex flex-col gap-4">
@@ -141,7 +115,7 @@ export function DriverSidePanel({
           )}
           {action?.type === "edit" && manager && (
             <a
-              href={`#${DRIVER_DATES_ID}`}
+              href={`#${action.target === "cdl" ? DRIVER_CDL_ID : "qualification-file"}`}
               className={buttonVariants({
                 size: "lg",
                 className: "mt-4 w-full",
@@ -218,7 +192,7 @@ export function DriverSidePanel({
               className="flex items-center justify-between gap-3 py-2.5 text-sm last:pb-0"
             >
               <span className="flex items-center gap-2">
-                {photo.path ? (
+                {photo.onFile ? (
                   <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
                 ) : (
                   <Circle className="size-4 text-muted-foreground" />
@@ -226,7 +200,7 @@ export function DriverSidePanel({
                 <span
                   className={cn(
                     "font-medium",
-                    !photo.path && "text-muted-foreground"
+                    !photo.onFile && "text-muted-foreground"
                   )}
                 >
                   {photo.label}
@@ -236,60 +210,11 @@ export function DriverSidePanel({
                 href={`#${DRIVER_DOCUMENTS_ID}`}
                 className="text-xs font-medium hover:underline"
               >
-                {photo.path ? "View" : manager ? "Upload" : "Not on file"}
+                {photo.onFile ? "View" : manager ? "Upload" : "Not on file"}
               </a>
             </li>
           ))}
         </ul>
-      </Panel>
-
-      {/* Pay */}
-      <Panel
-        title="Pay"
-        aside={
-          <span className="text-sm text-muted-foreground">
-            {rate ?? "No rate set"}
-          </span>
-        }
-      >
-        <dl className="flex flex-col gap-2">
-          <PayRow label="This week" total={earnings.week} />
-          <PayRow label="This month" total={earnings.month} />
-          <PayRow label="This year" total={year} />
-          <PayRow label="All time" total={earnings.all} />
-          {earnings.ahead.loads > 0 && (
-            <>
-              <div className="my-1 border-t" />
-              <MoneyLine
-                label={
-                  <>
-                    Booked ahead
-                    <span className="ml-1.5">
-                      {earnings.ahead.loads}{" "}
-                      {earnings.ahead.loads === 1 ? "load" : "loads"}
-                    </span>
-                  </>
-                }
-                muted
-              >
-                {formatRate(earnings.ahead.pay)}
-              </MoneyLine>
-            </>
-          )}
-        </dl>
-        <p className="mt-3 text-xs text-muted-foreground">
-          By delivery date, at the rate locked on each load.
-          {unpriced > 0 &&
-            ` ${unpriced} per-mile ${unpriced === 1 ? "load has" : "loads have"} no miles, so ${unpriced === 1 ? "it isn't" : "they aren't"} counted.`}
-        </p>
-        {year.loads > 0 && (
-          <p className="mt-2 text-sm text-muted-foreground tabular-nums">
-            This year: {miles.format(year.miles)} mi ·{" "}
-            {formatRate(year.revenue)} revenue
-            {year.miles > 0 &&
-              ` · ${formatRate(year.revenue / year.miles)} per mile`}
-          </p>
-        )}
       </Panel>
     </div>
   )

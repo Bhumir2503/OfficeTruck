@@ -6,6 +6,7 @@ import {
   type AttentionInput,
 } from "@/lib/dashboard-format"
 import { complianceItems, expiry, today as getToday } from "@/lib/driver-format"
+import { getDqDatesByDriver } from "@/lib/dq/fleet"
 import { getDrivers } from "@/lib/drivers"
 import { COMPANY_DOCUMENT_LABELS } from "@/lib/company-document-format"
 import { getCompanyDocuments } from "@/lib/documents"
@@ -28,7 +29,7 @@ import { getTaxFilings, getTrucks } from "@/lib/trucks"
 export const getAttention = cache(async (organizationId: string) => {
   const today = getToday()
   const supabase = await createClient()
-  const [invoices, ready, booked, drivers, trucks, filings, papers] =
+  const [invoices, ready, booked, drivers, trucks, filings, papers, dq] =
     await Promise.all([
       getInvoices(organizationId),
       getLoadsToInvoice(organizationId),
@@ -44,6 +45,7 @@ export const getAttention = cache(async (organizationId: string) => {
       getTrucks(organizationId),
       getTaxFilings(organizationId),
       getCompanyDocuments(organizationId),
+      getDqDatesByDriver(organizationId),
     ])
   if (booked.error) {
     throw booked.error
@@ -54,7 +56,7 @@ export const getAttention = cache(async (organizationId: string) => {
     ...drivers
       .filter((driver) => driver.status === "active")
       .flatMap((driver) =>
-        complianceItems(driver, today).map((item) => ({
+        complianceItems(driver, dq[driver.id], today).map((item) => ({
           owner: driver.full_name,
           item,
           path: `drivers/${driver.id}`,

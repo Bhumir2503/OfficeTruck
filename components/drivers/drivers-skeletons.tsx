@@ -134,64 +134,77 @@ function DriverFormSkeleton({ editing = false }: { editing?: boolean }) {
     <div className="flex flex-col gap-6">
       <SettingsCard
         title={editing ? "Driver details" : "Driver"}
-        description="Name and how to reach them."
+        description="Name, how to reach them, and when they started."
         contentClassName="grid gap-5 sm:grid-cols-6"
       >
         <FieldSkeleton label="Full name" className="sm:col-span-6" />
-        <FieldSkeleton label="Phone" className="sm:col-span-3" />
+        <FieldSkeleton label="Sign-in number" className="sm:col-span-3" />
         <FieldSkeleton label="Email" className="sm:col-span-3" />
+        <FieldSkeleton label="Start date" className="sm:col-span-3" />
+        <div className="flex items-start gap-2 text-sm sm:col-span-3 sm:pt-8">
+          <Skeleton className="mt-0.5 size-4 shrink-0 rounded-sm" />
+          <span>
+            Holds a medical variance, SPE certificate or exemption letter
+          </span>
+        </div>
       </SettingsCard>
       <SettingsCard
-        title="Compliance"
-        description="You'll see a warning 60, 30 and 7 days before each one is due."
+        title="CDL"
+        description="The license as printed. You'll see a warning 60, 30 and 7 days before it expires."
         contentClassName="grid gap-5 sm:grid-cols-6"
       >
         <FieldSkeleton label="CDL number" className="sm:col-span-4" />
         <FieldSkeleton label="Issuing state" className="sm:col-span-2" />
+        <Field className="sm:col-span-6">
+          <FieldLabel>Class</FieldLabel>
+          <div className="flex gap-2">
+            <Skeleton className="h-8 w-20 rounded-md" />
+            <Skeleton className="h-8 w-20 rounded-md" />
+            <Skeleton className="h-8 w-20 rounded-md" />
+          </div>
+        </Field>
+        <Field className="sm:col-span-6">
+          <FieldLabel>Endorsements</FieldLabel>
+          <div className="flex flex-wrap gap-2">
+            {Array.from({ length: 6 }, (_, index) => (
+              <Skeleton key={index} className="h-8 w-28 rounded-md" />
+            ))}
+          </div>
+        </Field>
+        <FieldSkeleton
+          label="Restrictions"
+          hint="The letters printed on the license, if any."
+          className="sm:col-span-3"
+        />
         <FieldSkeleton
           label="CDL expires"
           hint="The expiration date printed on the license."
           className="sm:col-span-3"
         />
         <FieldSkeleton
-          label="Medical card expires"
-          hint="From the DOT medical examiner's certificate."
-          className="sm:col-span-3"
-        />
-        <FieldSkeleton
-          label="Last annual review"
-          hint="Review of the driving record. Due again a year later."
-          className="sm:col-span-3"
-        />
-        <FieldSkeleton
-          label="Last Clearinghouse query"
-          hint="The yearly limited query. Due again a year later."
-          className="sm:col-span-3"
+          label="Other states, past 3 years"
+          hint="Every other state that licensed them in the past 3 years. A hiring driving record is needed from each."
+          className="sm:col-span-6"
         />
       </SettingsCard>
+      {/* On the driver page, pay has its own card. */}
       {!editing && (
         <SettingsCard
-          title="CDL and medical card"
-          description="Optional. Photos or PDFs, kept private to your organization."
+          title="Pay"
+          description="Used to work out profit per load."
         >
-          <div className="grid gap-6 sm:grid-cols-2">
-            <PhotoSkeleton label="CDL" />
-            <PhotoSkeleton label="Medical card" />
-          </div>
+          <Field>
+            <FieldLabel>Paid</FieldLabel>
+            {/* Not set, Per mile, % of load, Flat per load. */}
+            <div className="flex flex-wrap gap-1">
+              <Skeleton className="h-8 w-18 rounded-md" />
+              <Skeleton className="h-8 w-20 rounded-md" />
+              <Skeleton className="h-8 w-22 rounded-md" />
+              <Skeleton className="h-8 w-28 rounded-md" />
+            </div>
+          </Field>
         </SettingsCard>
       )}
-      <SettingsCard title="Pay" description="Used to work out profit per load.">
-        <Field>
-          <FieldLabel>Paid</FieldLabel>
-          {/* Not set, Per mile, % of load, Flat per load. */}
-          <div className="flex flex-wrap gap-1">
-            <Skeleton className="h-8 w-18 rounded-md" />
-            <Skeleton className="h-8 w-20 rounded-md" />
-            <Skeleton className="h-8 w-22 rounded-md" />
-            <Skeleton className="h-8 w-28 rounded-md" />
-          </div>
-        </Field>
-      </SettingsCard>
       <SettingsCard
         title="Notes"
         footer={
@@ -221,17 +234,6 @@ export function NewDriverSkeleton() {
       <div className="mx-auto max-w-5xl">
         <DriverFormSkeleton />
       </div>
-    </div>
-  )
-}
-
-/** A card-shaped photo slot with its label and buttons. */
-function PhotoSkeleton({ label }: { label: string }) {
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="text-sm font-medium">{label}</div>
-      <Skeleton className="aspect-[1.586] w-full rounded-lg" />
-      <Skeleton className="h-8 w-24 rounded-md" />
     </div>
   )
 }
@@ -282,27 +284,30 @@ export function DriverDetailSkeleton() {
           <Line className="w-64" />
         </div>
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
-          <div className="flex min-w-0 flex-col gap-6">
+          {/* Same order as the page: details and compliance first, then
+              documents. */}
+          <div className="flex min-w-0 flex-col gap-4">
+            <DriverFormSkeleton editing />
             <SettingsCard
-              title="Loads"
-              description="Driver pay uses the rate locked on each load when they were assigned."
-              contentClassName="space-y-3"
+              title="Documents"
+              description="CDL, medical card, driving record and other papers. Photos or PDFs, kept private to your organization."
             >
               <Skeleton className="h-9 w-full" />
-              <Skeleton className="h-9 w-full" />
-              <Skeleton className="h-9 w-full" />
-            </SettingsCard>
-            <SettingsCard
-              title="CDL and medical card"
-              description="Photos or PDFs, kept private to your organization."
-            >
-              <div className="grid gap-6 sm:grid-cols-2">
-                <PhotoSkeleton label="CDL" />
-                <PhotoSkeleton label="Medical card" />
-              </div>
+              <Skeleton className="mt-2 h-9 w-full" />
             </SettingsCard>
           </div>
-          <aside className="flex flex-col gap-4 lg:row-span-2">
+          <aside className="order-first flex flex-col gap-4 lg:order-none">
+            {/* The qualification file summary, with the exports. */}
+            <section className="flex flex-col gap-3 overflow-hidden rounded-xl border bg-card px-5 pt-4 pb-5 shadow-xs">
+              <div className="flex items-center justify-between">
+                <h4 className="font-display font-semibold text-brand-ink">
+                  Qualification file
+                </h4>
+                <Skeleton className="h-6 w-24 rounded-full" />
+              </div>
+              <Line className="w-32" />
+              <Skeleton className="h-9 w-full rounded-md" />
+            </section>
             <section className="overflow-hidden rounded-xl border bg-card px-5 pt-4 pb-5 shadow-xs">
               <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                 Needs attention
@@ -312,11 +317,7 @@ export function DriverDetailSkeleton() {
               <Skeleton className="mt-4 h-10 w-full rounded-md" />
             </section>
             <PanelSkeleton title="Compliance" rows={6} />
-            <PanelSkeleton title="Pay" rows={4} tall />
           </aside>
-          <div className="min-w-0">
-            <DriverFormSkeleton editing />
-          </div>
         </div>
       </div>
     </div>
