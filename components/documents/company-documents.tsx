@@ -14,6 +14,14 @@ import {
   SettingsEmptyState,
 } from "@/components/settings/settings-card"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
@@ -169,6 +177,22 @@ export function CompanyDocuments({
   today: string
 }) {
   const [pending, start] = useTransition()
+  // The document waiting on the delete confirmation, if any.
+  const [deleting, setDeleting] = useState<CompanyDocument | null>(null)
+
+  function remove() {
+    if (!deleting) return
+    const doc = deleting
+    start(async () => {
+      const result = await removeCompanyDocument(organizationId, doc.id)
+      if ("error" in result) {
+        toast.error(result.error)
+        return
+      }
+      toast.success("Deleted.")
+      setDeleting(null)
+    })
+  }
 
   return (
     <SettingsCard
@@ -232,23 +256,7 @@ export function CompanyDocuments({
                     size="icon-sm"
                     aria-label={`Delete ${doc.file_name}`}
                     disabled={pending}
-                    onClick={() => {
-                      if (
-                        !confirm(
-                          `Delete ${doc.file_name}? This can't be undone.`
-                        )
-                      ) {
-                        return
-                      }
-                      start(async () => {
-                        const result = await removeCompanyDocument(
-                          organizationId,
-                          doc.id
-                        )
-                        if ("error" in result) toast.error(result.error)
-                        else toast.success("Deleted.")
-                      })
-                    }}
+                    onClick={() => setDeleting(doc)}
                   >
                     <Trash2 />
                   </Button>
@@ -259,6 +267,33 @@ export function CompanyDocuments({
         </Table>
       )}
       <UploadForm organizationId={organizationId} />
+      <Dialog
+        open={deleting !== null}
+        onOpenChange={(open) => !pending && !open && setDeleting(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete this document?</DialogTitle>
+            <DialogDescription>
+              {deleting
+                ? `${deleting.title ?? COMPANY_DOCUMENT_LABELS[deleting.kind]} (${deleting.file_name}) will be deleted. This can't be undone.`
+                : "This can't be undone."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={pending}
+              onClick={() => setDeleting(null)}
+            >
+              Cancel
+            </Button>
+            <Button variant="destructive" disabled={pending} onClick={remove}>
+              {pending ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </SettingsCard>
   )
 }

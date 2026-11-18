@@ -9,7 +9,13 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { PAY_TYPES, PAY_TYPE_LABELS, type PayType } from "@/lib/schemas/driver"
 
 const UNITS: Record<
@@ -100,31 +106,38 @@ export function PayFields({
 
   return (
     <>
-      <Field data-invalid={!!errors.pay_type} className="sm:col-span-6">
+      <Field data-invalid={!!errors.pay_type} className="sm:col-span-3">
         <FieldLabel id="driver-pay-type-label">Paid</FieldLabel>
         <input ref={hiddenRef} type="hidden" name="pay_type" value={type} />
-        <ToggleGroup
-          aria-labelledby="driver-pay-type-label"
-          variant="outline"
-          size="sm"
-          spacing={1}
-          className="flex-wrap"
-          value={[type || "none"]}
-          onValueChange={(value: string[]) => {
-            const next = value[0]
-            // Clicking the selected option again leaves it selected.
-            if (next !== undefined) {
-              setType(next === "none" ? "" : (next as PayType))
-            }
-          }}
+        <Select
+          value={type || "none"}
+          onValueChange={(value) =>
+            setType(!value || value === "none" ? "" : (value as PayType))
+          }
+          items={[
+            { value: "none", label: "Not set" },
+            ...PAY_TYPES.map((payType) => ({
+              value: payType,
+              label: PAY_TYPE_LABELS[payType],
+            })),
+          ]}
         >
-          <ToggleGroupItem value="none">Not set</ToggleGroupItem>
-          {PAY_TYPES.map((payType) => (
-            <ToggleGroupItem key={payType} value={payType}>
-              {PAY_TYPE_LABELS[payType]}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
+          <SelectTrigger
+            id="driver-pay-type"
+            aria-labelledby="driver-pay-type-label"
+            className="w-full"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">Not set</SelectItem>
+            {PAY_TYPES.map((payType) => (
+              <SelectItem key={payType} value={payType}>
+                {PAY_TYPE_LABELS[payType]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <FieldError errors={errors.pay_type} />
       </Field>
       {unit && (

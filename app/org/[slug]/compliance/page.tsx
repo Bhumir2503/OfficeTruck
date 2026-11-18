@@ -26,6 +26,7 @@ import {
   today as getToday,
   type ComplianceItem,
 } from "@/lib/driver-format"
+import { getDqDatesByDriver } from "@/lib/dq/fleet"
 import { getDrivers } from "@/lib/drivers"
 import { canManage, getOrganization } from "@/lib/organizations"
 import {
@@ -62,10 +63,11 @@ export default async function CompliancePage({
 
   const slug = organization.slug
   const today = getToday()
-  const [drivers, trucks, filings] = await Promise.all([
+  const [drivers, trucks, filings, dqDates] = await Promise.all([
     getDrivers(organization.id),
     getTrucks(organization.id),
     getTaxFilings(organization.id),
+    getDqDatesByDriver(organization.id),
   ])
 
   const currentTaxYear = taxYearOf(today)
@@ -80,7 +82,7 @@ export default async function CompliancePage({
     ...drivers
       .filter((driver) => driver.status === "active")
       .flatMap((driver) =>
-        complianceItems(driver, today).map((item) => ({
+        complianceItems(driver, dqDates[driver.id], today).map((item) => ({
           item,
           owner: driver.full_name,
           href: `/org/${slug}/drivers/${driver.id}`,

@@ -1,12 +1,15 @@
 "use client"
 
-import { setDriverPhoto } from "@/app/org/[slug]/drivers/actions"
-import type { DriverPhotoKind } from "@/lib/drivers"
+import { addDriverDocument } from "@/app/org/[slug]/drivers/actions"
+import {
+  DRIVER_DOCUMENT_LABELS,
+  type DriverDocumentKind,
+} from "@/lib/driver-document-format"
 import { createClient } from "@/lib/supabase/client"
 
 // Matches the driver-documents bucket's limits in the migration.
 const BUCKET = "driver-documents"
-export const PHOTO_TYPES = [
+export const FILE_TYPES = [
   "image/png",
   "image/jpeg",
   "image/webp",
@@ -16,14 +19,9 @@ const MAX_BYTES = 10 * 1024 * 1024
 /** Phone photos are far bigger than needed to read a card. */
 const MAX_SIDE = 2000
 
-export const PHOTO_LABELS: Record<DriverPhotoKind, string> = {
-  cdl: "CDL",
-  medical_card: "Medical card",
-}
-
 /** Why a file can't be used, or null if it's fine. */
-export function photoFileError(file: File) {
-  if (!PHOTO_TYPES.includes(file.type)) {
+export function driverFileError(file: File) {
+  if (!FILE_TYPES.includes(file.type)) {
     return "Choose a PNG, JPG or WebP photo, or a PDF."
   }
   if (file.size > MAX_BYTES) {
@@ -57,32 +55,43 @@ async function shrink(file: File): Promise<Blob> {
 }
 
 /**
- * Uploads a CDL or medical card file to the driver's folder and points the
- * driver at it, replacing any earlier one. Returns an error message, or null.
+ * Uploads a photo or PDF to the driver's folder and records it as a document
+ * of `kind`. Photos are shrunk first. Returns an error message, or null.
  */
-export async function uploadDriverPhoto(
+export async function uploadDriverDocument(
   organizationId: string,
   driverId: string,
-  kind: DriverPhotoKind,
-  file: File
+  input: {
+    kind: DriverDocumentKind
+    title: string
+    expires_on: string
+    file: File
+  }
 ): Promise<string | null> {
-  const problem = photoFileError(file)
+  const { file, kind } = input
+  const problem = driverFileError(file)
   if (problem) {
     return problem
   }
   try {
     const pdf = file.type === "application/pdf"
     const body = pdf ? file : await shrink(file)
-    // A new name each time, so a replaced photo is never served stale.
-    const path = `${organizationId}/${driverId}/${kind.replace("_", "-")}-${crypto.randomUUID()}.${pdf ? "pdf" : "webp"}`
+    const type = pdf ? "application/pdf" : "image/webp"
+    const path = `${organizationId}/${driverId}/${kind.replaceAll("_", "-")}-${crypto.randomUUID()}.${pdf ? "pdf" : "webp"}`
     const storage = createClient().storage.from(BUCKET)
-    const { error } = await storage.upload(path, body, {
-      contentType: pdf ? "application/pdf" : "image/webp",
-    })
+    const { error } = await storage.upload(path, body, { contentType: type })
     if (error) {
       throw error
     }
-    const result = await setDriverPhoto(organizationId, driverId, kind, path)
+    const result = await addDriverDocument(organizationId, driverId, {
+      kind,
+      title: input.title,
+      expires_on: input.expires_on,
+      path,
+      file_name: file.name.slice(0, 200) || DRIVER_DOCUMENT_LABELS[kind],
+      content_type: type,
+      size_bytes: body.size,
+    })
     if ("error" in result) {
       await storage.remove([path])
       return result.error

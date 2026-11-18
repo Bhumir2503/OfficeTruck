@@ -1,5 +1,14 @@
-import { AlertTriangle, ArrowRight, Package } from "lucide-react"
+"use client"
+
+import {
+  AlertTriangle,
+  ArrowRight,
+  ChevronLeft,
+  ChevronRight,
+  Package,
+} from "lucide-react"
 import Link from "next/link"
+import { useState } from "react"
 
 import { LoadStatusBadge } from "@/components/loads/load-status-menu"
 import {
@@ -7,6 +16,7 @@ import {
   SettingsCardFooter,
   SettingsEmptyState,
 } from "@/components/settings/settings-card"
+import { Button } from "@/components/ui/button"
 import {
   Table,
   TableBody,
@@ -23,6 +33,9 @@ import { isFallenThrough } from "@/lib/schemas/load"
 
 const miles = new Intl.NumberFormat("en-US")
 
+/** Rows per page. Totals and overlap warnings still use every load. */
+const PAGE_SIZE = 10
+
 /** The loads a driver has run, with miles, revenue and their pay. */
 export function DriverLoads({
   loads,
@@ -32,6 +45,8 @@ export function DriverLoads({
   /** /org/<slug>/loads */
   loadsBase: string
 }) {
+  const [page, setPage] = useState(0)
+
   if (loads.length === 0) {
     return (
       <SettingsCard title="Loads">
@@ -78,6 +93,12 @@ export function DriverLoads({
     .filter(Boolean)
     .join(" · ")
 
+  const pages = Math.ceil(loads.length / PAGE_SIZE)
+  // Stays in range if loads go away (say, one is unassigned).
+  const current = Math.min(page, pages - 1)
+  const first = current * PAGE_SIZE
+  const shown = loads.slice(first, first + PAGE_SIZE)
+
   return (
     <SettingsCard
       title="Loads"
@@ -100,7 +121,7 @@ export function DriverLoads({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {loads.map((load) => {
+          {shown.map((load) => {
             const pay = loadDriverPay(load)
             const cancelled = isFallenThrough(load.status)
             return (
@@ -164,6 +185,36 @@ export function DriverLoads({
           })}
         </TableBody>
       </Table>
+      {pages > 1 && (
+        <div className="flex items-center justify-between gap-3 border-t px-6 py-2.5">
+          <span className="text-sm text-muted-foreground tabular-nums">
+            {first + 1}–{first + shown.length} of {loads.length}
+          </span>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="icon-sm"
+              aria-label="Newer loads"
+              disabled={current === 0}
+              onClick={() => setPage(current - 1)}
+            >
+              <ChevronLeft />
+            </Button>
+            <span className="px-2 text-sm text-muted-foreground tabular-nums">
+              Page {current + 1} of {pages}
+            </span>
+            <Button
+              variant="outline"
+              size="icon-sm"
+              aria-label="Older loads"
+              disabled={current === pages - 1}
+              onClick={() => setPage(current + 1)}
+            >
+              <ChevronRight />
+            </Button>
+          </div>
+        </div>
+      )}
     </SettingsCard>
   )
 }

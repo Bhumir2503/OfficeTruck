@@ -1,5 +1,11 @@
+import type { DriverDocumentKind } from "@/lib/driver-document-format"
 import type { LoadStatus } from "@/lib/schemas/load"
-import type { DriverStatus, PayType } from "@/lib/schemas/driver"
+import type {
+  CdlClass,
+  CdlEndorsement,
+  DriverStatus,
+  PayType,
+} from "@/lib/schemas/driver"
 import { createClient } from "@/lib/supabase/server"
 
 export type Driver = {
@@ -7,21 +13,33 @@ export type Driver = {
   full_name: string
   phone: string | null
   email: string | null
+  /** Their first day, "YYYY-MM-DD"; the qualification file counts from it. */
+  start_date: string | null
+  /** Holds a medical variance, SPE certificate or exemption letter. */
+  holds_medical_variance: boolean
   cdl_number: string | null
   cdl_state: string | null
+  cdl_class: CdlClass | null
+  cdl_endorsements: CdlEndorsement[]
+  cdl_restrictions: string | null
   /** A calendar date, "YYYY-MM-DD". */
   cdl_expires_on: string | null
+  /** The DOT medical card's expiration date. */
   medical_card_expires_on: string | null
-  /** When the yearly driving record review was last done; due a year later. */
-  annual_review_on: string | null
-  /** When the yearly Clearinghouse query was last run; due a year later. */
-  clearinghouse_query_on: string | null
+  /** The medical examiner's National Registry number. */
+  medical_examiner_registry_number: string | null
+  medical_examiner_name: string | null
+  /** When the medical exam was done. */
+  medical_exam_on: string | null
+  /** When their driving record was last reviewed; due again a year later. */
+  last_annual_review_on: string | null
+  /** When their limited Clearinghouse query was last run; due yearly. */
+  last_clearinghouse_query_on: string | null
+  /** Other states that licensed the driver in the past 3 years. */
+  prior_license_states: string[]
   pay_type: PayType | null
   /** Dollars per mile, percent of the load, or dollars per load. */
   pay_rate: number | null
-  /** Paths in the driver-documents bucket. */
-  cdl_photo_path: string | null
-  medical_card_photo_path: string | null
   status: DriverStatus
   notes: string | null
   created_at: string
@@ -29,7 +47,7 @@ export type Driver = {
 }
 
 const DRIVER_COLUMNS =
-  "id, full_name, phone, email, cdl_number, cdl_state, cdl_expires_on, medical_card_expires_on, annual_review_on, clearinghouse_query_on, pay_type, pay_rate, cdl_photo_path, medical_card_photo_path, status, notes, created_at, updated_at"
+  "id, full_name, phone, email, start_date, holds_medical_variance, cdl_number, cdl_state, cdl_class, cdl_endorsements, cdl_restrictions, cdl_expires_on, medical_card_expires_on, medical_examiner_registry_number, medical_examiner_name, medical_exam_on, last_annual_review_on, last_clearinghouse_query_on, prior_license_states, pay_type, pay_rate, status, notes, created_at, updated_at"
 
 /** Every driver in the organization, by name. */
 export async function getDrivers(organizationId: string): Promise<Driver[]> {
@@ -133,33 +151,54 @@ export async function getDriverLoads(
   return data as DriverLoad[]
 }
 
-export type DriverPhotoKind = "cdl" | "medical_card"
+export type DriverDocument = {
+  id: string
+  kind: DriverDocumentKind
+  title: string | null
+  expires_on: string | null
+  file_name: string
+  content_type: string
+  created_at: string
+  /** A link that works for an hour, or null. */
+  url: string | null
+}
 
-/**
- * Short-lived links to a driver's CDL and medical card photos, since the
- * bucket is private. A missing or unreadable file comes back as null.
- */
-export async function getDriverPhotoUrls(
-  driver: Driver
-): Promise<Record<DriverPhotoKind, string | null>> {
-  const paths = [driver.cdl_photo_path, driver.medical_card_photo_path].filter(
-    (path): path is string => !!path
-  )
+/** A driver's papers, by kind then newest first, with links to open them. */
+export async function getDriverDocuments(
+  organizationId: string,
+  driverId: string
+): Promise<DriverDocument[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("driver_documents")
+    .select(
+      "id, kind, title, expires_on, path, file_name, content_type, created_at"
+    )
+    .eq("organization_id", organizationId)
+    .eq("driver_id", driverId)
+    .order("kind")
+    .order("created_at", { ascending: false })
+  if (error) {
+    throw error
+  }
   const urls = new Map<string, string>()
-  if (paths.length) {
-    const supabase = await createClient()
-    const { data } = await supabase.storage
+  if (data.length) {
+    // The bucket is private, so links are signed and short-lived.
+    const { data: signed } = await supabase.storage
       .from("driver-documents")
-      .createSignedUrls(paths, 60 * 60)
-    for (const item of data ?? []) {
+      .createSignedUrls(
+        data.map((row) => row.path),
+        60 * 60
+      )
+    for (const item of signed ?? []) {
       if (item.path && item.signedUrl) {
         urls.set(item.path, item.signedUrl)
       }
     }
   }
-  const url = (path: string | null) => (path ? (urls.get(path) ?? null) : null)
-  return {
-    cdl: url(driver.cdl_photo_path),
-    medical_card: url(driver.medical_card_photo_path),
-  }
+  return data.map(({ path, ...row }) => ({
+    ...row,
+    kind: row.kind as DriverDocumentKind,
+    url: urls.get(path) ?? null,
+  }))
 }

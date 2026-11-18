@@ -11,6 +11,9 @@ const dateFormat = new Intl.DateTimeFormat("en-US", {
 })
 
 /** "2027-03-04" → "Mar 4, 2027" */
+/** Where the driver page's CDL card is, for links that jump to it. */
+export const DRIVER_CDL_ID = "cdl-details"
+
 export function formatDate(value: string) {
   return dateFormat.format(new Date(`${value}T00:00:00Z`))
 }
@@ -82,11 +85,65 @@ export function needsAction(state: ExpiryState) {
   )
 }
 
-type ComplianceDates = {
-  cdl_expires_on: string | null
-  medical_card_expires_on: string | null
-  annual_review_on: string | null
-  clearinghouse_query_on: string | null
+/** One of a driver's qualification file dates, as the side panel shows it. */
+export type DqDate = {
+  /** When it's due, or when the completed one runs out. */
+  due: string | null
+  /** When it was last done. */
+  last: string | null
+  /** The current one is done (so its date is an expiry, not a due date). */
+  done: boolean
+}
+
+/**
+ * The qualification file dates the driver page and lists show beside the
+ * CDL: medical proof, the annual review and the Clearinghouse query. Null
+ * when the file has no such item (it isn't set up yet).
+ */
+export type DqComplianceDates = {
+  medical: DqDate | null
+  annualReview: DqDate | null
+  clearinghouse: DqDate | null
+}
+
+type DqDateItem = {
+  template_code: string
+  cycle_number: number
+  completed_at: string | null
+  valid_until: string | null
+  due_date: string | null
+  not_applicable_reason: string | null
+}
+
+/** Picks those dates out of a driver's qualification file items. */
+export function dqComplianceDates(
+  items: readonly DqDateItem[]
+): DqComplianceDates {
+  const pick = (codes: string[]): DqDate | null => {
+    const mine = items.filter(
+      (item) =>
+        codes.includes(item.template_code) && !item.not_applicable_reason
+    )
+    if (!mine.length) return null
+    const current = mine.reduce((a, b) =>
+      b.cycle_number > a.cycle_number ? b : a
+    )
+    const last = mine
+      .filter((item) => item.completed_at)
+      .map((item) => item.completed_at!.slice(0, 10))
+      .sort()
+      .at(-1)
+    return {
+      due: current.completed_at ? current.valid_until : current.due_date,
+      last: last ?? null,
+      done: !!current.completed_at,
+    }
+  }
+  return {
+    medical: pick(["medical_proof_cdl", "medical_certificate"]),
+    annualReview: pick(["annual_review"]),
+    clearinghouse: pick(["clearinghouse_limited_query"]),
+  }
 }
 
 export type ComplianceItem = {
@@ -102,17 +159,44 @@ export type ComplianceItem = {
   expiry: Expiry
 }
 
-/** The four dates to keep up with, in the order they're shown. */
+/**
+ * The four dates to keep up with, in the order they're shown: the CDL from
+ * the driver, the rest from their qualification file (`dq`, or undefined
+ * when it isn't set up, which shows them as not set).
+ */
 export function complianceItems(
-  driver: ComplianceDates,
+  driver: {
+    cdl_expires_on: string | null
+    medical_card_expires_on?: string | null
+    last_annual_review_on?: string | null
+    last_clearinghouse_query_on?: string | null
+  },
+  dq: DqComplianceDates | undefined,
   today: string
 ): ComplianceItem[] {
-  const reviewDue = driver.annual_review_on
-    ? addYear(driver.annual_review_on)
-    : null
-  const queryDue = driver.clearinghouse_query_on
-    ? addYear(driver.clearinghouse_query_on)
-    : null
+  const fromFile = (
+    key: string,
+    label: string,
+    date: DqDate | null | undefined,
+    kind: "expires" | "due"
+  ): ComplianceItem => ({
+    key,
+    label,
+    // An item not done yet is due, even if it runs out once it's done.
+    kind: date && !date.done ? "due" : kind,
+    due: date?.due ?? null,
+    last: date?.last ?? null,
+    expiry: expiry(date?.due ?? null, today),
+  })
+  const yearly = (
+    key: string,
+    label: string,
+    last: string | null | undefined
+  ): ComplianceItem | null => {
+    if (!last) return null
+    const due = addYear(last)
+    return { key, label, kind: "due", due, last, expiry: expiry(due, today) }
+  }
   return [
     {
       key: "cdl",
@@ -121,29 +205,30 @@ export function complianceItems(
       due: driver.cdl_expires_on,
       expiry: expiry(driver.cdl_expires_on, today),
     },
-    {
-      key: "medical_card",
-      label: "Medical card",
-      kind: "expires",
-      due: driver.medical_card_expires_on,
-      expiry: expiry(driver.medical_card_expires_on, today),
-    },
-    {
-      key: "annual_review",
-      label: "Annual review",
-      kind: "due",
-      due: reviewDue,
-      last: driver.annual_review_on,
-      expiry: expiry(reviewDue, today),
-    },
-    {
-      key: "clearinghouse",
-      label: "Clearinghouse query",
-      kind: "due",
-      due: queryDue,
-      last: driver.clearinghouse_query_on,
-      expiry: expiry(queryDue, today),
-    },
+    // The medical card's date from its card, else the qualification file.
+    driver.medical_card_expires_on
+      ? {
+          key: "medical_card",
+          label: "Medical card",
+          kind: "expires" as const,
+          due: driver.medical_card_expires_on,
+          expiry: expiry(driver.medical_card_expires_on, today),
+        }
+      : fromFile("medical_card", "Medical card", dq?.medical, "expires"),
+    // The yearly checks from the driver, else the qualification file.
+    yearly("annual_review", "Annual review", driver.last_annual_review_on) ??
+      fromFile("annual_review", "Annual review", dq?.annualReview, "due"),
+    yearly(
+      "clearinghouse",
+      "Clearinghouse query",
+      driver.last_clearinghouse_query_on
+    ) ??
+      fromFile(
+        "clearinghouse",
+        "Clearinghouse query",
+        dq?.clearinghouse,
+        "due"
+      ),
   ]
 }
 
@@ -300,53 +385,112 @@ export type DriverStepLoad = {
 }
 
 export type DriverStep = {
+  /** Stable, so a list of steps can be keyed. */
+  id: string
   /** How loud the step is: a lapsed document is "danger". */
   tone: "danger" | "warning" | "default"
   title: string
   detail: string
   action:
-    | { type: "edit"; label: string }
+    /** Where to fix it on the driver page. */
+    | { type: "edit"; label: string; target: DriverCardTarget }
     | { type: "activate" }
     | { type: "load"; id: string; reference: string }
     | { type: "new_load" }
     | null
 }
 
+/** The driver page cards a step can send you to. */
+export type DriverCardTarget = "details" | "cdl" | "medical" | "annual"
+
+/** The driver page's card ids, for links that jump to them. */
+export const DRIVER_CARD_IDS: Record<DriverCardTarget, string> = {
+  details: "driver-details",
+  cdl: DRIVER_CDL_ID,
+  medical: "medical-card",
+  annual: "annual-checks",
+}
+
+/** What the next steps know about the driver beyond their dates. */
+export type DriverStepFacts = {
+  full_name: string
+  status: DriverStatus
+  phone?: string | null
+  start_date?: string | null
+  cdl_number?: string | null
+  cdl_state?: string | null
+  cdl_class?: string | null
+  /** Kinds of document on file, e.g. "cdl", "medical_card". */
+  documents?: readonly string[]
+}
+
 const firstName = (name: string) => name.split(" ")[0]
 const day = (wallClock: string) => formatDate(wallClock.slice(0, 10))
 
+/** Where an item is fixed: each has a card on the driver page. */
+const TARGETS: Record<string, DriverCardTarget> = {
+  cdl: "cdl",
+  medical_card: "medical",
+  annual_review: "annual",
+  clearinghouse: "annual",
+}
+const targetOf = (item: ComplianceItem): DriverCardTarget | null =>
+  TARGETS[item.key] ?? null
+
+const fixAction = (
+  item: ComplianceItem,
+  label: string
+): DriverStep["action"] => {
+  const target = targetOf(item)
+  return target ? { type: "edit", label, target } : null
+}
+
+const howToFix = (item: ComplianceItem) =>
+  !targetOf(item)
+    ? "record it in the qualification file"
+    : item.kind === "due"
+      ? "save the date you did it"
+      : "save the new date"
+
 /**
- * The one thing to do about a driver now, most pressing first: a lapsed
- * document keeps them off the road, then the load they're on, a document
- * running out within 30 days, missing dates, and their next load.
+ * Everything to do about a driver, most pressing first: a lapsed document
+ * keeps them off the road, then the load they're on, anything running out
+ * within 30 days, what's missing from their profile, what's due within 60
+ * days, and their next load. The first is what to do now; the rest is what
+ * comes after. Never empty.
  */
-export function driverNextStep(
-  driver: { full_name: string; status: DriverStatus },
+export function driverNextSteps(
+  driver: DriverStepFacts,
   items: ComplianceItem[],
   loads: DriverStepLoad[]
-): DriverStep {
+): DriverStep[] {
   const name = firstName(driver.full_name)
   if (driver.status === "inactive") {
-    return {
-      tone: "default",
-      title: "Inactive",
-      detail: `${name} stays on record but can't be picked for new loads. Mark them active to book them again.`,
-      action: { type: "activate" },
-    }
+    return [
+      {
+        id: "inactive",
+        tone: "default",
+        title: "Inactive",
+        detail: `${name} stays on record but can't be picked for new loads. Mark them active to book them again.`,
+        action: { type: "activate" },
+      },
+    ]
   }
 
-  const lapsed = items.filter((item) => item.expiry.state === "expired")
-  if (lapsed[0]) {
-    const item = lapsed[0]
-    const more = lapsed.length - 1
-    return {
+  const steps: DriverStep[] = []
+
+  // 1. Late: keeps them off the road.
+  for (const item of items.filter((i) => i.expiry.state === "expired")) {
+    steps.push({
+      id: `late:${item.key}`,
       tone: "danger",
       title: `${item.label} ${item.kind === "expires" ? "expired" : "overdue"}`,
-      detail: `${item.kind === "expires" ? "Expired" : "Was due"} ${formatDate(item.due!)}. Keep ${name} off loads until it's renewed, then save the new date.${more ? ` ${more} more ${more === 1 ? "item is" : "items are"} late.` : ""}`,
-      action: { type: "edit", label: "Update dates" },
-    }
+      detail: `${item.kind === "expires" ? "Expired" : "Was due"} ${formatDate(item.due!)}. Keep ${name} off loads until it's ${item.kind === "expires" ? "renewed" : "done"}, then ${howToFix(item)}.`,
+      action: fixAction(item, `Update the ${item.label.toLowerCase()}`),
+    })
   }
 
+  // 2. The load they're on.
   const byPickup = [...loads].sort((a, b) =>
     a.pickup_start.localeCompare(b.pickup_start)
   )
@@ -354,7 +498,8 @@ export function driverNextStep(
     (load) => load.status === "dispatched" || load.status === "loaded"
   )
   if (onLoad) {
-    return {
+    steps.push({
+      id: `on:${onLoad.id}`,
       tone: "default",
       title: `On load ${onLoad.reference}`,
       detail:
@@ -362,47 +507,123 @@ export function driverNextStep(
           ? `In transit to ${onLoad.delivery_location}, delivering ${day(onLoad.delivery_start)}.`
           : `Dispatched. Picks up ${day(onLoad.pickup_start)} in ${onLoad.pickup_location}.`,
       action: { type: "load", id: onLoad.id, reference: onLoad.reference },
-    }
+    })
   }
 
-  const soon = items.find(
-    (item) => item.expiry.state === "urgent" || item.expiry.state === "soon"
-  )
-  if (soon && soon.expiry.state !== "missing") {
-    return {
+  // 3. Running out within 30 days.
+  for (const item of items.filter(
+    (i) => i.expiry.state === "urgent" || i.expiry.state === "soon"
+  )) {
+    if (item.expiry.state === "missing") continue
+    steps.push({
+      id: `soon:${item.key}`,
       tone: "warning",
-      title: `${soon.label} ${soon.kind === "expires" ? "expires" : "due"} ${inDays(soon.expiry.days)}`,
-      detail: `${soon.kind === "expires" ? "Runs out" : "Due"} ${formatDate(soon.due!)}. Renew it before then and save the new date.`,
-      action: { type: "edit", label: "Update dates" },
-    }
+      title: `${item.label} ${item.kind === "expires" ? "expires" : "due"} ${inDays(item.expiry.days)}`,
+      detail: `${item.kind === "expires" ? "Runs out" : "Due"} ${formatDate(item.due!)}. ${item.kind === "expires" ? "Renew it" : "Do it"} before then and ${howToFix(item)}.`,
+      action: fixAction(item, `Update the ${item.label.toLowerCase()}`),
+    })
   }
 
-  const unset = items.filter(
-    (item) => item.kind === "expires" && item.expiry.state === "missing"
-  )
-  if (unset.length) {
-    return {
+  // 4. Missing from their profile.
+  const docs = driver.documents ?? []
+  const missing: [string, string, string, DriverCardTarget][] = []
+  if (!driver.phone)
+    missing.push([
+      "phone",
+      "Add a sign-in number",
+      `${name} signs in on their phone with it, to upload their own papers.`,
+      "details",
+    ])
+  if (!driver.start_date)
+    missing.push([
+      "start",
+      "Add the start date",
+      "Their file's due dates count from their first day.",
+      "details",
+    ])
+  if (!driver.cdl_number || !driver.cdl_state)
+    missing.push([
+      "cdl_number",
+      "Add the CDL number and state",
+      "As printed on the license.",
+      "cdl",
+    ])
+  if (!driver.cdl_class)
+    missing.push(["cdl_class", "Add the CDL class", "A, B or C.", "cdl"])
+  for (const item of items.filter(
+    (i) => i.expiry.state === "missing" && targetOf(i)
+  )) {
+    missing.push([
+      `date:${item.key}`,
+      `Add the ${item.label} date`,
+      "You'll get a warning 60, 30 and 7 days before it runs out.",
+      targetOf(item)!,
+    ])
+  }
+  if (!docs.includes("cdl"))
+    missing.push([
+      "cdl_copy",
+      "Upload a copy of the CDL",
+      "A photo of the front, or a PDF.",
+      "cdl",
+    ])
+  if (!docs.includes("medical_card"))
+    missing.push([
+      "medical_copy",
+      "Upload the medical card",
+      "A photo or PDF of the medical examiner's certificate.",
+      "medical",
+    ])
+  for (const [key, title, detail, target] of missing) {
+    steps.push({
+      id: `missing:${key}`,
       tone: "warning",
-      title: `Add the ${unset.map((item) => item.label).join(" and ")} ${unset.length === 1 ? "date" : "dates"}`,
-      detail: "You'll get a warning 60, 30 and 7 days before it runs out.",
-      action: { type: "edit", label: "Add dates" },
-    }
+      title,
+      detail,
+      action: { type: "edit", label: title, target },
+    })
   }
 
+  // 5. Due within 60 days.
+  for (const item of items) {
+    if (item.expiry.state !== "upcoming") continue
+    steps.push({
+      id: `upcoming:${item.key}`,
+      tone: "default",
+      title: `${item.label} ${item.kind === "expires" ? "expires" : "due"} ${inDays(item.expiry.days)}`,
+      detail: `${item.kind === "expires" ? "Runs out" : "Due"} ${formatDate(item.due!)}.`,
+      action: fixAction(item, `Update the ${item.label.toLowerCase()}`),
+    })
+  }
+
+  // 6. Their next load, or a new one.
   const next = byPickup.find((load) => load.status === "booked")
   if (next) {
-    return {
+    steps.push({
+      id: `next:${next.id}`,
       tone: "default",
       title: `Next up: load ${next.reference}`,
       detail: `Picks up ${day(next.pickup_start)} in ${next.pickup_location}.`,
       action: { type: "load", id: next.id, reference: next.reference },
-    }
+    })
+  } else if (!onLoad) {
+    steps.push({
+      id: "ready",
+      tone: "default",
+      title: "Ready for a load",
+      detail: `Nothing booked for ${name}. Pick them on a new load to send them out.`,
+      action: { type: "new_load" },
+    })
   }
 
-  return {
-    tone: "default",
-    title: "Ready for a load",
-    detail: `Nothing booked for ${name}. Pick them on a new load to send them out.`,
-    action: { type: "new_load" },
-  }
+  return steps
+}
+
+/** The one thing to do about a driver now: the first of their next steps. */
+export function driverNextStep(
+  driver: DriverStepFacts,
+  items: ComplianceItem[],
+  loads: DriverStepLoad[]
+): DriverStep {
+  return driverNextSteps(driver, items, loads)[0]!
 }

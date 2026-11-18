@@ -3,6 +3,10 @@ import {
   type CompanyDocumentKind,
   type DocumentEntry,
 } from "@/lib/company-document-format"
+import {
+  DRIVER_DOCUMENT_LABELS,
+  type DriverDocumentKind,
+} from "@/lib/driver-document-format"
 import { DOCUMENT_LABELS, type DocumentKind } from "@/lib/load-document-format"
 import { EXPENSE_LABELS, type ExpenseKind } from "@/lib/load-expense-format"
 import { createClient } from "@/lib/supabase/server"
@@ -58,7 +62,7 @@ export async function getCompanyDocuments(
 
 /**
  * Every file in the organization: company papers, load documents, expense
- * receipts and driver CDL and medical card photos, newest first.
+ * receipts and driver documents, newest first.
  */
 export async function getAllDocuments(
   organizationId: string,
@@ -80,9 +84,9 @@ export async function getAllDocuments(
       .eq("organization_id", organizationId)
       .not("receipt_path", "is", null),
     supabase
-      .from("drivers")
+      .from("driver_documents")
       .select(
-        "id, full_name, cdl_photo_path, medical_card_photo_path, updated_at"
+        "id, kind, title, path, file_name, created_at, driver:drivers (id, full_name)"
       )
       .eq("organization_id", organizationId),
   ])
@@ -107,12 +111,14 @@ export async function getAllDocuments(
     spent_on: string
     load: Linked
   }[]
-  const driverRows = drivers.data as {
+  const driverRows = drivers.data as unknown as {
     id: string
-    full_name: string
-    cdl_photo_path: string | null
-    medical_card_photo_path: string | null
-    updated_at: string
+    kind: DriverDocumentKind
+    title: string | null
+    path: string
+    file_name: string
+    created_at: string
+    driver: { id: string; full_name: string } | null
   }[]
 
   const [loadUrls, driverUrls] = await Promise.all([
@@ -123,11 +129,7 @@ export async function getAllDocuments(
     sign(
       supabase,
       "driver-documents",
-      driverRows.flatMap((driver) =>
-        [driver.cdl_photo_path, driver.medical_card_photo_path].filter(
-          (path): path is string => !!path
-        )
-      )
+      driverRows.map((row) => row.path)
     ),
   ])
 
@@ -162,25 +164,16 @@ export async function getAllDocuments(
       date: row.spent_on,
       url: loadUrls.get(row.receipt_path) ?? null,
     })),
-    ...driverRows.flatMap((driver) =>
-      (
-        [
-          ["cdl", "CDL", driver.cdl_photo_path],
-          ["medical", "Medical card", driver.medical_card_photo_path],
-        ] as const
-      )
-        .filter(([, , path]) => !!path)
-        .map(([key, type, path]) => ({
-          key: `driver:${driver.id}:${key}`,
-          group: "driver" as const,
-          type,
-          file_name: `${driver.full_name} ${type}`,
-          owner: driver.full_name,
-          path: `drivers/${driver.id}`,
-          date: driver.updated_at,
-          url: driverUrls.get(path!) ?? null,
-        }))
-    ),
+    ...driverRows.map((row) => ({
+      key: `driver:${row.id}`,
+      group: "driver" as const,
+      type: row.title ?? DRIVER_DOCUMENT_LABELS[row.kind],
+      file_name: row.file_name,
+      owner: row.driver?.full_name ?? "Driver",
+      path: row.driver ? `drivers/${row.driver.id}` : null,
+      date: row.created_at,
+      url: driverUrls.get(row.path) ?? null,
+    })),
   ]
   return entries.sort((a, b) => b.date.localeCompare(a.date))
 }

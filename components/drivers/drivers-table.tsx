@@ -28,6 +28,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import {
   complianceItems,
   formatPay,
+  type DqComplianceDates,
   needsAction,
   type ComplianceItem,
 } from "@/lib/driver-format"
@@ -99,6 +100,7 @@ export function DriversTable({
   today,
   canManage,
   pay,
+  dqDates,
 }: {
   drivers: Driver[]
   /** /org/<slug>/drivers */
@@ -116,6 +118,8 @@ export function DriversTable({
       { status: "paid" | "to_pay" | "none"; net: number }
     >
   } | null
+  /** Each driver's file dates (medical, annual review, Clearinghouse). */
+  dqDates: Record<string, DqComplianceDates>
 }) {
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState<Filter>("active")
@@ -124,9 +128,9 @@ export function DriversTable({
     () =>
       drivers.map((driver) => ({
         driver,
-        items: complianceItems(driver, today),
+        items: complianceItems(driver, dqDates[driver.id], today),
       })),
-    [drivers, today]
+    [drivers, dqDates, today]
   )
 
   const counts = useMemo(() => {
