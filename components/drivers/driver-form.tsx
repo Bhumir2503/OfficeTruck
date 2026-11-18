@@ -570,11 +570,7 @@ export function DriverForm({
         )}
         <SettingsCard
           title={driver ? "Driver details" : "Driver"}
-          description={
-            driver
-              ? "Name, how to reach them, and when they started."
-              : "Name, how to reach them, when they started, and how they're paid."
-          }
+          description="Name, how to reach them, and when they started."
           id={DRIVER_CARD_IDS.details}
           data-card="details"
           className={cardClassName?.details}
@@ -619,17 +615,24 @@ export function DriverForm({
             onUpdate={onUpdate}
             className="sm:col-span-3"
           />
-          {/* How they're paid; it works out profit per load. On the driver
-              page pay has its own box beside the form instead. */}
-          {!driver && (
+        </SettingsCard>
+
+        {/* On the driver page pay has its own box beside the form instead. */}
+        {!driver && (
+          <SettingsCard
+            title="Pay"
+            description="How they're paid. It works out the driver's cut and your profit on each load."
+            data-card="pay"
+            contentClassName="grid gap-5 sm:grid-cols-6"
+          >
             <PayFields
               defaultType={null}
               defaultRate={null}
               errors={errors}
               onUpdate={onUpdate}
             />
-          )}
-        </SettingsCard>
+          </SettingsCard>
+        )}
 
         <SettingsCard
           // The side panel's CDL links jump here.
