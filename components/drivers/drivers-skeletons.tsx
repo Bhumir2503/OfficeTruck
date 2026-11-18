@@ -134,24 +134,26 @@ function DriverFormSkeleton({ editing = false }: { editing?: boolean }) {
     <div className="flex flex-col gap-6">
       <SettingsCard
         title={editing ? "Driver details" : "Driver"}
-        description={
-          editing
-            ? "Name, how to reach them, and when they started."
-            : "Name, how to reach them, when they started, and how they're paid."
-        }
+        description="Name, how to reach them, and when they started."
         contentClassName="grid gap-5 sm:grid-cols-6"
       >
         <FieldSkeleton label="Full name" className="sm:col-span-6" />
         <FieldSkeleton label="Sign-in number" className="sm:col-span-3" />
         <FieldSkeleton label="Email" className="sm:col-span-3" />
         <FieldSkeleton label="Start date" className="sm:col-span-3" />
-        {!editing && (
+      </SettingsCard>
+      {!editing && (
+        <SettingsCard
+          title="Pay"
+          description="How they're paid. It works out the driver's cut and your profit on each load."
+          contentClassName="grid gap-5 sm:grid-cols-6"
+        >
           <Field className="sm:col-span-3">
             <FieldLabel>Paid</FieldLabel>
             <Skeleton className="h-9 w-full rounded-md" />
           </Field>
-        )}
-      </SettingsCard>
+        </SettingsCard>
+      )}
       <SettingsCard
         title="CDL"
         description="The license as printed. You'll see a warning 60, 30 and 7 days before it expires."
