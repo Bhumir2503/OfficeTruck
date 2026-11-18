@@ -258,6 +258,62 @@ export async function addDriverDocument(
   return { ok: true }
 }
 
+/**
+ * Renames one of a driver's documents. Only the name changes; if the new
+ * one leaves off the file's extension (.pdf, .jpg), it's kept.
+ */
+export async function renameDriverDocument(
+  organizationId: string,
+  driverId: string,
+  documentId: string,
+  name: string
+): Promise<ActionResult> {
+  if (!(await canManageDrivers(organizationId))) {
+    return { error: NOT_ALLOWED }
+  }
+  const trimmed = name.trim().replace(/[\\/]/g, "-")
+  if (!trimmed) {
+    return { error: "Enter a name." }
+  }
+
+  const supabase = await createClient()
+  const { data: current } = await supabase
+    .from("driver_documents")
+    .select("file_name")
+    .eq("organization_id", organizationId)
+    .eq("driver_id", driverId)
+    .eq("id", documentId)
+    .maybeSingle()
+  if (!current) {
+    return { error: "That document doesn't exist anymore." }
+  }
+  const extension = /\.[a-z0-9]{2,5}$/i.exec(current.file_name)?.[0] ?? ""
+  const fileName =
+    extension && !trimmed.toLowerCase().endsWith(extension.toLowerCase())
+      ? `${trimmed}${extension}`
+      : trimmed
+  if (fileName.length > 200) {
+    return { error: "Keep the name under 200 characters." }
+  }
+
+  const { data, error } = await supabase
+    .from("driver_documents")
+    .update({ file_name: fileName })
+    .eq("organization_id", organizationId)
+    .eq("driver_id", driverId)
+    .eq("id", documentId)
+    .select("id")
+  if (error) {
+    return { error: error.message }
+  }
+  // Row-level security skips the update, rather than failing.
+  if (!data.length) {
+    return { error: NOT_ALLOWED }
+  }
+  refresh()
+  return { ok: true }
+}
+
 /** Deletes one of a driver's documents and its file. */
 export async function removeDriverDocument(
   organizationId: string,

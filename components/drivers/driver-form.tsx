@@ -2,13 +2,17 @@
 
 import { cn } from "cn"
 
-import { CornerDownLeft, FileText, Upload } from "lucide-react"
+import { CornerDownLeft, FileText, IdCard, Pencil, Upload } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
-import { createDriver, updateDriver } from "@/app/org/[slug]/drivers/actions"
+import {
+  createDriver,
+  renameDriverDocument,
+  updateDriver,
+} from "@/app/org/[slug]/drivers/actions"
 import { DateField } from "@/components/drivers/date-field"
 import { PayFields } from "@/components/drivers/pay-fields"
 import {
@@ -190,7 +194,7 @@ function CdlCopyField({
 }: {
   organizationId: string
   driverId: string
-  copy: { file_name: string; url: string | null } | null
+  copy: { id: string; file_name: string; url: string | null } | null
 }) {
   const router = useRouter()
   const fileInput = useRef<HTMLInputElement>(null)
@@ -213,60 +217,157 @@ function CdlCopyField({
     router.refresh()
   }
 
+  const [dragging, setDragging] = useState(false)
+  // The new name while renaming, or null.
+  const [draft, setDraft] = useState<string | null>(null)
+  const [renaming, setRenaming] = useState(false)
+  // Enter saves and closes the box, which can also fire a blur: save once.
+  const settled = useRef(false)
+  const filled = !!copy && !sending
+
+  async function rename() {
+    if (!copy || draft === null || settled.current) return
+    settled.current = true
+    const name = draft.trim()
+    setDraft(null)
+    if (!name || name === copy.file_name) return
+    setRenaming(true)
+    const result = await renameDriverDocument(
+      organizationId,
+      driverId,
+      copy.id,
+      name
+    )
+    setRenaming(false)
+    if ("error" in result) {
+      toast.error(result.error)
+      return
+    }
+    toast.success("Renamed.")
+    router.refresh()
+  }
+
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 sm:col-span-6">
-      <span className="text-sm font-medium">Copy of the CDL</span>
-      <div className="flex min-w-0 items-center gap-2">
-        {copy && !sending ? (
-          <span className="inline-flex max-w-full items-center rounded-md border">
+    <div
+      className={cn(
+        "flex items-center gap-3 rounded-lg border p-3 transition-colors sm:col-span-6",
+        filled ? "bg-card" : "border-dashed",
+        dragging && "border-brand bg-brand/5"
+      )}
+      onDragOver={(event) => {
+        event.preventDefault()
+        setDragging(true)
+      }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={(event) => {
+        event.preventDefault()
+        setDragging(false)
+        const file = event.dataTransfer.files?.[0]
+        if (file && !sending) void upload(file)
+      }}
+    >
+      <div
+        className={cn(
+          "flex size-10 shrink-0 items-center justify-center rounded-md",
+          filled ? "bg-brand/10 text-brand" : "bg-muted text-muted-foreground"
+        )}
+      >
+        {filled ? (
+          <FileText className="size-5" />
+        ) : (
+          <IdCard className="size-5" />
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">Copy of the CDL</p>
+        {sending ? (
+          <p className="truncate text-xs text-muted-foreground">
+            Uploading {sending}…
+          </p>
+        ) : copy && draft !== null ? (
+          <Input
+            aria-label="New name"
+            value={draft}
+            autoFocus
+            maxLength={200}
+            className="mt-0.5 h-7 text-xs"
+            onFocus={(event) => {
+              // Select the name, not the extension, ready to type over.
+              const dot = event.currentTarget.value.lastIndexOf(".")
+              event.currentTarget.setSelectionRange(
+                0,
+                dot > 0 ? dot : event.currentTarget.value.length
+              )
+            }}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              // Kept from the form, so Enter doesn't save the CDL card.
+              event.stopPropagation()
+              if (event.key === "Enter") {
+                event.preventDefault()
+                void rename()
+              } else if (event.key === "Escape") {
+                event.preventDefault()
+                settled.current = true
+                setDraft(null)
+              }
+            }}
+            onBlur={() => void rename()}
+          />
+        ) : copy ? (
+          <div className="flex min-w-0 items-center gap-1">
             <a
               href={copy.url ?? undefined}
               target="_blank"
               rel="noreferrer"
               title={`Open ${copy.file_name}`}
-              className="inline-flex h-8 min-w-0 items-center gap-1.5 px-2.5 text-sm font-medium text-brand hover:underline"
+              className={cn(
+                "truncate text-xs text-brand hover:underline",
+                renaming && "opacity-60"
+              )}
             >
-              <FileText className="size-4 shrink-0" />
-              <span className="truncate">{copy.file_name}</span>
+              {copy.file_name}
             </a>
-            <Button
+            <button
               type="button"
-              size="icon-sm"
-              variant="ghost"
-              aria-label="Replace the CDL copy"
-              title="Replace the CDL copy"
-              className="rounded-l-none border-l"
-              onClick={() => fileInput.current?.click()}
+              aria-label="Rename the CDL copy"
+              title="Rename"
+              disabled={renaming}
+              className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+              onClick={() => {
+                settled.current = false
+                setDraft(copy.file_name)
+              }}
             >
-              <Upload />
-            </Button>
-          </span>
+              <Pencil className="size-3" />
+            </button>
+          </div>
         ) : (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={!!sending}
-            className="max-w-full"
-            onClick={() => fileInput.current?.click()}
-          >
-            <Upload />
-            <span className="truncate">{sending ?? "Upload"}</span>
-          </Button>
+          <p className="text-xs text-muted-foreground">Not uploaded</p>
         )}
-        <input
-          ref={fileInput}
-          type="file"
-          accept={FILE_TYPES.join(",")}
-          className="sr-only"
-          tabIndex={-1}
-          onChange={(event) => {
-            const file = event.target.files?.[0]
-            event.target.value = ""
-            if (file) void upload(file)
-          }}
-        />
       </div>
+      <Button
+        type="button"
+        size="sm"
+        variant={filled ? "ghost" : "outline"}
+        disabled={!!sending}
+        className="shrink-0"
+        onClick={() => fileInput.current?.click()}
+      >
+        <Upload /> {filled ? "Replace" : "Upload"}
+      </Button>
+      <input
+        ref={fileInput}
+        type="file"
+        accept={FILE_TYPES.join(",")}
+        className="sr-only"
+        tabIndex={-1}
+        onChange={(event) => {
+          const file = event.target.files?.[0]
+          event.target.value = ""
+          if (file) void upload(file)
+        }}
+      />
     </div>
   )
 }
@@ -309,7 +410,7 @@ export function DriverForm({
   base: string
   driver?: Driver
   /** The newest copy of the CDL on file, shown on the CDL card. */
-  cdlCopy?: { file_name: string; url: string | null } | null
+  cdlCopy?: { id: string; file_name: string; url: string | null } | null
   /**
    * Classes for each card (pay is only a card when adding a driver). When given, the form adds no box of its own, so
    * its cards sit directly in the page's column and can be ordered among
