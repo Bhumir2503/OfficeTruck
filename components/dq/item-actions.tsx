@@ -477,6 +477,15 @@ export function VoidSignatureButton({
   )
 }
 
+/**
+ * Whether an item is completed by uploading a document. Signed items (the
+ * employment application, review and registry notes) are signed in the
+ * app, and the employer checks are logged, so they get no upload.
+ */
+export function takesUploads(item: Pick<ChecklistEntry, "evidence">) {
+  return item.evidence === "document" || item.evidence === "either"
+}
+
 /** The buttons for one checklist item, for owners and admins. */
 export function ItemActions({ item, rules, driverName, signerName }: Props) {
   const fileInput = useRef<HTMLInputElement>(null)
@@ -557,7 +566,7 @@ export function ItemActions({ item, rules, driverName, signerName }: Props) {
           <Pencil /> Edit
         </Button>
       )}
-      {item.evidence !== "contact_log" && (open || latest) && (
+      {takesUploads(item) && (open || latest) && (
         <>
           {sending || !latest ? (
             <Button

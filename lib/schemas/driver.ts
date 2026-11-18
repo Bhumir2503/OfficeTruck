@@ -116,6 +116,16 @@ export const driverSchema = z
     ),
     cdl_restrictions: optional(max(60), (value) => value.toUpperCase()),
     cdl_expires_on: optionalDate,
+    medical_card_expires_on: optionalDate,
+    medical_examiner_name: optional(max(120)),
+    medical_exam_on: optionalDate,
+    // The two yearly checks, each due again a year after the last.
+    last_annual_review_on: optionalDate,
+    last_clearinghouse_query_on: optionalDate,
+    // The examiner's National Registry number, digits only.
+    medical_examiner_registry_number: optional(
+      z.string().regex(/^\d{4,12}$/, "Enter the registry number, digits only.")
+    ),
     // Other states that licensed the driver in the past 3 years.
     prior_license_states: z.preprocess(
       codeList,
@@ -146,7 +156,7 @@ export const driverSchema = z
         ])
         .nullable()
     ),
-    notes: optional(max(2000)),
+    // Notes aren't edited on the driver page, so saves leave them as they are.
   })
   .superRefine((driver, context) => {
     if (driver.pay_type && driver.pay_rate === null) {

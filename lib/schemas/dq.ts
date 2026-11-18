@@ -240,7 +240,9 @@ export const EMPLOYER_CHECK_OUTCOMES = [
   "attempt_failed",
 ] as const
 
-export const employerCheckSchema = z.object({
+/** A contact with a previous employer, failed attempts included. */
+const employerContactSchema = z.object({
+  outcome: z.enum(EMPLOYER_CHECK_OUTCOMES, "Choose what happened."),
   employer_name: text(1, 200, "The employer's name"),
   employer_address: optionalText(500, "The address"),
   contacted_at: z.iso.datetime({
@@ -248,10 +250,24 @@ export const employerCheckSchema = z.object({
     message: "Enter when you contacted them.",
   }),
   method: z.enum(EMPLOYER_CHECK_METHODS, "Choose how you contacted them."),
-  outcome: z.enum(EMPLOYER_CHECK_OUTCOMES, "Choose what happened."),
   response_summary: optionalText(5000, "What they said"),
   response_document_id: uuid.nullable().default(null),
 })
+
+/** The driver had no DOT-regulated employer in the past 3 years. */
+export const NO_PREVIOUS_EMPLOYERS = "no_previous_employers"
+
+const noPreviousEmployersSchema = z.object({
+  outcome: z.literal(NO_PREVIOUS_EMPLOYERS),
+  // How it was confirmed, e.g. "New CDL holder; see the application."
+  response_summary: optionalText(500, "The note"),
+})
+
+export const employerCheckSchema = z.discriminatedUnion(
+  "outcome",
+  [employerContactSchema, noPreviousEmployersSchema],
+  "Choose what happened."
+)
 
 /** The first issue's message, for an endpoint's error response. */
 export function firstIssue(error: z.ZodError): string {

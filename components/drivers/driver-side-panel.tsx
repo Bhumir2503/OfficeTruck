@@ -1,91 +1,66 @@
-import { cn } from "cn"
-import {
-  AlertTriangle,
-  ArrowRight,
-  CalendarClock,
-  CheckCircle2,
-  Circle,
-  Clock,
-  Plus,
-} from "lucide-react"
+import { ArrowRight, CalendarClock, Plus } from "lucide-react"
 import Link from "next/link"
 
-import { ExpiryBadge } from "@/components/drivers/driver-badges"
 import { DriverStatusButton } from "@/components/drivers/driver-status-button"
-import { Panel } from "@/components/side-panel"
 import { buttonVariants } from "@/components/ui/button"
 import {
-  DRIVER_CDL_ID,
-  driverNextStep,
-  formatDate,
-  needsAction,
+  DRIVER_CARD_IDS,
+  driverNextSteps,
   type ComplianceItem,
+  type DriverStep,
 } from "@/lib/driver-format"
-import type { Driver, DriverDocument, DriverLoad } from "@/lib/drivers"
+import type { Driver, DriverLoad } from "@/lib/drivers"
 
-/** Where the document links go. */
+/** Where the driver page's Documents card is. */
 export const DRIVER_DOCUMENTS_ID = "documents"
-
-function ItemIcon({ item, warn }: { item: ComplianceItem; warn: boolean }) {
-  const state = item.expiry.state
-  if (state === "missing") {
-    return <Circle className="size-4 shrink-0 text-muted-foreground" />
-  }
-  if (warn && state === "expired") {
-    return <AlertTriangle className="size-4 shrink-0 text-destructive" />
-  }
-  if (warn && needsAction(state)) {
-    return (
-      <Clock className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-    )
-  }
-  return (
-    <CheckCircle2 className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-  )
-}
 
 /**
  * The right-hand side of the driver page: the one thing to do about them
- * now and whether their paperwork is current.
+ * now.
  */
 export function DriverSidePanel({
   organizationId,
   driver,
   items,
-  documents,
   loads,
   manager,
   loadsBase,
+  documentKinds = [],
 }: {
   organizationId: string
   driver: Driver
   items: ComplianceItem[]
-  documents: Pick<DriverDocument, "kind">[]
   loads: DriverLoad[]
   manager: boolean
   /** /org/<slug>/loads */
   loadsBase: string
+  /** Kinds of document on file, e.g. "cdl", "medical_card". */
+  documentKinds?: readonly string[]
 }) {
-  const step = driverNextStep(driver, items, loads)
+  const steps = driverNextSteps(
+    { ...driver, documents: documentKinds },
+    items,
+    loads
+  )
+  const step = steps[0]!
   const action = step.action
-  // Inactive drivers aren't driving, so their dates don't need warnings.
-  const warn = driver.status === "active"
-  const current = items.every((item) => item.expiry.state === "ok")
-  const photos = [
-    { label: "CDL copy", kind: "cdl" },
-    { label: "Medical card copy", kind: "medical_card" },
-  ].map((photo) => ({
-    label: photo.label,
-    onFile: documents.some((doc) => doc.kind === photo.kind),
-  }))
-
+  // What comes after, briefly; everything is still worked out each visit.
+  const later = steps.slice(1, 5)
+  const hrefOf = (s: DriverStep) =>
+    s.action?.type === "edit"
+      ? `#${DRIVER_CARD_IDS[s.action.target]}`
+      : s.action?.type === "load"
+        ? `${loadsBase}/${s.action.id}`
+        : s.action?.type === "new_load"
+          ? `${loadsBase}/new`
+          : null
   return (
     <div className="flex flex-col gap-4">
-      {/* Needs attention */}
+      {/* Next action */}
       <section className="overflow-hidden rounded-xl border bg-card text-card-foreground shadow-xs">
         <div className="px-5 pt-4 pb-5">
           <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Needs attention
+            Next action
           </p>
           <h4 className="mt-1 text-lg font-semibold tracking-tight">
             {step.title}
@@ -115,7 +90,7 @@ export function DriverSidePanel({
           )}
           {action?.type === "edit" && manager && (
             <a
-              href={`#${action.target === "cdl" ? DRIVER_CDL_ID : "qualification-file"}`}
+              href={`#${DRIVER_CARD_IDS[action.target]}`}
               className={buttonVariants({
                 size: "lg",
                 className: "mt-4 w-full",
@@ -137,85 +112,48 @@ export function DriverSidePanel({
             </div>
           )}
         </div>
-      </section>
-
-      {/* Compliance */}
-      <Panel
-        title="Compliance"
-        aside={
-          warn &&
-          current && (
-            <span className="inline-flex h-6 items-center rounded-4xl bg-emerald-500/15 px-2.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-              All current
-            </span>
-          )
-        }
-      >
-        <ul className="flex flex-col divide-y">
-          {items.map((item) => (
-            <li key={item.key} className="py-2.5 first:pt-0">
-              <div className="flex items-center justify-between gap-3 text-sm">
-                <span className="flex min-w-0 items-center gap-2">
-                  <ItemIcon item={item} warn={warn} />
-                  <span
-                    className={cn(
-                      "truncate font-medium",
-                      !item.due && "text-muted-foreground"
+        {later.length > 0 && (
+          <div className="border-t bg-muted/30 px-5 py-3">
+            <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              Then
+            </p>
+            <ol className="mt-2 flex flex-col gap-1.5">
+              {later.map((s) => {
+                const href =
+                  manager || s.action?.type === "load" ? hrefOf(s) : null
+                const dot =
+                  s.tone === "danger"
+                    ? "bg-destructive"
+                    : s.tone === "warning"
+                      ? "bg-amber-500"
+                      : "bg-muted-foreground/40"
+                const label = (
+                  <>
+                    <span
+                      className={`mt-1.5 size-1.5 shrink-0 rounded-full ${dot}`}
+                    />
+                    <span className="min-w-0">{s.title}</span>
+                  </>
+                )
+                return (
+                  <li key={s.id}>
+                    {href ? (
+                      <a
+                        href={href}
+                        className="flex gap-2 text-sm hover:underline"
+                      >
+                        {label}
+                      </a>
+                    ) : (
+                      <span className="flex gap-2 text-sm">{label}</span>
                     )}
-                  >
-                    {item.label}
-                  </span>
-                </span>
-                {!item.due ? (
-                  <span className="text-xs text-muted-foreground">Not set</span>
-                ) : warn && needsAction(item.expiry.state) ? (
-                  <ExpiryBadge item={item} />
-                ) : (
-                  <span className="text-xs text-muted-foreground tabular-nums">
-                    {item.kind === "expires" ? "Expires" : "Due"}{" "}
-                    {formatDate(item.due)}
-                  </span>
-                )}
-              </div>
-              {item.kind === "due" && (
-                <p className="mt-0.5 pl-6 text-xs text-muted-foreground">
-                  {item.last
-                    ? `Last done ${formatDate(item.last)}`
-                    : "Not done yet"}
-                </p>
-              )}
-            </li>
-          ))}
-          {photos.map((photo) => (
-            <li
-              key={photo.label}
-              className="flex items-center justify-between gap-3 py-2.5 text-sm last:pb-0"
-            >
-              <span className="flex items-center gap-2">
-                {photo.onFile ? (
-                  <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
-                ) : (
-                  <Circle className="size-4 text-muted-foreground" />
-                )}
-                <span
-                  className={cn(
-                    "font-medium",
-                    !photo.onFile && "text-muted-foreground"
-                  )}
-                >
-                  {photo.label}
-                </span>
-              </span>
-              <a
-                href={`#${DRIVER_DOCUMENTS_ID}`}
-                className="text-xs font-medium hover:underline"
-              >
-                {photo.onFile ? "View" : manager ? "Upload" : "Not on file"}
-              </a>
-            </li>
-          ))}
-        </ul>
-      </Panel>
+                  </li>
+                )
+              })}
+            </ol>
+          </div>
+        )}
+      </section>
     </div>
   )
 }

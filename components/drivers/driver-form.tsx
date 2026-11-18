@@ -27,9 +27,8 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import { useZodForm } from "@/hooks/use-zod-form"
-import { DRIVER_CDL_ID } from "@/lib/driver-format"
+import { DRIVER_CARD_IDS, DRIVER_CDL_ID } from "@/lib/driver-format"
 import { FILE_TYPES, uploadDriverDocument } from "@/lib/driver-document-upload"
 import type { Driver } from "@/lib/drivers"
 import { formatPhone, handlePhoneInput, handlePhoneKeyDown } from "@/lib/phone"
@@ -44,7 +43,8 @@ import {
 } from "@/lib/schemas/driver"
 
 type Name = keyof DriverInput
-export type DriverFormCard = "details" | "cdl" | "pay" | "notes"
+export type DriverFormCard =
+  "details" | "cdl" | "medical" | "annual" | "pay" | "notes"
 type Errors = Partial<Record<Name, { message: string }[]>>
 
 const fieldId = (name: Name) => `driver-${name.replaceAll("_", "-")}`
@@ -191,10 +191,14 @@ function CdlCopyField({
   organizationId,
   driverId,
   copy,
+  kind = "cdl",
+  label = "Copy of the CDL",
 }: {
   organizationId: string
   driverId: string
   copy: { id: string; file_name: string; url: string | null } | null
+  kind?: "cdl" | "medical_card"
+  label?: string
 }) {
   const router = useRouter()
   const fileInput = useRef<HTMLInputElement>(null)
@@ -203,7 +207,7 @@ function CdlCopyField({
   async function upload(file: File) {
     setSending(file.name)
     const problem = await uploadDriverDocument(organizationId, driverId, {
-      kind: "cdl",
+      kind,
       title: "",
       expires_on: "",
       file,
@@ -213,7 +217,7 @@ function CdlCopyField({
       toast.error(problem)
       return
     }
-    toast.success("CDL copy saved.")
+    toast.success(`${label} saved.`)
     router.refresh()
   }
 
@@ -279,7 +283,7 @@ function CdlCopyField({
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">Copy of the CDL</p>
+        <p className="truncate text-sm font-medium">{label}</p>
         {sending ? (
           <p className="truncate text-xs text-muted-foreground">
             Uploading {sending}…
@@ -330,7 +334,7 @@ function CdlCopyField({
             </a>
             <button
               type="button"
-              aria-label="Rename the CDL copy"
+              aria-label={`Rename the ${label.toLowerCase()}`}
               title="Rename"
               disabled={renaming}
               className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -404,6 +408,7 @@ export function DriverForm({
   driver,
   cardClassName,
   cdlCopy,
+  medicalCopy,
 }: {
   organizationId: string
   /** /org/<slug>/drivers */
@@ -411,6 +416,8 @@ export function DriverForm({
   driver?: Driver
   /** The newest copy of the CDL on file, shown on the CDL card. */
   cdlCopy?: { id: string; file_name: string; url: string | null } | null
+  /** The newest copy of the medical card, shown on the Medical card card. */
+  medicalCopy?: { id: string; file_name: string; url: string | null } | null
   /**
    * Classes for each card (pay is only a card when adding a driver). When given, the form adds no box of its own, so
    * its cards sit directly in the page's column and can be ordered among
@@ -443,9 +450,9 @@ export function DriverForm({
         return result.error
       }
 
-      // Documents are uploaded on the driver's page, so go there next.
-      toast.success(`${values.full_name} added. Upload their documents here.`)
-      router.push(`${base}/${result.id}#documents`)
+      // The CDL copy is uploaded on the driver's page, so go there next.
+      toast.success(`${values.full_name} added. Upload their CDL here.`)
+      router.push(`${base}/${result.id}#${DRIVER_CDL_ID}`)
     }
   )
 
@@ -480,10 +487,10 @@ export function DriverForm({
   // When editing, every card gets its own save bar so you don't have to
   // scroll to the bottom. They all submit the same form, so remember which
   // card the save came from and show "Saving…" and errors only there.
-  const [savingCard, setSavingCard] = useState<DriverFormCard>("notes")
+  const [savingCard, setSavingCard] = useState<DriverFormCard>("details")
 
   function markSavingCard(event: React.MouseEvent<HTMLButtonElement>) {
-    setSavingCard(cardOf(event.currentTarget) ?? "notes")
+    setSavingCard(cardOf(event.currentTarget) ?? "details")
   }
 
   // Enter in a field would press the form's first save button, which is
@@ -545,9 +552,30 @@ export function DriverForm({
         disabled={pending}
         className={cardClassName ? "contents" : "flex flex-col gap-6"}
       >
+        {driver && (
+          // Pay is saved from its own box; these carry it through the other
+          // saves unchanged. Outside every card, so they never mark one dirty.
+          <>
+            <input
+              type="hidden"
+              name="pay_type"
+              value={driver.pay_type ?? ""}
+            />
+            <input
+              type="hidden"
+              name="pay_rate"
+              value={driver.pay_rate === null ? "" : String(driver.pay_rate)}
+            />
+          </>
+        )}
         <SettingsCard
           title={driver ? "Driver details" : "Driver"}
-          description="Name, how to reach them, and when they started."
+          description={
+            driver
+              ? "Name, how to reach them, and when they started."
+              : "Name, how to reach them, when they started, and how they're paid."
+          }
+          id={DRIVER_CARD_IDS.details}
           data-card="details"
           className={cardClassName?.details}
           footer={cardFooter("details")}
@@ -591,17 +619,16 @@ export function DriverForm({
             onUpdate={onUpdate}
             className="sm:col-span-3"
           />
-          <label className="flex items-start gap-2 text-sm sm:col-span-3 sm:pt-8">
-            <input
-              type="checkbox"
-              name="holds_medical_variance"
-              defaultChecked={driver?.holds_medical_variance ?? false}
-              className="mt-0.5 size-4 accent-brand"
+          {/* How they're paid; it works out profit per load. On the driver
+              page pay has its own box beside the form instead. */}
+          {!driver && (
+            <PayFields
+              defaultType={null}
+              defaultRate={null}
+              errors={errors}
+              onUpdate={onUpdate}
             />
-            <span>
-              Holds a medical variance, SPE certificate or exemption letter
-            </span>
-          </label>
+          )}
         </SettingsCard>
 
         <SettingsCard
@@ -699,93 +726,127 @@ export function DriverForm({
           )}
         </SettingsCard>
 
-        {driver ? (
-          // Pay is changed in the Pay card on the driver page. These keep
-          // the current rate in the form, so saving here never clears it,
-          // and follow it when that card saves a new one.
-          <>
+        <SettingsCard
+          className={cardClassName?.medical}
+          title="Medical card"
+          description="The DOT medical examiner's certificate. You'll see a warning 60, 30 and 7 days before it expires."
+          id={DRIVER_CARD_IDS.medical}
+          data-card="medical"
+          footer={cardFooter("medical")}
+          contentClassName="grid gap-5 sm:grid-cols-6"
+        >
+          <TextField
+            name="medical_examiner_name"
+            label="Medical examiner"
+            placeholder="e.g. Dr. Jane Lee"
+            defaultValue={driver?.medical_examiner_name ?? undefined}
+            errors={errors}
+            className="sm:col-span-3"
+          />
+          <TextField
+            name="medical_examiner_registry_number"
+            label="Examiner's registry number"
+            placeholder="e.g. 1234567890"
+            inputMode="numeric"
+            defaultValue={driver?.medical_examiner_registry_number ?? undefined}
+            errors={errors}
+            className="sm:col-span-3"
+          />
+          <DateField
+            id={fieldId("medical_exam_on")}
+            name="medical_exam_on"
+            label="Exam date"
+            defaultValue={driver?.medical_exam_on}
+            errors={errors.medical_exam_on}
+            onUpdate={onUpdate}
+            className="sm:col-span-3"
+          />
+          <DateField
+            id={fieldId("medical_card_expires_on")}
+            name="medical_card_expires_on"
+            label="Medical card expires"
+            defaultValue={driver?.medical_card_expires_on}
+            errors={errors.medical_card_expires_on}
+            onUpdate={onUpdate}
+            className="sm:col-span-3"
+          />
+          <label className="flex items-start gap-2 text-sm sm:col-span-6">
             <input
-              type="hidden"
-              name="pay_type"
-              value={driver.pay_type ?? ""}
+              type="checkbox"
+              name="holds_medical_variance"
+              defaultChecked={driver?.holds_medical_variance ?? false}
+              className="mt-0.5 size-4 accent-brand"
             />
-            <input
-              type="hidden"
-              name="pay_rate"
-              value={driver.pay_rate === null ? "" : String(driver.pay_rate)}
+            <span>
+              Holds a medical variance, SPE certificate or exemption letter
+            </span>
+          </label>
+          {driver && (
+            <CdlCopyField
+              organizationId={organizationId}
+              driverId={driver.id}
+              copy={medicalCopy ?? null}
+              kind="medical_card"
+              label="Copy of the medical card"
             />
-          </>
-        ) : (
-          <SettingsCard
-            title="Pay"
-            description="Used to work out profit per load."
-            className={cardClassName?.pay}
-            contentClassName="grid gap-5 sm:grid-cols-6"
-          >
-            <PayFields
-              defaultType={null}
-              defaultRate={null}
-              errors={errors}
-              onUpdate={onUpdate}
-            />
-          </SettingsCard>
-        )}
+          )}
+        </SettingsCard>
 
         <SettingsCard
-          title="Notes"
-          data-card="notes"
-          className={cardClassName?.notes}
-          footer={
+          className={cardClassName?.annual}
+          title="Annual checks"
+          description="Each is due again a year after the last one. You'll see a warning 60, 30 and 7 days before."
+          id={DRIVER_CARD_IDS.annual}
+          data-card="annual"
+          footer={cardFooter("annual")}
+          contentClassName="grid gap-5 sm:grid-cols-6"
+        >
+          <DateField
+            id={fieldId("last_annual_review_on")}
+            name="last_annual_review_on"
+            label="Last annual review"
+            hint="When you last reviewed their driving record (MVR)."
+            defaultValue={driver?.last_annual_review_on}
+            errors={errors.last_annual_review_on}
+            onUpdate={onUpdate}
+            className="sm:col-span-3"
+          />
+          <DateField
+            id={fieldId("last_clearinghouse_query_on")}
+            name="last_clearinghouse_query_on"
+            label="Last Clearinghouse query"
+            hint="When you last ran their limited query."
+            defaultValue={driver?.last_clearinghouse_query_on}
+            errors={errors.last_clearinghouse_query_on}
+            onUpdate={onUpdate}
+            className="sm:col-span-3"
+          />
+        </SettingsCard>
+
+        {!driver && (
+          // Adding a driver saves everything at once.
+          <div className="overflow-hidden rounded-xl border bg-card shadow-xs">
             <SettingsCardFooter
               hint={
-                formError && (!driver || savingCard === "notes") ? (
+                formError ? (
                   <span className="text-destructive">{formError}</span>
-                ) : driver ? (
-                  "Changes are saved for everyone in your organization."
                 ) : (
                   "New drivers start as active."
                 )
               }
             >
-              {!driver && (
-                <Link
-                  href={base}
-                  className={buttonVariants({ variant: "outline", size: "sm" })}
-                >
-                  Cancel
-                </Link>
-              )}
-              <Button
-                type="submit"
-                size="sm"
-                disabled={pending || (!!driver && !dirtyCards.has("notes"))}
-                onClick={markSavingCard}
+              <Link
+                href={base}
+                className={buttonVariants({ variant: "outline", size: "sm" })}
               >
-                {driver
-                  ? saveLabel("notes")
-                  : pending
-                    ? "Saving…"
-                    : "Save driver"}{" "}
-                <CornerDownLeft />
+                Cancel
+              </Link>
+              <Button type="submit" size="sm" disabled={pending}>
+                {pending ? "Saving…" : "Save driver"} <CornerDownLeft />
               </Button>
             </SettingsCardFooter>
-          }
-        >
-          <Field data-invalid={!!errors.notes}>
-            <FieldLabel htmlFor="driver-notes" className="sr-only">
-              Notes
-            </FieldLabel>
-            <Textarea
-              id="driver-notes"
-              name="notes"
-              rows={3}
-              placeholder="Endorsements, home terminal, preferred lanes…"
-              defaultValue={driver?.notes ?? undefined}
-              aria-invalid={!!errors.notes}
-            />
-            <FieldError errors={errors.notes} />
-          </Field>
-        </SettingsCard>
+          </div>
+        )}
       </fieldset>
     </form>
   )

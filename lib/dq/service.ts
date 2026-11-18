@@ -16,6 +16,7 @@ import {
   currentItems,
   dateOf,
   driverStatus,
+  inEffect,
   itemStatus,
   nextCycle,
   validUntil,
@@ -36,6 +37,7 @@ import {
   employerCheckSchema,
   endDateSchema,
   firstIssue,
+  NO_PREVIOUS_EMPLOYERS,
   notApplicableSchema,
   voidSignatureSchema,
   registrySignSchema,
@@ -292,11 +294,19 @@ export async function listChecklist(
   if (items.error || documents.error || attestations.error) {
     return fail(500, "The checklist couldn't be loaded.")
   }
-  const itemRows = items.data as ItemRow[]
+  const byId = new Map(templates.map((t) => [t.id, t]))
+  // Items of a rule that has ended (the non-CDL medical rules, say) and
+  // were marked not applicable are history only: left off the checklist.
+  const itemRows = (items.data as ItemRow[]).filter((item) => {
+    const template = byId.get(item.template_id)
+    return !(
+      item.not_applicable_reason &&
+      template &&
+      !inEffect(template, today)
+    )
+  })
   const documentRows = documents.data as DocumentRow[]
   const attestationRows = attestations.data as AttestationRow[]
-  const byId = new Map(templates.map((t) => [t.id, t]))
-
   const urls = await signedUrls(supabase, [
     ...documentRows.filter((d) => !d.superseded_at).map((d) => d.storage_path),
     ...attestationRows.flatMap((a) => (a.pdf_path ? [a.pdf_path] : [])),
@@ -769,6 +779,7 @@ export async function completeItem(
       .from("dq_employer_checks")
       .select("id", { count: "exact", head: true })
       .eq("driver_id", item.driver_id)
+      .is("removed_at", null)
     if (!count) return fail(400, "Log at least one employer contact first.")
   } else {
     const { data } = await supabase
@@ -1216,7 +1227,10 @@ export async function setEndDate(
 
 // ------------------------------------------------ Previous-employer log --
 
-/** Logs one contact with a previous employer, failed ones included. */
+/**
+ * Logs one contact with a previous employer, failed ones included, or that
+ * the driver had no previous DOT-regulated employer in the past 3 years.
+ */
 export async function logEmployerCheck(
   supabase: SupabaseClient,
   driverId: string,
@@ -1224,35 +1238,50 @@ export async function logEmployerCheck(
 ): Promise<Result<{ id: string }>> {
   const parsed = employerCheckSchema.safeParse(body)
   if (!parsed.success) return fail(400, firstIssue(parsed.error))
+  const check = parsed.data
   const driver = await loadDriver(supabase, driverId)
   if (!driver) return fail(404, NOT_FOUND)
   if (!(await isManager(supabase, driver.organization_id))) {
     return fail(403, MANAGERS_ONLY)
   }
-  if (parsed.data.response_document_id) {
-    const { data } = await supabase
-      .from("dq_documents")
-      .select("driver_id, file_type")
-      .eq("id", parsed.data.response_document_id)
-      .maybeSingle()
-    const doc = data as { driver_id: string; file_type: string } | null
-    if (
-      !doc ||
-      doc.driver_id !== driverId ||
-      doc.file_type !== "investigation"
-    ) {
-      return fail(
-        400,
-        "Attach a document from this driver's investigation file."
-      )
+
+  let row: Record<string, unknown>
+  if (check.outcome === NO_PREVIOUS_EMPLOYERS) {
+    row = {
+      outcome: check.outcome,
+      response_summary: check.response_summary,
+      contacted_at: new Date().toISOString(),
+      employer_name: null,
+      method: null,
     }
+  } else {
+    if (check.response_document_id) {
+      const { data } = await supabase
+        .from("dq_documents")
+        .select("driver_id, file_type")
+        .eq("id", check.response_document_id)
+        .maybeSingle()
+      const doc = data as { driver_id: string; file_type: string } | null
+      if (
+        !doc ||
+        doc.driver_id !== driverId ||
+        doc.file_type !== "investigation"
+      ) {
+        return fail(
+          400,
+          "Attach a document from this driver's investigation file."
+        )
+      }
+    }
+    row = check
   }
+
   const { data, error } = await supabase
     .from("dq_employer_checks")
     .insert({
       organization_id: driver.organization_id,
       driver_id: driverId,
-      ...parsed.data,
+      ...row,
     })
     .select("id")
     .single()
@@ -1328,4 +1357,36 @@ export async function voidSignature(
     .not("completed_at", "is", null)
   if (reopen.error) return dbError(reopen.error)
   return ok({ reopened: true })
+}
+
+/**
+ * Removes an entry from the previous-employer contact log (one logged by
+ * mistake). It's marked removed, not deleted: it leaves the log and the
+ * export and stays in the file's history. Owners and admins.
+ */
+export async function removeEmployerCheck(
+  supabase: SupabaseClient,
+  checkId: string
+): Promise<Result<{ id: string }>> {
+  const { data } = await supabase
+    .from("dq_employer_checks")
+    .select("id, organization_id, removed_at")
+    .eq("id", checkId)
+    .maybeSingle()
+  const check = data as {
+    id: string
+    organization_id: string
+    removed_at: string | null
+  } | null
+  if (!check) return fail(404, NOT_FOUND)
+  if (!(await isManager(supabase, check.organization_id))) {
+    return fail(403, MANAGERS_ONLY)
+  }
+  if (check.removed_at) return fail(400, "That entry was already removed.")
+  const { error } = await supabase
+    .from("dq_employer_checks")
+    .update({ removed_at: new Date().toISOString() })
+    .eq("id", check.id)
+  if (error) return dbError(error)
+  return ok({ id: check.id })
 }

@@ -24,6 +24,17 @@ export type Driver = {
   cdl_restrictions: string | null
   /** A calendar date, "YYYY-MM-DD". */
   cdl_expires_on: string | null
+  /** The DOT medical card's expiration date. */
+  medical_card_expires_on: string | null
+  /** The medical examiner's National Registry number. */
+  medical_examiner_registry_number: string | null
+  medical_examiner_name: string | null
+  /** When the medical exam was done. */
+  medical_exam_on: string | null
+  /** When their driving record was last reviewed; due again a year later. */
+  last_annual_review_on: string | null
+  /** When their limited Clearinghouse query was last run; due yearly. */
+  last_clearinghouse_query_on: string | null
   /** Other states that licensed the driver in the past 3 years. */
   prior_license_states: string[]
   pay_type: PayType | null
@@ -36,7 +47,7 @@ export type Driver = {
 }
 
 const DRIVER_COLUMNS =
-  "id, full_name, phone, email, start_date, holds_medical_variance, cdl_number, cdl_state, cdl_class, cdl_endorsements, cdl_restrictions, cdl_expires_on, prior_license_states, pay_type, pay_rate, status, notes, created_at, updated_at"
+  "id, full_name, phone, email, start_date, holds_medical_variance, cdl_number, cdl_state, cdl_class, cdl_endorsements, cdl_restrictions, cdl_expires_on, medical_card_expires_on, medical_examiner_registry_number, medical_examiner_name, medical_exam_on, last_annual_review_on, last_clearinghouse_query_on, prior_license_states, pay_type, pay_rate, status, notes, created_at, updated_at"
 
 /** Every driver in the organization, by name. */
 export async function getDrivers(organizationId: string): Promise<Driver[]> {

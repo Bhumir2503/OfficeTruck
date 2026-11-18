@@ -248,3 +248,7 @@ Answers to questions the spec left open, from the build conversation:
   templates and the rules engine, unused, in case non-CDL drivers (hotshot,
   box trucks) are supported later. A driver with no class saved counts as
   CDL.
+- **The non-CDL medical rules are ended** (Nov 17, 2026): the examiner's
+  certificate and the National Registry note have `effective_to` set, so
+  no driver gets them. Items of an ended rule that were marked not
+  applicable are left off the checklist and export, and kept in history.

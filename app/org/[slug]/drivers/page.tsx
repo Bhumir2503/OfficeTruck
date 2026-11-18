@@ -3,7 +3,7 @@ import { notFound } from "next/navigation"
 
 import { DriversTable } from "@/components/drivers/drivers-table"
 import { today } from "@/lib/driver-format"
-import { getDqDatesByDriver, getFleetStatus } from "@/lib/dq/fleet"
+import { getDqDatesByDriver } from "@/lib/dq/fleet"
 import { getDrivers } from "@/lib/drivers"
 import { canManage, getOrganization } from "@/lib/organizations"
 import { formatWeek, shiftWeek, weekOf } from "@/lib/settlement-format"
@@ -22,16 +22,11 @@ export default async function DriversPage({
   const manager = canManage(organization)
   // Pay status covers last week, the week payroll usually covers.
   const week = shiftWeek(weekOf(today()), -1)
-  const [drivers, settlements, fleet, dqDates] = await Promise.all([
+  const [drivers, settlements, dqDates] = await Promise.all([
     getDrivers(organization.id),
     manager ? getPayWeek(organization.id, week) : null,
-    getFleetStatus(organization.id, today()),
     getDqDatesByDriver(organization.id),
   ])
-  // Each driver's qualification file status, for the Driver file column.
-  const files = Object.fromEntries(
-    [...fleet].map(([id, row]) => [id, row.status])
-  )
   const pay = settlements && {
     week,
     label: formatWeek(week),
@@ -60,7 +55,6 @@ export default async function DriversPage({
           today={today()}
           canManage={manager}
           pay={pay}
-          files={files}
           dqDates={dqDates}
         />
       </div>

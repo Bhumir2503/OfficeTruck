@@ -25,6 +25,8 @@ const METHOD_LABELS: Record<string, string> = {
 }
 
 const OUTCOME_LABELS: Record<string, string> = {
+  no_previous_employers:
+    "No previous DOT-regulated employers in the past 3 years",
   response_received: "Response received",
   no_response: "No response",
   declined: "Declined to answer",
@@ -170,21 +172,23 @@ export async function exportFile(
         "employer_name, employer_address, contacted_at, method, outcome, response_summary"
       )
       .eq("driver_id", driverId)
+      .is("removed_at", null)
       .order("contacted_at")
     const contacts = (data ?? []) as {
-      employer_name: string
+      employer_name: string | null
       employer_address: string | null
       contacted_at: string
-      method: string
+      method: string | null
       outcome: string
       response_summary: string | null
     }[]
     sections.push({
       heading: "Previous-employer contacts",
       lines: contacts.length
-        ? contacts.map(
-            (c) =>
-              `${dateOf(c.contacted_at)}  ${c.employer_name}${c.employer_address ? `, ${c.employer_address}` : ""}. ${METHOD_LABELS[c.method] ?? c.method}: ${OUTCOME_LABELS[c.outcome] ?? c.outcome}.${c.response_summary ? ` ${c.response_summary}` : ""}`
+        ? contacts.map((c) =>
+            c.employer_name === null
+              ? `${dateOf(c.contacted_at)}  ${OUTCOME_LABELS[c.outcome] ?? c.outcome}.${c.response_summary ? ` ${c.response_summary}` : ""}`
+              : `${dateOf(c.contacted_at)}  ${c.employer_name}${c.employer_address ? `, ${c.employer_address}` : ""}. ${(c.method && METHOD_LABELS[c.method]) ?? c.method}: ${OUTCOME_LABELS[c.outcome] ?? c.outcome}.${c.response_summary ? ` ${c.response_summary}` : ""}`
           )
         : ["No contacts logged."],
     })

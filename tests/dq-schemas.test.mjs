@@ -186,6 +186,40 @@ describe("applicationDraftSchema", () => {
   })
 })
 
+describe("employerCheckSchema: no previous employers", () => {
+  it("needs no employer or contact method, only an optional note", () => {
+    assert.deepEqual(
+      employerCheckSchema.parse({ outcome: "no_previous_employers" }),
+      { outcome: "no_previous_employers", response_summary: null }
+    )
+    assert.equal(
+      employerCheckSchema.parse({
+        outcome: "no_previous_employers",
+        response_summary: "  New CDL holder  ",
+      }).response_summary,
+      "New CDL holder"
+    )
+  })
+
+  it("still needs the employer for a real contact", () => {
+    assert.equal(
+      employerCheckSchema.safeParse({
+        outcome: "no_response",
+        contacted_at: "2026-11-16T15:00:00Z",
+        method: "phone",
+      }).success,
+      false
+    )
+  })
+
+  it("refuses an outcome it doesn't know", () => {
+    assert.equal(
+      employerCheckSchema.safeParse({ outcome: "ghosted" }).success,
+      false
+    )
+  })
+})
+
 describe("the rest", () => {
   it("logs employer contacts with a full timestamp", () => {
     const base = {

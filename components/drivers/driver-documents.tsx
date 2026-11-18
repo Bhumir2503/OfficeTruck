@@ -4,6 +4,7 @@ import { cn } from "cn"
 import {
   ExternalLink,
   FileText,
+  FolderOpen,
   ImageIcon,
   Loader2,
   Plus,
@@ -15,7 +16,10 @@ import { toast } from "sonner"
 
 import { removeDriverDocument } from "@/app/org/[slug]/drivers/actions"
 import { ExpiryBadge } from "@/components/drivers/driver-badges"
-import { SettingsCard } from "@/components/settings/settings-card"
+import {
+  SettingsCard,
+  SettingsEmptyState,
+} from "@/components/settings/settings-card"
 import { Button, buttonVariants } from "@/components/ui/button"
 import {
   Dialog,
@@ -35,6 +39,14 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import {
   DATED_ON_DRIVER,
   DRIVER_DOCUMENT_KINDS,
   DRIVER_DOCUMENT_LABELS,
@@ -48,10 +60,15 @@ import {
 import { expiry, formatDate, needsAction } from "@/lib/driver-format"
 import type { Driver, DriverDocument } from "@/lib/drivers"
 
-type Dates = Pick<Driver, "cdl_expires_on">
+type Dates = Pick<Driver, "cdl_expires_on" | "medical_card_expires_on">
 
-/** Every driver needs these on file; they show as slots until uploaded. */
-const ESSENTIALS = ["cdl", "medical_card"] as const
+/**
+ * What Add document offers. The CDL and medical card copies are uploaded on
+ * their own cards, so they aren't listed here.
+ */
+const ADDABLE_KINDS = DRIVER_DOCUMENT_KINDS.filter(
+  (kind) => kind !== "cdl" && kind !== "medical_card"
+)
 
 const sizeFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 })
 const fileSize = (bytes: number) =>
@@ -154,7 +171,7 @@ function AddDocumentDialog({
               onValueChange={(value) =>
                 setKind((value as DriverDocumentKind) ?? initialKind)
               }
-              items={DRIVER_DOCUMENT_KINDS.map((value) => ({
+              items={ADDABLE_KINDS.map((value) => ({
                 value,
                 label: DRIVER_DOCUMENT_LABELS[value],
               }))}
@@ -163,7 +180,7 @@ function AddDocumentDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {DRIVER_DOCUMENT_KINDS.map((value) => (
+                {ADDABLE_KINDS.map((value) => (
                   <SelectItem key={value} value={value}>
                     {DRIVER_DOCUMENT_LABELS[value]}
                   </SelectItem>
@@ -175,7 +192,9 @@ function AddDocumentDialog({
             <FieldLabel htmlFor="driver-doc-expires">Expires</FieldLabel>
             {datedOnDriver ? (
               <FieldDescription className="pt-1.5">
-                Set on the CDL card.
+                {kind === "medical_card"
+                  ? "Set on the Medical card card."
+                  : "Set on the CDL card."}
               </FieldDescription>
             ) : (
               <Input
@@ -300,8 +319,8 @@ function Expires({
 }
 
 /**
- * A driver's papers as a list: what each is, when it runs out and a link to
- * open it, with slots for the CDL and medical card until they're uploaded.
+ * A driver's papers as a table: what each is, when it runs out and a link to
+ * open it. The CDL and medical card copies are uploaded on their own cards.
  */
 export function DriverDocuments({
   id,
@@ -329,11 +348,28 @@ export function DriverDocuments({
   const [pending, start] = useTransition()
   const [adding, setAdding] = useState(false)
   // The open dialog keeps its kind while it animates closed.
-  const [dialogKind, setDialogKind] = useState<DriverDocumentKind>("cdl")
+  const [dialogKind, setDialogKind] = useState<DriverDocumentKind>("mvr")
   const [dialogKey, setDialogKey] = useState(0)
-  const missing = ESSENTIALS.filter(
-    (kind) => !documents.some((doc) => doc.kind === kind)
-  )
+  // The document waiting on the delete confirmation, if any.
+  const [deleting, setDeleting] = useState<DriverDocument | null>(null)
+
+  function remove() {
+    if (!deleting) return
+    const doc = deleting
+    start(async () => {
+      const result = await removeDriverDocument(
+        organizationId,
+        driverId,
+        doc.id
+      )
+      if ("error" in result) {
+        toast.error(result.error)
+        return
+      }
+      toast.success("Deleted.")
+      setDeleting(null)
+    })
+  }
 
   function add(kind: DriverDocumentKind) {
     setDialogKind(kind)
@@ -345,7 +381,8 @@ export function DriverDocuments({
   return (
     <SettingsCard
       id={id}
-      className="scroll-mt-6"
+      // Columns appear as the card gets wider, not the window.
+      className="@container scroll-mt-6"
       title="Documents"
       description={
         documents.length
@@ -358,112 +395,127 @@ export function DriverDocuments({
             variant="outline"
             size="sm"
             className="shrink-0"
-            onClick={() => add(missing[0] ?? "mvr")}
+            onClick={() => add("mvr")}
           >
             <Plus />
             Add document
           </Button>
         )
       }
-      contentClassName="px-0 pb-0"
+      contentClassName={documents.length ? "px-0 pb-0" : undefined}
     >
-      <ul className="divide-y border-t">
-        {documents.map((doc) => {
-          const label = DRIVER_DOCUMENT_LABELS[doc.kind]
-          const dateField = DATED_ON_DRIVER[doc.kind]
-          const due = dateField ? dates[dateField] : doc.expires_on
-          return (
-            <li key={doc.id} className="flex items-center gap-3 px-6 py-3">
-              <FileTile pdf={doc.content_type === "application/pdf"} />
-              <div className="min-w-0 flex-1">
-                {doc.url ? (
-                  <a
-                    href={doc.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-sm font-medium hover:underline"
-                  >
-                    {doc.title ?? label}
-                  </a>
-                ) : (
-                  <span className="text-sm font-medium">
-                    {doc.title ?? label}
-                  </span>
-                )}
-                <p className="truncate text-xs text-muted-foreground">
-                  {doc.title && `${label} · `}
-                  {doc.file_name} · Added{" "}
-                  {formatDate(doc.created_at.slice(0, 10))}
-                </p>
-              </div>
-              <Expires due={due} label={label} warn={warn} today={today} />
-              <div className="flex shrink-0 items-center">
-                {doc.url && (
-                  <a
-                    href={doc.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label={`Open ${doc.file_name}`}
-                    className={buttonVariants({
-                      variant: "ghost",
-                      size: "icon-sm",
-                    })}
-                  >
-                    <ExternalLink />
-                  </a>
-                )}
-                {canManage && (
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={`Delete ${doc.file_name}`}
-                    disabled={pending}
-                    onClick={() => {
-                      if (
-                        !confirm(
-                          `Delete ${doc.file_name}? This can't be undone.`
-                        )
-                      ) {
-                        return
-                      }
-                      start(async () => {
-                        const result = await removeDriverDocument(
-                          organizationId,
-                          driverId,
-                          doc.id
-                        )
-                        if ("error" in result) toast.error(result.error)
-                        else toast.success("Deleted.")
-                      })
-                    }}
-                  >
-                    <Trash2 />
-                  </Button>
-                )}
-              </div>
-            </li>
-          )
-        })}
-        {missing.map((kind) => (
-          <li key={kind} className="flex items-center gap-3 px-6 py-3">
-            <FileTile empty />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-muted-foreground">
-                {DRIVER_DOCUMENT_LABELS[kind]}
-              </p>
-              <p className="text-xs text-muted-foreground">Not uploaded yet</p>
-            </div>
-            {canManage ? (
-              <Button variant="outline" size="sm" onClick={() => add(kind)}>
-                <Upload />
-                Upload
-              </Button>
-            ) : (
-              <span className="text-xs text-muted-foreground">Not on file</span>
-            )}
-          </li>
-        ))}
-      </ul>
+      {documents.length === 0 ? (
+        <SettingsEmptyState icon={FolderOpen} title="No documents yet">
+          {canManage
+            ? "Add driving records, drug test results, road tests and other papers. The CDL and medical card copies go on their own cards."
+            : "Owners and admins add documents here."}
+        </SettingsEmptyState>
+      ) : (
+        <Table className="[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6">
+          <TableHeader className="bg-muted/40">
+            <TableRow>
+              <TableHead>Document</TableHead>
+              <TableHead className="hidden @lg:table-cell">Type</TableHead>
+              <TableHead>Expires</TableHead>
+              <TableHead className="hidden @xl:table-cell">Added</TableHead>
+              <TableHead className="w-20">
+                <span className="sr-only">Actions</span>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {documents.map((doc) => {
+              const label = DRIVER_DOCUMENT_LABELS[doc.kind]
+              const dateField = DATED_ON_DRIVER[doc.kind]
+              const due = dateField ? dates[dateField] : doc.expires_on
+              const pdf = doc.content_type === "application/pdf"
+              return (
+                <TableRow key={doc.id}>
+                  <TableCell className="max-w-0 py-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span
+                        className={cn(
+                          "flex size-8 shrink-0 items-center justify-center rounded-md",
+                          pdf
+                            ? "bg-red-500/10 text-red-700"
+                            : "bg-sky-500/10 text-sky-700"
+                        )}
+                      >
+                        {pdf ? (
+                          <FileText className="size-4" />
+                        ) : (
+                          <ImageIcon className="size-4" />
+                        )}
+                      </span>
+                      <div className="min-w-0">
+                        <a
+                          href={doc.url ?? undefined}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block truncate text-sm font-medium hover:underline"
+                        >
+                          {doc.title ?? label}
+                        </a>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {doc.file_name}
+                        </p>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="hidden text-sm text-muted-foreground @lg:table-cell">
+                    {label}
+                  </TableCell>
+                  <TableCell>
+                    {due ? (
+                      <Expires
+                        due={due}
+                        label={label}
+                        warn={warn}
+                        today={today}
+                      />
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="hidden text-xs whitespace-nowrap text-muted-foreground @xl:table-cell">
+                    {formatDate(doc.created_at.slice(0, 10))}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex justify-end">
+                      {doc.url && (
+                        <a
+                          href={doc.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label={`Open ${doc.file_name}`}
+                          className={buttonVariants({
+                            variant: "ghost",
+                            size: "icon-sm",
+                          })}
+                        >
+                          <ExternalLink />
+                        </a>
+                      )}
+                      {canManage && (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="hover:text-destructive"
+                          aria-label={`Delete ${doc.file_name}`}
+                          disabled={pending}
+                          onClick={() => setDeleting(doc)}
+                        >
+                          <Trash2 />
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+          </TableBody>
+        </Table>
+      )}
       {canManage && (
         <AddDocumentDialog
           key={dialogKey}
@@ -476,6 +528,33 @@ export function DriverDocuments({
           }}
         />
       )}
+      <Dialog
+        open={deleting !== null}
+        onOpenChange={(open) => !pending && !open && setDeleting(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete this document?</DialogTitle>
+            <DialogDescription>
+              {deleting
+                ? `${deleting.title ?? DRIVER_DOCUMENT_LABELS[deleting.kind]} (${deleting.file_name}) will be deleted. This can't be undone.`
+                : "This can't be undone."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={pending}
+              onClick={() => setDeleting(null)}
+            >
+              Cancel
+            </Button>
+            <Button variant="destructive" disabled={pending} onClick={remove}>
+              {pending ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </SettingsCard>
   )
 }

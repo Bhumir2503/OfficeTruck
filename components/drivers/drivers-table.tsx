@@ -4,7 +4,6 @@ import { Search, UserRoundPlus } from "lucide-react"
 import Link from "next/link"
 import { useMemo, useState } from "react"
 
-import { DriverDqBadge } from "@/components/dq/dq-badges"
 import {
   DriverStatusBadge,
   ExpiryBadge,
@@ -33,7 +32,6 @@ import {
   needsAction,
   type ComplianceItem,
 } from "@/lib/driver-format"
-import type { DqDriverStatus } from "@/lib/dq-rules"
 import type { Driver } from "@/lib/drivers"
 import { initials } from "@/lib/initials"
 import { formatRate } from "@/lib/load-format"
@@ -102,7 +100,6 @@ export function DriversTable({
   today,
   canManage,
   pay,
-  files,
   dqDates,
 }: {
   drivers: Driver[]
@@ -121,8 +118,6 @@ export function DriversTable({
       { status: "paid" | "to_pay" | "none"; net: number }
     >
   } | null
-  /** Each driver's qualification file status; missing when not set up. */
-  files: Record<string, DqDriverStatus>
   /** Each driver's file dates (medical, annual review, Clearinghouse). */
   dqDates: Record<string, DqComplianceDates>
 }) {
@@ -269,7 +264,6 @@ export function DriversTable({
               </TableHead>
             )}
             <TableHead className="hidden sm:table-cell">Compliance</TableHead>
-            <TableHead className="hidden lg:table-cell">Driver file</TableHead>
             <TableHead className="w-24">Status</TableHead>
           </TableRow>
         </TableHeader>
@@ -277,7 +271,7 @@ export function DriversTable({
           {filtered.length === 0 && (
             <TableRow>
               <TableCell
-                colSpan={pay ? 7 : 6}
+                colSpan={pay ? 6 : 5}
                 className="h-24 text-center text-muted-foreground"
               >
                 {search.trim() === "" && filter !== "all"
@@ -354,38 +348,6 @@ export function DriversTable({
                 )}
                 <TableCell className="hidden max-w-80 text-sm whitespace-normal sm:table-cell">
                   <ComplianceSummary items={items} status={driver.status} />
-                </TableCell>
-                <TableCell className="hidden lg:table-cell">
-                  <Link
-                    href={`${base}/${driver.id}#qualification-file`}
-                    className="inline-flex rounded-4xl hover:opacity-80"
-                  >
-                    <DriverDqBadge status={files[driver.id] ?? null} />
-                  </Link>
-                  {(() => {
-                    const file = files[driver.id]
-                    const next =
-                      file && file.status !== "no_checklist"
-                        ? file.nextDueDate
-                        : null
-                    return (
-                      next && (
-                        <p
-                          className={
-                            next < today
-                              ? "mt-1 text-xs text-destructive"
-                              : "mt-1 text-xs text-muted-foreground"
-                          }
-                        >
-                          Next due{" "}
-                          {new Date(`${next}T00:00:00Z`).toLocaleDateString(
-                            "en-US",
-                            { month: "short", day: "numeric", timeZone: "UTC" }
-                          )}
-                        </p>
-                      )
-                    )
-                  })()}
                 </TableCell>
                 <TableCell>
                   <DriverStatusBadge status={driver.status} />

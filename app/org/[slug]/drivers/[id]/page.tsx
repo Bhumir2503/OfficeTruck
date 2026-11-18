@@ -3,15 +3,11 @@ import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 
-import {
-  DqFileSection,
-  DqFileSummary,
-  DRIVER_FILE_ID,
-  loadDqFile,
-} from "@/components/dq/dq-file-section"
 import { DriverStatusBadge } from "@/components/drivers/driver-badges"
 import { DriverDocuments } from "@/components/drivers/driver-documents"
 import { DriverForm } from "@/components/drivers/driver-form"
+import { DriverNotes } from "@/components/drivers/driver-notes"
+import { DriverPayBox } from "@/components/drivers/driver-pay-box"
 import {
   DRIVER_DOCUMENTS_ID,
   DriverSidePanel,
@@ -20,9 +16,10 @@ import { DriverStatusButton } from "@/components/drivers/driver-status-button"
 import { buttonVariants } from "@/components/ui/button"
 import {
   complianceItems,
-  dqComplianceDates,
+  formatPay,
   today as getToday,
 } from "@/lib/driver-format"
+import { getDqDatesByDriver } from "@/lib/dq/fleet"
 import { getDriver, getDriverLoads, getDriverDocuments } from "@/lib/drivers"
 import { canManage, getOrganization } from "@/lib/organizations"
 import { formatPhone } from "@/lib/phone"
@@ -55,19 +52,29 @@ export default async function DriverPage({
   const manager = canManage(organization)
   const today = getToday()
   const loadsBase = `/org/${organization.slug}/loads`
-  // The Pay and Loads cards are set aside for now; their components are
-  // kept. Loads still feed the side panel's next step.
-  const [loads, documents, dqFile] = await Promise.all([
+  const currentRate = formatPay(driver.pay_type, driver.pay_rate)
+  // The Loads and Pay statement cards are set aside for now; loads still
+  // feed the side panel's next step and the rate notice. The qualification
+  // file is off the page too; its dates still feed the next step.
+  const [loads, documents, dqDates] = await Promise.all([
     getDriverLoads(organization.id, driver.id),
     getDriverDocuments(organization.id, driver.id),
-    loadDqFile({
-      driverId: driver.id,
-      organizationId: organization.id,
-      manager,
-      today,
-    }),
+    getDqDatesByDriver(organization.id),
   ])
-  const items = complianceItems(driver, dqComplianceDates(dqFile.items), today)
+  // Booked loads still locked at a rate other than the driver's current one.
+  const staleLoads = loads
+    .filter(
+      (load) =>
+        (load.status === "booked" || load.status === "dispatched") &&
+        currentRate !== null &&
+        formatPay(load.driver_pay_type, load.driver_pay_rate) !== currentRate
+    )
+    .map((load) => ({
+      reference: load.reference,
+      locked:
+        formatPay(load.driver_pay_type, load.driver_pay_rate) ?? "no rate",
+    }))
+  const items = complianceItems(driver, dqDates[driver.id], today)
   const contact = [
     driver.cdl_number
       ? `CDL ${driver.cdl_number}${driver.cdl_state ? ` · ${driver.cdl_state}` : ""}`
@@ -137,8 +144,7 @@ export default async function DriverPage({
         </div>
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
           {/* One column of cards, in the order they're reached for: who the
-              driver is, their compliance dates and qualification file, their
-              documents, then their work, with notes last. The edit
+              driver is and their CDL. The edit
               form's cards are placed among the others with `order`, since the
               form can't wrap the cards that have forms of their own. */}
           <div className="flex min-w-0 flex-col gap-4">
@@ -148,17 +154,18 @@ export default async function DriverPage({
                 base={base}
                 driver={driver}
                 cdlCopy={documents.find((doc) => doc.kind === "cdl") ?? null}
+                medicalCopy={
+                  documents.find((doc) => doc.kind === "medical_card") ?? null
+                }
                 cardClassName={{
                   details: "order-1",
                   cdl: "order-2",
-                  notes: "order-7",
+                  medical: "order-3",
+                  annual: "order-4",
                 }}
               />
             )}
-            <div id={DRIVER_FILE_ID} className="order-3 scroll-mt-6">
-              <DqFileSection file={dqFile} />
-            </div>
-            <div className="order-4">
+            <div className="order-5">
               <DriverDocuments
                 id={DRIVER_DOCUMENTS_ID}
                 organizationId={organization.id}
@@ -174,15 +181,30 @@ export default async function DriverPage({
           {/* Beside the cards, what's next stays in view; on a phone it
               comes first. */}
           <aside className="order-first flex flex-col gap-4 lg:sticky lg:top-6 lg:order-none lg:max-h-[calc(100svh-3rem)] lg:overflow-y-auto">
-            <DqFileSummary file={dqFile} />
             <DriverSidePanel
               organizationId={organization.id}
               driver={driver}
               items={items}
-              documents={documents}
               loads={loads}
               manager={manager}
               loadsBase={loadsBase}
+              documentKinds={documents.map((doc) => doc.kind)}
+            />
+            {manager && (
+              <DriverPayBox
+                organizationId={organization.id}
+                driverId={driver.id}
+                payType={driver.pay_type}
+                payRate={driver.pay_rate}
+                currentRate={currentRate}
+                stale={staleLoads}
+              />
+            )}
+            <DriverNotes
+              organizationId={organization.id}
+              driverId={driver.id}
+              notes={driver.notes}
+              canManage={manager}
             />
           </aside>
         </div>

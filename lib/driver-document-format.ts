@@ -30,9 +30,10 @@ export const DRIVER_DOCUMENT_LABELS: Record<DriverDocumentKind, string> = {
  * so the upload doesn't ask for it again.
  */
 export const DATED_ON_DRIVER: Partial<
-  Record<DriverDocumentKind, "cdl_expires_on">
+  Record<DriverDocumentKind, "cdl_expires_on" | "medical_card_expires_on">
 > = {
   cdl: "cdl_expires_on",
+  medical_card: "medical_card_expires_on",
 }
 
 export function isDriverDocumentKind(

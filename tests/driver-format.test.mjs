@@ -6,6 +6,7 @@ import {
   dqComplianceDates,
   driverEarnings,
   driverNextStep,
+  driverNextSteps,
   weekStart,
 } from "../lib/driver-format.ts"
 
@@ -40,7 +41,17 @@ const withMedical = (date) => ({
   ...current,
   dq: { ...current.dq, medical: date },
 })
-const active = { full_name: "Ana Torres", status: "active" }
+// A driver whose profile is complete, so only dates and loads lead.
+const active = {
+  full_name: "Ana Torres",
+  status: "active",
+  phone: "4055550118",
+  start_date: "2026-01-05",
+  cdl_number: "R482931055",
+  cdl_state: "OK",
+  cdl_class: "A",
+  documents: ["cdl", "medical_card"],
+}
 
 describe("weekStart", () => {
   it("starts the week on Monday", () => {
@@ -92,6 +103,60 @@ describe("driverEarnings", () => {
   })
 })
 
+describe("driverNextSteps", () => {
+  const steps = (driver, dates = current, loads = []) =>
+    driverNextSteps(driver, complianceItems(dates, dates.dq, TODAY), loads)
+
+  it("lists what's missing from the profile, and where to fix it", () => {
+    const list = steps({ full_name: "Ana Torres", status: "active" })
+    assert.deepEqual(
+      list.map((s) => [s.title, s.action?.target ?? s.action?.type]),
+      [
+        ["Add a sign-in number", "details"],
+        ["Add the start date", "details"],
+        ["Add the CDL number and state", "cdl"],
+        ["Add the CDL class", "cdl"],
+        ["Upload a copy of the CDL", "cdl"],
+        ["Upload the medical card", "medical"],
+        ["Ready for a load", "new_load"],
+      ]
+    )
+  })
+
+  it("puts late items first, then the load, then what runs out soon", () => {
+    const list = steps(
+      active,
+      { ...withMedical(done("2026-11-01")), cdl_expires_on: "2026-11-24" },
+      [load({ reference: "NOW", status: "dispatched" })]
+    )
+    assert.deepEqual(
+      list.map((s) => s.title),
+      ["Medical card expired", "On load NOW", "CDL expires in 9 days"]
+    )
+  })
+
+  it("moves on once something's done", () => {
+    const before = steps({ ...active, cdl_class: null })
+    const after = steps(active)
+    assert.equal(before[0].title, "Add the CDL class")
+    assert.equal(after[0].title, "Ready for a load")
+  })
+
+  it("keeps a booked load at the end of the queue", () => {
+    const list = steps({ ...active, phone: null }, current, [
+      load({
+        reference: "LATER",
+        status: "booked",
+        pickup_start: "2026-11-20T08:00:00",
+      }),
+    ])
+    assert.deepEqual(
+      list.map((s) => s.title),
+      ["Add a sign-in number", "Next up: load LATER"]
+    )
+  })
+})
+
 describe("driverNextStep", () => {
   const step = (dates, loads = [], driver = active) =>
     driverNextStep(driver, complianceItems(dates, dates.dq, TODAY), loads)
@@ -110,11 +175,11 @@ describe("driverNextStep", () => {
     ])
     assert.equal(result.tone, "danger")
     assert.equal(result.title, "Medical card expired")
-    // Fixed in the qualification file, not on the CDL card.
+    // Fixed on the Medical card card.
     assert.deepEqual(result.action, {
       type: "edit",
-      label: "Open the qualification file",
-      target: "file",
+      label: "Update the medical card",
+      target: "medical",
     })
   })
 
@@ -154,6 +219,38 @@ describe("driverNextStep", () => {
     const medical = items.find((item) => item.key === "medical_card")
     assert.equal(medical.kind, "due")
     assert.equal(medical.expiry.state, "expired")
+  })
+
+  it("dates the yearly checks from the driver, a year after the last", () => {
+    const items = complianceItems(
+      {
+        ...current,
+        last_annual_review_on: "2025-11-20",
+        last_clearinghouse_query_on: "2024-02-29",
+      },
+      current.dq,
+      TODAY
+    )
+    const review = items.find((item) => item.key === "annual_review")
+    assert.equal(review.due, "2026-11-20")
+    assert.equal(review.last, "2025-11-20")
+    assert.equal(review.kind, "due")
+    const query = items.find((item) => item.key === "clearinghouse")
+    assert.equal(query.due, "2025-02-28")
+    assert.equal(query.expiry.state, "expired")
+  })
+
+  it("sends an overdue yearly check to the Annual checks card", () => {
+    const result = step({
+      ...current,
+      last_annual_review_on: "2025-01-10",
+    })
+    assert.equal(result.title, "Annual review overdue")
+    assert.equal(result.action?.target, "annual")
+    assert.match(
+      result.detail,
+      /until it's done, then save the date you did it/
+    )
   })
 
   it("names the earliest booked load, or says they're free", () => {

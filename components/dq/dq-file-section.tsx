@@ -23,14 +23,12 @@ const FILES = [
   {
     type: "investigation",
     title: "Investigation history file",
-    description:
-      "Safety performance history from previous employers. Owners and admins only.",
+    description: "Safety performance history from previous employers.",
   },
   {
     type: "drug_alcohol",
     title: "Drug and alcohol file",
-    description:
-      "Pre-employment test and Clearinghouse records. Owners and admins only.",
+    description: "Pre-employment test and Clearinghouse records.",
   },
 ] as const
 
@@ -78,6 +76,7 @@ export async function loadDqFile({
             "id, employer_name, employer_address, contacted_at, method, outcome, response_summary"
           )
           .eq("driver_id", driverId)
+          .is("removed_at", null)
           .order("contacted_at", { ascending: false })
       : null,
     user
@@ -216,14 +215,15 @@ export function DqFileSection({ file }: { file: DqFile }) {
               manager={manager && !frozen}
               driverName={driver.full_name}
               signerName={signerName}
-            />
-            {f.type === "investigation" && manager && (
-              <EmployerChecks
-                driverId={driver.id}
-                checks={checks}
-                frozen={frozen}
-              />
-            )}
+            >
+              {f.type === "investigation" && manager && (
+                <EmployerChecks
+                  driverId={driver.id}
+                  checks={checks}
+                  frozen={frozen}
+                />
+              )}
+            </DqChecklist>
           </div>
         )
       })}

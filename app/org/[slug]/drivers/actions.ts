@@ -26,6 +26,9 @@ function saveError(error: { code?: string; message: string }) {
   if (error.code === "23514" && error.message.includes("end_after_start")) {
     return "The start date can't be after the day they left."
   }
+  if (error.code === "23514" && error.message.includes("medical_exam_before")) {
+    return "The exam date can't be after the medical card expires."
+  }
   return error.message
 }
 
@@ -146,6 +149,22 @@ export async function updateDriverPay(
   })
 }
 
+/** Saves only a driver's notes, from the notes box beside the driver page. */
+export async function updateDriverNotes(
+  organizationId: string,
+  driverId: string,
+  notes: string
+): Promise<ActionResult> {
+  if (!(await canManageDrivers(organizationId))) {
+    return { error: NOT_ALLOWED }
+  }
+  const trimmed = notes.trim()
+  if (trimmed.length > 2000) {
+    return { error: "Keep notes under 2,000 characters." }
+  }
+  return update(organizationId, driverId, { notes: trimmed || null })
+}
+
 export async function setDriverStatus(
   organizationId: string,
   driverId: string,
@@ -168,6 +187,8 @@ async function update(
   driverId: string,
   values: Partial<DriverValues> & {
     status?: DriverStatus
+    // Saved from the notes box, not the form.
+    notes?: string | null
   }
 ): Promise<ActionResult> {
   const supabase = await createClient()

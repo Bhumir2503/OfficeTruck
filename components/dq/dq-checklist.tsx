@@ -10,6 +10,7 @@ import {
 } from "@/components/dq/dq-badges"
 import {
   ItemActions,
+  takesUploads,
   VoidSignatureButton,
   type ItemRules,
 } from "@/components/dq/item-actions"
@@ -63,6 +64,7 @@ export function DqChecklist({
   manager,
   driverName,
   signerName,
+  children,
 }: {
   title: string
   description: string
@@ -71,6 +73,8 @@ export function DqChecklist({
   manager: boolean
   driverName: string
   signerName: string
+  /** More of the file, below the items (the employer contact log). */
+  children?: React.ReactNode
 }) {
   const [history, setHistory] = useState(false)
   const past = items.filter((item) => !item.current).length
@@ -105,7 +109,7 @@ export function DqChecklist({
             manager &&
             item.current &&
             !item.not_applicable_reason &&
-            item.evidence !== "contact_log"
+            takesUploads(item)
               ? item.documents.find((d) => !d.superseded)?.id
               : undefined
           const listed = item.documents.filter(
@@ -219,6 +223,7 @@ export function DqChecklist({
           )
         })}
       </ul>
+      {children}
     </SettingsCard>
   )
 }
