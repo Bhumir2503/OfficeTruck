@@ -32,10 +32,10 @@ function Line({ className }: { className?: string }) {
 }
 
 const DRIVER_ROWS = [
-  { name: "w-28", contact: "w-24", cdl: "w-24" },
-  { name: "w-36", contact: "w-28", cdl: "w-20" },
-  { name: "w-24", contact: "w-24", cdl: "w-28" },
-  { name: "w-32", contact: "w-32", cdl: "w-24" },
+  { name: "w-28", contact: "w-24" },
+  { name: "w-36", contact: "w-28" },
+  { name: "w-24", contact: "w-24" },
+  { name: "w-32", contact: "w-32" },
 ]
 
 export function DriversListSkeleton() {
@@ -55,23 +55,21 @@ export function DriversListSkeleton() {
         >
           <div className="flex flex-col gap-3 px-6 pb-4 sm:flex-row sm:items-center">
             <Skeleton className="h-9 w-full" />
-            {/* Active, Inactive, All. */}
-            <div className="flex shrink-0 gap-1">
-              <Skeleton className="h-8 w-20 rounded-md" />
-              <Skeleton className="h-8 w-22 rounded-md" />
-              <Skeleton className="h-8 w-14 rounded-md" />
-            </div>
+            {/* The status filter's dropdown. */}
+            <Skeleton className="h-9 w-full shrink-0 rounded-md sm:w-40" />
           </div>
           <Table className="[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6">
             <TableHeader className="bg-muted/40">
               <TableRow>
                 <TableHead>Driver</TableHead>
-                <TableHead className="hidden lg:table-cell">CDL</TableHead>
-                <TableHead className="hidden md:table-cell">Pay</TableHead>
+                <TableHead className="hidden md:table-cell">Now</TableHead>
+                <TableHead className="hidden lg:table-cell">
+                  Last delivery
+                </TableHead>
+                <TableHead className="hidden xl:table-cell">Pay rate</TableHead>
                 <TableHead className="hidden sm:table-cell">
                   Compliance
                 </TableHead>
-                <TableHead className="w-24">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -86,17 +84,19 @@ export function DriversListSkeleton() {
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell className="hidden lg:table-cell">
-                    <Skeleton className={cn("h-4", row.cdl)} />
-                  </TableCell>
                   <TableCell className="hidden md:table-cell">
+                    <Line className="w-20" />
+                    <Line className="h-3.5 w-32" />
+                  </TableCell>
+                  <TableCell className="hidden lg:table-cell">
+                    <Line className="w-20" />
+                    <Line className="h-3.5 w-28" />
+                  </TableCell>
+                  <TableCell className="hidden xl:table-cell">
                     <Skeleton className="h-4 w-24" />
                   </TableCell>
                   <TableCell className="hidden sm:table-cell">
                     <Skeleton className="h-6 w-36 rounded-full" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-6 w-16 rounded-full" />
                   </TableCell>
                 </TableRow>
               ))}
@@ -142,18 +142,6 @@ function DriverFormSkeleton({ editing = false }: { editing?: boolean }) {
         <FieldSkeleton label="Email" className="sm:col-span-3" />
         <FieldSkeleton label="Start date" className="sm:col-span-3" />
       </SettingsCard>
-      {!editing && (
-        <SettingsCard
-          title="Pay"
-          description="How they're paid. It works out the driver's cut and your profit on each load."
-          contentClassName="grid gap-5 sm:grid-cols-6"
-        >
-          <Field className="sm:col-span-3">
-            <FieldLabel>Paid</FieldLabel>
-            <Skeleton className="h-9 w-full rounded-md" />
-          </Field>
-        </SettingsCard>
-      )}
       <SettingsCard
         title="CDL"
         description="The license as printed. You'll see a warning 60, 30 and 7 days before it expires."
@@ -223,27 +211,38 @@ export function NewDriverSkeleton() {
           <div className="min-w-0 lg:col-start-1 lg:row-start-1">
             <DriverFormSkeleton />
           </div>
-          <aside className="lg:col-start-2 lg:row-start-1">
-            <section className="overflow-hidden rounded-xl border bg-card shadow-xs">
-              <div className="px-5 pt-4 pb-5">
-                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                  New driver
+          <aside className="flex flex-col gap-6 lg:col-start-2 lg:row-start-1">
+            <section className="flex flex-col gap-4 rounded-xl border bg-card px-5 pt-4 pb-5 shadow-xs">
+              <div>
+                <h4 className="font-semibold">Pay</h4>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  It works out the driver&apos;s cut and your profit on each
+                  load.
                 </p>
-                <h4 className="mt-1 text-xl font-semibold tracking-tight">
-                  Their documents
-                </h4>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Attach their CDL and medical card. Both are saved to the
-                  driver&apos;s documents when you save.
-                </p>
-                <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-                  <Skeleton className="h-36 w-full rounded-xl" />
-                  <Skeleton className="h-36 w-full rounded-xl" />
-                </div>
-                <div className="mt-5 flex flex-col gap-2 border-t pt-5">
-                  <Skeleton className="h-10 w-full rounded-md bg-foreground/10" />
-                  <Skeleton className="mx-auto h-8 w-16 rounded-md" />
-                </div>
+              </div>
+              <Field>
+                <FieldLabel>Paid</FieldLabel>
+                <Skeleton className="h-9 w-full rounded-md" />
+              </Field>
+            </section>
+            <section className="flex flex-col gap-3 rounded-xl border bg-card px-5 pt-4 pb-5 shadow-xs">
+              <h4 className="font-semibold">Notes</h4>
+              <Skeleton className="h-24 w-full" />
+            </section>
+            <section className="rounded-xl border bg-card px-5 pt-4 pb-5 shadow-xs">
+              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                New driver
+              </p>
+              <h4 className="mt-1 text-xl font-semibold tracking-tight">
+                Add a driver
+              </h4>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Fill in what you have. Only their name is needed to save, and
+                anything else can be added from their page later.
+              </p>
+              <div className="mt-5 flex flex-col gap-2 border-t pt-5">
+                <Skeleton className="h-10 w-full rounded-md bg-foreground/10" />
+                <Skeleton className="mx-auto h-8 w-16 rounded-md" />
               </div>
             </section>
           </aside>

@@ -6,6 +6,8 @@ import type {
   DriverStatus,
   PayType,
 } from "@/lib/schemas/driver"
+import { LAST_DELIVERY_DAYS } from "@/lib/driver-format"
+import { cityState } from "@/lib/report-format"
 import { createClient } from "@/lib/supabase/server"
 
 export type Driver = {
@@ -149,6 +151,159 @@ export async function getDriverLoads(
     throw error
   }
   return data as DriverLoad[]
+}
+
+/** A load on the drivers list's Now column. */
+export type DriverNowLoad = {
+  id: string
+  reference: string
+  /** "Dallas, TX" */
+  from: string
+  to: string
+  status: "booked" | "dispatched" | "loaded"
+  pickup_start: string
+}
+
+/** A driver's most recent delivered load, for the drivers list. */
+export type DriverLastDelivery = {
+  id: string
+  reference: string
+  /** "Gary, IN" */
+  to: string
+  /** The day it was delivered, "YYYY-MM-DD". */
+  delivered_on: string
+}
+
+export type DriverNow = {
+  current: DriverNowLoad | null
+  next: DriverNowLoad | null
+  last: DriverLastDelivery | null
+}
+
+// A load counts as delivered from here on in the flow.
+const DELIVERED = ["delivered", "invoiced", "paid", "factored"] as const
+
+/** A timestamp's calendar day on the server, as today() counts days. */
+function dayOf(timestamp: string) {
+  const date = new Date(timestamp)
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+/**
+ * The day a load was actually delivered: when the driver checked out (or
+ * in) at the last delivery, else the scheduled delivery day. A load marked
+ * complete before its scheduled day counts on the day it was marked.
+ */
+function deliveredOn(
+  row: {
+    delivery_start: string
+    completed_at: string | null
+    load_stops:
+      | {
+          kind: string
+          position: number
+          arrived_at: string | null
+          departed_at: string | null
+        }[]
+      | null
+  },
+  today: string
+) {
+  const last = (row.load_stops ?? [])
+    .filter((stop) => stop.kind === "delivery")
+    .sort((a, b) => b.position - a.position)[0]
+  const checkedIn = last?.departed_at ?? last?.arrived_at
+  if (checkedIn) {
+    return dayOf(checkedIn)
+  }
+  const scheduled = row.delivery_start.slice(0, 10)
+  if (scheduled > today && row.completed_at) {
+    return dayOf(row.completed_at)
+  }
+  return scheduled
+}
+
+/**
+ * What each driver is doing, for the drivers list: the load they're on
+ * (dispatched or in transit), the next one booked for them, and the last
+ * one they delivered in the past LAST_DELIVERY_DAYS. Two queries for the
+ * whole organization.
+ */
+export async function getDriversNow(
+  organizationId: string,
+  /** "YYYY-MM-DD" */
+  today: string
+): Promise<Record<string, DriverNow>> {
+  const supabase = await createClient()
+  // Only recent deliveries, so the list doesn't read the whole history.
+  const since = new Date(`${today}T00:00:00Z`)
+  since.setUTCDate(since.getUTCDate() - LAST_DELIVERY_DAYS)
+  const [open, delivered] = await Promise.all([
+    supabase
+      .from("loads")
+      .select(
+        "id, driver_id, reference, pickup_location, delivery_location, pickup_start, status"
+      )
+      .eq("organization_id", organizationId)
+      .not("driver_id", "is", null)
+      .in("status", ["booked", "dispatched", "loaded"])
+      .order("pickup_start", { ascending: true }),
+    supabase
+      .from("loads")
+      .select(
+        "id, driver_id, reference, delivery_location, delivery_start, completed_at, load_stops(kind, position, arrived_at, departed_at)"
+      )
+      .eq("organization_id", organizationId)
+      .not("driver_id", "is", null)
+      .in("status", DELIVERED)
+      .gte("delivery_start", since.toISOString().slice(0, 10)),
+  ])
+
+  if (open.error) {
+    throw open.error
+  }
+  if (delivered.error) {
+    throw delivered.error
+  }
+  const byDriver: Record<string, DriverNow> = {}
+  const entryOf = (driverId: string) =>
+    (byDriver[driverId] ??= { current: null, next: null, last: null })
+  for (const row of delivered.data) {
+    const entry = entryOf(row.driver_id!)
+    const on = deliveredOn(row, today)
+    if (!entry.last || on > entry.last.delivered_on) {
+      entry.last = {
+        id: row.id,
+        reference: row.reference,
+        to: cityState(row.delivery_location),
+        delivered_on: on,
+      }
+    }
+  }
+  for (const row of open.data) {
+    const load: DriverNowLoad = {
+      id: row.id,
+      reference: row.reference,
+      from: cityState(row.pickup_location),
+      to: cityState(row.delivery_location),
+      status: row.status as DriverNowLoad["status"],
+      pickup_start: row.pickup_start,
+    }
+    const entry = entryOf(row.driver_id!)
+    // In transit beats dispatched; otherwise the earliest pickup wins.
+    if (load.status !== "booked") {
+      if (
+        !entry.current ||
+        (load.status === "loaded" && entry.current.status !== "loaded")
+      ) {
+        entry.current = load
+      }
+    } else if (!entry.next) {
+      entry.next = load
+    }
+  }
+  return byDriver
 }
 
 export type DriverDocument = {

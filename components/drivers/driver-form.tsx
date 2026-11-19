@@ -12,12 +12,13 @@ import {
   createDriver,
   renameDriverDocument,
   updateDriver,
+  updateDriverNotes,
 } from "@/app/org/[slug]/drivers/actions"
 import { DateField } from "@/components/drivers/date-field"
 import {
   type DocFiles,
-  DriverDocsCard,
-} from "@/components/drivers/driver-docs-card"
+  PendingCopyField,
+} from "@/components/drivers/pending-copy-field"
 import { PayFields } from "@/components/drivers/pay-fields"
 import {
   SettingsCard,
@@ -31,6 +32,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { useZodForm } from "@/hooks/use-zod-form"
 import { DRIVER_CARD_IDS, DRIVER_CDL_ID } from "@/lib/driver-format"
 import { FILE_TYPES, uploadDriverDocument } from "@/lib/driver-document-upload"
@@ -441,6 +443,12 @@ export function DriverForm({
     cdl: null,
     medical_card: null,
   })
+  // Adding a driver: their notes, saved on their own once the driver is
+  // added, as the Notes box on the driver page does. No name, so the
+  // form's own values leave them out.
+  const [notes, setNotes] = useState("")
+  const setDocFile = (kind: keyof DocFiles, file: File | null) =>
+    setDocFiles((current) => ({ ...current, [kind]: file }))
 
   const { errors, formError, pending, formProps, revalidate } = useZodForm(
     driverSchema,
@@ -462,7 +470,16 @@ export function DriverForm({
         return result.error
       }
 
-      // The documents dropped in at the top go on as the driver's first.
+      const problems: string[] = []
+      if (notes.trim()) {
+        const saved = await updateDriverNotes(organizationId, result.id, notes)
+        if ("error" in saved) {
+          problems.push("notes")
+        }
+      }
+
+      // The copies attached on the CDL and medical cards go on as the
+      // driver's first documents.
       const uploads = (["cdl", "medical_card"] as const).filter(
         (kind) => docFiles[kind]
       )
@@ -478,9 +495,16 @@ export function DriverForm({
           failed.push(kind === "cdl" ? "CDL" : "medical card")
         }
       }
-      if (failed.length) {
+      problems.push(...failed)
+      if (problems.length) {
+        // "notes", "notes and CDL", "notes, CDL and medical card"
+        const list =
+          problems.length > 1
+            ? `${problems.slice(0, -1).join(", ")} and ${problems.at(-1)}`
+            : problems[0]
+        const plural = problems.length > 1 || problems[0] === "notes"
         toast.warning(
-          `${values.full_name} added, but the ${failed.join(" and ")} didn't upload. Add ${failed.length > 1 ? "them" : "it"} here.`
+          `${values.full_name} added, but the ${list} didn't save. Add ${plural ? "them" : "it"} here.`
         )
       } else if (uploads.length) {
         toast.success(`${values.full_name} added with their documents.`)
@@ -671,23 +695,6 @@ export function DriverForm({
             />
           </SettingsCard>
 
-          {/* On the driver page pay has its own box beside the form instead. */}
-          {!driver && (
-            <SettingsCard
-              title="Pay"
-              description="How they're paid. It works out the driver's cut and your profit on each load."
-              data-card="pay"
-              contentClassName="grid gap-5 sm:grid-cols-6"
-            >
-              <PayFields
-                defaultType={null}
-                defaultRate={null}
-                errors={errors}
-                onUpdate={onUpdate}
-              />
-            </SettingsCard>
-          )}
-
           <SettingsCard
             // The side panel's CDL links jump here.
             id={DRIVER_CDL_ID}
@@ -776,11 +783,17 @@ export function DriverForm({
               className="sm:col-span-6"
               onChange={handleUppercaseInput}
             />
-            {driver && (
+            {driver ? (
               <CdlCopyField
                 organizationId={organizationId}
                 driverId={driver.id}
                 copy={cdlCopy ?? null}
+              />
+            ) : (
+              <PendingCopyField
+                kind="cdl"
+                file={docFiles.cdl}
+                onChange={(file) => setDocFile("cdl", file)}
               />
             )}
           </SettingsCard>
@@ -842,13 +855,19 @@ export function DriverForm({
                 Holds a medical variance, SPE certificate or exemption letter
               </span>
             </label>
-            {driver && (
+            {driver ? (
               <CdlCopyField
                 organizationId={organizationId}
                 driverId={driver.id}
                 copy={medicalCopy ?? null}
                 kind="medical_card"
                 label="Copy of the medical card"
+              />
+            ) : (
+              <PendingCopyField
+                kind="medical_card"
+                file={docFiles.medical_card}
+                onChange={(file) => setDocFile("medical_card", file)}
               />
             )}
           </SettingsCard>
@@ -886,36 +905,74 @@ export function DriverForm({
         </div>
 
         {!driver && (
-          // Beside the cards, the documents and saving stay in view; on a
-          // phone they come after them, as on New load.
-          <aside className="lg:sticky lg:top-6 lg:col-start-2 lg:row-start-1">
-            <DriverDocsCard
-              files={docFiles}
-              onFilesChange={(kind, file) =>
-                setDocFiles((current) => ({ ...current, [kind]: file }))
-              }
+          // Beside the cards, pay, notes and saving stay in view; on a phone
+          // they come after them, as on New load.
+          <aside className="flex flex-col gap-6 lg:sticky lg:top-6 lg:col-start-2 lg:row-start-1">
+            {/* Like the Pay box beside the form on the driver page. */}
+            <section
+              data-card="pay"
+              className="flex flex-col gap-4 rounded-xl border bg-card px-5 pt-4 pb-5 text-card-foreground shadow-xs"
             >
-              {/* Adding a driver saves everything at once. */}
-              <Button
-                type="submit"
-                size="lg"
-                className="w-full"
-                disabled={pending}
-              >
-                {pending ? "Saving…" : "Save driver"} <CornerDownLeft />
-              </Button>
-              <Link
-                href={base}
-                className={buttonVariants({ variant: "ghost", size: "sm" })}
-              >
-                Cancel
-              </Link>
-              {formError && (
-                <p role="alert" className="text-sm text-destructive">
-                  {formError}
+              <div>
+                <h4 className="font-semibold">Pay</h4>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  It works out the driver&apos;s cut and your profit on each
+                  load.
                 </p>
-              )}
-            </DriverDocsCard>
+              </div>
+              <PayFields
+                defaultType={null}
+                defaultRate={null}
+                errors={errors}
+                onUpdate={onUpdate}
+              />
+            </section>
+            {/* Like the Notes box beside the driver page. */}
+            <section className="flex flex-col gap-3 rounded-xl border bg-card px-5 pt-4 pb-5 text-card-foreground shadow-xs">
+              <h4 className="font-semibold">Notes</h4>
+              <Textarea
+                aria-label="Notes"
+                rows={4}
+                maxLength={2000}
+                placeholder="Endorsements, home terminal, preferred lanes…"
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+              />
+            </section>
+            <section className="rounded-xl border bg-card px-5 pt-4 pb-5 text-card-foreground shadow-xs">
+              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                New driver
+              </p>
+              <h4 className="mt-1 text-xl font-semibold tracking-tight">
+                Add a driver
+              </h4>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Fill in what you have. Only their name is needed to save, and
+                anything else can be added from their page later.
+              </p>
+              <div className="mt-5 flex flex-col gap-2 border-t pt-5">
+                {/* Adding a driver saves everything at once. */}
+                <Button
+                  type="submit"
+                  size="lg"
+                  className="w-full"
+                  disabled={pending}
+                >
+                  {pending ? "Saving…" : "Save driver"} <CornerDownLeft />
+                </Button>
+                <Link
+                  href={base}
+                  className={buttonVariants({ variant: "ghost", size: "sm" })}
+                >
+                  Cancel
+                </Link>
+                {formError && (
+                  <p role="alert" className="text-sm text-destructive">
+                    {formError}
+                  </p>
+                )}
+              </div>
+            </section>
           </aside>
         )}
       </fieldset>
