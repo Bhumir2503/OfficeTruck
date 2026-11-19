@@ -1,7 +1,11 @@
 import type { PayType } from "@/lib/schemas/driver"
 import type { LoadStatus } from "@/lib/schemas/load"
 import type { Ownership, TruckStatus } from "@/lib/schemas/truck"
+import { type DriverNow, getLoadsNow } from "@/lib/drivers"
 import { createClient } from "@/lib/supabase/server"
+
+/** The load a truck is on, its next booked one and its last delivery. */
+export type TruckNow = DriverNow
 
 export type Truck = {
   id: string
@@ -172,4 +176,13 @@ export async function getTaxFilings(
     ...filing,
     truck_ids: trucks.map((truck) => truck.truck_id),
   }))
+}
+
+/** What each truck is doing, for the trucks list, by truck id. */
+export function getTrucksNow(
+  organizationId: string,
+  /** "YYYY-MM-DD" */
+  today: string
+): Promise<Record<string, TruckNow>> {
+  return getLoadsNow(organizationId, today, "truck_id")
 }

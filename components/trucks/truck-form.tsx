@@ -247,270 +247,344 @@ export function TruckForm({
     }
   )
 
+  // The fixed costs: a card when editing, beside the form when adding.
+  const costFields = (className: string) => (
+    <>
+      <TextField
+        name="monthly_payment"
+        label="Payment or lease"
+        prefix="$"
+        suffix="/ month"
+        inputMode="decimal"
+        placeholder="0.00"
+        defaultValue={money(truck?.monthly_payment ?? null)}
+        errors={errors}
+        className={className}
+        onChange={handleCurrencyInput}
+        onKeyDown={handleCurrencyKeyDown}
+        onBlur={handleCurrencyBlur}
+      />
+      <TextField
+        name="monthly_insurance"
+        label="Insurance"
+        prefix="$"
+        suffix="/ month"
+        inputMode="decimal"
+        placeholder="0.00"
+        defaultValue={money(truck?.monthly_insurance ?? null)}
+        errors={errors}
+        className={className}
+        onChange={handleCurrencyInput}
+        onKeyDown={handleCurrencyKeyDown}
+        onBlur={handleCurrencyBlur}
+      />
+      <TextField
+        name="monthly_other_costs"
+        label="Other fixed costs"
+        prefix="$"
+        suffix="/ month"
+        inputMode="decimal"
+        placeholder="0.00"
+        defaultValue={money(truck?.monthly_other_costs ?? null)}
+        errors={errors}
+        className={className}
+        onChange={handleCurrencyInput}
+        onKeyDown={handleCurrencyKeyDown}
+        onBlur={handleCurrencyBlur}
+        hint="Permits, ELD fees, parking."
+      />
+    </>
+  )
+
+  const notesField = (rows: number) => (
+    <Field data-invalid={!!errors.notes}>
+      <FieldLabel htmlFor="truck-notes" className="sr-only">
+        Notes
+      </FieldLabel>
+      <Textarea
+        id="truck-notes"
+        name="notes"
+        rows={rows}
+        placeholder="Trailer it usually pulls, service history, quirks…"
+        defaultValue={truck?.notes ?? undefined}
+        aria-invalid={!!errors.notes}
+      />
+      <FieldError errors={errors.notes} />
+    </Field>
+  )
+
   return (
     <form {...formProps} autoComplete="off">
-      <fieldset disabled={pending} className="flex flex-col gap-6">
-        <SettingsCard
-          title={truck ? "Truck details" : "Truck"}
-          description="The unit number is what your team calls it."
-          contentClassName="grid gap-5 sm:grid-cols-6"
+      <fieldset
+        disabled={pending}
+        className={
+          truck
+            ? "flex flex-col gap-6"
+            : // Adding: the cards, with costs, notes and saving beside them
+              // in view, as on Add driver and New load.
+              "grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]"
+        }
+      >
+        <div
+          className={
+            truck
+              ? "contents"
+              : "flex min-w-0 flex-col gap-6 lg:col-start-1 lg:row-start-1"
+          }
         >
-          <TextField
-            name="unit_number"
-            label="Unit number"
-            placeholder="e.g. Truck 12"
-            defaultValue={truck?.unit_number}
-            errors={errors}
-            className="sm:col-span-2"
-            autoFocus={!truck}
-          />
-          <TextField
-            name="vin"
-            label="VIN"
-            placeholder="17 characters"
-            defaultValue={truck?.vin ?? undefined}
-            errors={errors}
-            className="sm:col-span-4"
-            onChange={upperAlnum(17)}
-            hint="Matches IFTA rows when there's no ELD link."
-          />
-          <TextField
-            name="year"
-            label="Year"
-            inputMode="numeric"
-            placeholder="e.g. 2021"
-            defaultValue={truck?.year ?? undefined}
-            errors={errors}
-            className="sm:col-span-2"
-            onChange={handleYearInput}
-          />
-          <TextField
-            name="make"
-            label="Make"
-            placeholder="e.g. Freightliner"
-            defaultValue={truck?.make ?? undefined}
-            errors={errors}
-            className="sm:col-span-2"
-          />
-          <TextField
-            name="model"
-            label="Model"
-            placeholder="e.g. Cascadia"
-            defaultValue={truck?.model ?? undefined}
-            errors={errors}
-            className="sm:col-span-2"
-          />
-        </SettingsCard>
-
-        <SettingsCard
-          title="Plate and compliance"
-          description="You'll see a warning 60, 30 and 7 days before each one is due."
-          contentClassName="grid gap-5 sm:grid-cols-6"
-        >
-          <TextField
-            name="plate_number"
-            label="Plate number"
-            placeholder="e.g. R123456"
-            defaultValue={truck?.plate_number ?? undefined}
-            errors={errors}
-            className="sm:col-span-4"
-            onChange={upperAlnum(15, true)}
-          />
-          <TextField
-            name="plate_state"
-            label="Plate state"
-            placeholder="TX"
-            autoCapitalize="characters"
-            defaultValue={truck?.plate_state ?? undefined}
-            errors={errors}
-            className="sm:col-span-2"
-            onChange={handleStateInput}
-          />
-          <DateField
-            id={fieldId("plate_expires_on")}
-            name="plate_expires_on"
-            label="Plate expires"
-            defaultValue={truck?.plate_expires_on}
-            errors={errors.plate_expires_on}
-            onUpdate={revalidate}
-            className="sm:col-span-2"
-          />
-          <DateField
-            id={fieldId("registration_expires_on")}
-            name="registration_expires_on"
-            label="Registration or IRP expires"
-            defaultValue={truck?.registration_expires_on}
-            errors={errors.registration_expires_on}
-            onUpdate={revalidate}
-            className="sm:col-span-2"
-          />
-          <DateField
-            id={fieldId("annual_inspection_on")}
-            name="annual_inspection_on"
-            label="Last annual inspection"
-            hint="Due again a year later."
-            defaultValue={truck?.annual_inspection_on}
-            errors={errors.annual_inspection_on}
-            onUpdate={revalidate}
-            className="sm:col-span-2"
-          />
-        </SettingsCard>
-
-        <SettingsCard
-          title="Ownership and driver"
-          contentClassName="grid gap-5 sm:grid-cols-6"
-        >
-          <OwnershipField
-            defaultValue={truck?.ownership ?? null}
-            errors={errors.ownership}
-            onUpdate={revalidate}
-          />
-          <Field
-            data-invalid={!!errors.default_driver_id}
-            className="sm:col-span-3"
+          <SettingsCard
+            title={truck ? "Truck details" : "Truck"}
+            description="The unit number is what your team calls it."
+            contentClassName="grid gap-5 sm:grid-cols-6"
           >
-            <FieldLabel htmlFor={fieldId("default_driver_id")}>
-              Default driver
-            </FieldLabel>
-            <DriverSelect
-              id={fieldId("default_driver_id")}
-              name="default_driver_id"
-              drivers={drivers}
-              defaultValue={truck?.default_driver_id}
-              invalid={!!errors.default_driver_id}
+            <TextField
+              name="unit_number"
+              label="Unit number"
+              placeholder="e.g. Truck 12"
+              defaultValue={truck?.unit_number}
+              errors={errors}
+              className="sm:col-span-2"
+              autoFocus={!truck}
+            />
+            <TextField
+              name="vin"
+              label="VIN"
+              placeholder="17 characters"
+              defaultValue={truck?.vin ?? undefined}
+              errors={errors}
+              className="sm:col-span-4"
+              onChange={upperAlnum(17)}
+              hint="Matches IFTA rows when there's no ELD link."
+            />
+            <TextField
+              name="year"
+              label="Year"
+              inputMode="numeric"
+              placeholder="e.g. 2021"
+              defaultValue={truck?.year ?? undefined}
+              errors={errors}
+              className="sm:col-span-2"
+              onChange={handleYearInput}
+            />
+            <TextField
+              name="make"
+              label="Make"
+              placeholder="e.g. Freightliner"
+              defaultValue={truck?.make ?? undefined}
+              errors={errors}
+              className="sm:col-span-2"
+            />
+            <TextField
+              name="model"
+              label="Model"
+              placeholder="e.g. Cascadia"
+              defaultValue={truck?.model ?? undefined}
+              errors={errors}
+              className="sm:col-span-2"
+            />
+          </SettingsCard>
+
+          <SettingsCard
+            title="Plate and compliance"
+            description="You'll see a warning 60, 30 and 7 days before each one is due."
+            contentClassName="grid gap-5 sm:grid-cols-6"
+          >
+            <TextField
+              name="plate_number"
+              label="Plate number"
+              placeholder="e.g. R123456"
+              defaultValue={truck?.plate_number ?? undefined}
+              errors={errors}
+              className="sm:col-span-4"
+              onChange={upperAlnum(15, true)}
+            />
+            <TextField
+              name="plate_state"
+              label="Plate state"
+              placeholder="TX"
+              autoCapitalize="characters"
+              defaultValue={truck?.plate_state ?? undefined}
+              errors={errors}
+              className="sm:col-span-2"
+              onChange={handleStateInput}
+            />
+            <DateField
+              id={fieldId("plate_expires_on")}
+              name="plate_expires_on"
+              label="Plate expires"
+              defaultValue={truck?.plate_expires_on}
+              errors={errors.plate_expires_on}
+              onUpdate={revalidate}
+              className="sm:col-span-2"
+            />
+            <DateField
+              id={fieldId("registration_expires_on")}
+              name="registration_expires_on"
+              label="Registration or IRP expires"
+              defaultValue={truck?.registration_expires_on}
+              errors={errors.registration_expires_on}
+              onUpdate={revalidate}
+              className="sm:col-span-2"
+            />
+            <DateField
+              id={fieldId("annual_inspection_on")}
+              name="annual_inspection_on"
+              label="Last annual inspection"
+              hint="Due again a year later."
+              defaultValue={truck?.annual_inspection_on}
+              errors={errors.annual_inspection_on}
+              onUpdate={revalidate}
+              className="sm:col-span-2"
+            />
+          </SettingsCard>
+
+          <SettingsCard
+            title="Ownership and driver"
+            contentClassName="grid gap-5 sm:grid-cols-6"
+          >
+            <OwnershipField
+              defaultValue={truck?.ownership ?? null}
+              errors={errors.ownership}
               onUpdate={revalidate}
             />
-            {errors.default_driver_id ? (
-              <FieldError errors={errors.default_driver_id} />
-            ) : (
-              <FieldDescription>
-                Filled in on new loads with this truck.
-              </FieldDescription>
-            )}
-          </Field>
-          <TextField
-            name="home_base"
-            label="Home base"
-            placeholder="e.g. 4100 Industrial Blvd, Fort Worth, TX"
-            defaultValue={truck?.home_base ?? undefined}
-            errors={errors}
-            className="sm:col-span-6"
-            hint="Where the truck starts when it has no earlier load. Empty miles to the first pickup are estimated from its last delivery, or from here."
-          />
-        </SettingsCard>
+            <Field
+              data-invalid={!!errors.default_driver_id}
+              className="sm:col-span-3"
+            >
+              <FieldLabel htmlFor={fieldId("default_driver_id")}>
+                Default driver
+              </FieldLabel>
+              <DriverSelect
+                id={fieldId("default_driver_id")}
+                name="default_driver_id"
+                drivers={drivers}
+                defaultValue={truck?.default_driver_id}
+                invalid={!!errors.default_driver_id}
+                onUpdate={revalidate}
+              />
+              {errors.default_driver_id ? (
+                <FieldError errors={errors.default_driver_id} />
+              ) : (
+                <FieldDescription>
+                  Filled in on new loads with this truck.
+                </FieldDescription>
+              )}
+            </Field>
+            <TextField
+              name="home_base"
+              label="Home base"
+              placeholder="e.g. 4100 Industrial Blvd, Fort Worth, TX"
+              defaultValue={truck?.home_base ?? undefined}
+              errors={errors}
+              className="sm:col-span-6"
+              hint="Where the truck starts when it has no earlier load. Empty miles to the first pickup are estimated from its last delivery, or from here."
+            />
+          </SettingsCard>
 
-        <SettingsCard
-          title="ELD"
-          description="Links this truck to Motive, so its miles by state land here for IFTA."
-          action={<EldBadge connected={motiveId.trim() !== ""} />}
-          contentClassName="grid gap-5 sm:grid-cols-6"
-        >
-          <TextField
-            name="motive_vehicle_id"
-            label="Motive vehicle ID"
-            placeholder="e.g. 1234567"
-            value={motiveId}
-            errors={errors}
-            className="sm:col-span-3"
-            onChange={(event) => setMotiveId(event.currentTarget.value)}
-            hint="The vehicle's ID in Motive. Leave blank if it isn't on Motive."
-          />
-        </SettingsCard>
+          <SettingsCard
+            title="ELD"
+            description="Links this truck to Motive, so its miles by state land here for IFTA."
+            action={<EldBadge connected={motiveId.trim() !== ""} />}
+            contentClassName="grid gap-5 sm:grid-cols-6"
+          >
+            <TextField
+              name="motive_vehicle_id"
+              label="Motive vehicle ID"
+              placeholder="e.g. 1234567"
+              value={motiveId}
+              errors={errors}
+              className="sm:col-span-3"
+              onChange={(event) => setMotiveId(event.currentTarget.value)}
+              hint="The vehicle's ID in Motive. Leave blank if it isn't on Motive."
+            />
+          </SettingsCard>
+        </div>
 
-        <SettingsCard
-          title="Fixed costs"
-          description="Spread over the truck's miles, empty miles included, for cost per mile."
-          contentClassName="grid gap-5 sm:grid-cols-6"
-        >
-          <TextField
-            name="monthly_payment"
-            label="Payment or lease"
-            prefix="$"
-            suffix="/ month"
-            inputMode="decimal"
-            placeholder="0.00"
-            defaultValue={money(truck?.monthly_payment ?? null)}
-            errors={errors}
-            className="sm:col-span-2"
-            onChange={handleCurrencyInput}
-            onKeyDown={handleCurrencyKeyDown}
-            onBlur={handleCurrencyBlur}
-          />
-          <TextField
-            name="monthly_insurance"
-            label="Insurance"
-            prefix="$"
-            suffix="/ month"
-            inputMode="decimal"
-            placeholder="0.00"
-            defaultValue={money(truck?.monthly_insurance ?? null)}
-            errors={errors}
-            className="sm:col-span-2"
-            onChange={handleCurrencyInput}
-            onKeyDown={handleCurrencyKeyDown}
-            onBlur={handleCurrencyBlur}
-          />
-          <TextField
-            name="monthly_other_costs"
-            label="Other fixed costs"
-            prefix="$"
-            suffix="/ month"
-            inputMode="decimal"
-            placeholder="0.00"
-            defaultValue={money(truck?.monthly_other_costs ?? null)}
-            errors={errors}
-            className="sm:col-span-2"
-            onChange={handleCurrencyInput}
-            onKeyDown={handleCurrencyKeyDown}
-            onBlur={handleCurrencyBlur}
-            hint="Permits, ELD fees, parking."
-          />
-        </SettingsCard>
+        {truck ? (
+          <>
+            <SettingsCard
+              title="Fixed costs"
+              description="Spread over the truck's miles, empty miles included, for cost per mile."
+              contentClassName="grid gap-5 sm:grid-cols-6"
+            >
+              {costFields("sm:col-span-2")}
+            </SettingsCard>
 
-        <SettingsCard
-          title="Notes"
-          footer={
-            <SettingsCardFooter
-              hint={
-                formError ? (
-                  <span className="text-destructive">{formError}</span>
-                ) : truck ? (
-                  "Changes are saved for everyone in your organization."
-                ) : (
-                  "New trucks start as active."
-                )
+            <SettingsCard
+              title="Notes"
+              footer={
+                <SettingsCardFooter
+                  hint={
+                    formError ? (
+                      <span className="text-destructive">{formError}</span>
+                    ) : (
+                      "Changes are saved for everyone in your organization."
+                    )
+                  }
+                >
+                  <Button type="submit" size="sm" disabled={pending}>
+                    {pending ? "Saving…" : "Save changes"} <CornerDownLeft />
+                  </Button>
+                </SettingsCardFooter>
               }
             >
-              {!truck && (
+              {notesField(3)}
+            </SettingsCard>
+          </>
+        ) : (
+          // Beside the cards, costs, notes and saving stay in view; on a
+          // phone they come after them, as on Add driver.
+          <aside className="flex flex-col gap-6 lg:sticky lg:top-6 lg:col-start-2 lg:row-start-1">
+            <section className="flex flex-col gap-4 rounded-xl border bg-card px-5 pt-4 pb-5 text-card-foreground shadow-xs">
+              <div>
+                <h4 className="font-semibold">Fixed costs</h4>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Spread over the truck&apos;s miles, empty miles included, for
+                  cost per mile.
+                </p>
+              </div>
+              <div className="grid gap-4">{costFields("")}</div>
+            </section>
+            <section className="flex flex-col gap-3 rounded-xl border bg-card px-5 pt-4 pb-5 text-card-foreground shadow-xs">
+              <h4 className="font-semibold">Notes</h4>
+              {notesField(4)}
+            </section>
+            <section className="rounded-xl border bg-card px-5 pt-4 pb-5 text-card-foreground shadow-xs">
+              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                New truck
+              </p>
+              <h4 className="mt-1 text-xl font-semibold tracking-tight">
+                Add a truck
+              </h4>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Fill in what you have. Only the unit number is needed to save,
+                and anything else can be added from its page later. New trucks
+                start as active.
+              </p>
+              <div className="mt-5 flex flex-col gap-2 border-t pt-5">
+                <Button
+                  type="submit"
+                  size="lg"
+                  className="w-full"
+                  disabled={pending}
+                >
+                  {pending ? "Saving…" : "Save truck"} <CornerDownLeft />
+                </Button>
                 <Link
                   href={base}
-                  className={buttonVariants({ variant: "outline", size: "sm" })}
+                  className={buttonVariants({ variant: "ghost", size: "sm" })}
                 >
                   Cancel
                 </Link>
-              )}
-              <Button type="submit" size="sm" disabled={pending}>
-                {pending ? "Saving…" : truck ? "Save changes" : "Save truck"}{" "}
-                <CornerDownLeft />
-              </Button>
-            </SettingsCardFooter>
-          }
-        >
-          <Field data-invalid={!!errors.notes}>
-            <FieldLabel htmlFor="truck-notes" className="sr-only">
-              Notes
-            </FieldLabel>
-            <Textarea
-              id="truck-notes"
-              name="notes"
-              rows={3}
-              placeholder="Trailer it usually pulls, service history, quirks…"
-              defaultValue={truck?.notes ?? undefined}
-              aria-invalid={!!errors.notes}
-            />
-            <FieldError errors={errors.notes} />
-          </Field>
-        </SettingsCard>
+                {formError && (
+                  <p role="alert" className="text-sm text-destructive">
+                    {formError}
+                  </p>
+                )}
+              </div>
+            </section>
+          </aside>
+        )}
       </fieldset>
     </form>
   )

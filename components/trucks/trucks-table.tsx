@@ -10,7 +10,8 @@ import {
   SettingsCardFooter,
   SettingsEmptyState,
 } from "@/components/settings/settings-card"
-import { EldBadge, TruckStatusBadge } from "@/components/trucks/truck-badges"
+import { LastDeliveryCell, NowCell, NowLine } from "@/components/now-cells"
+import { TruckStatusBadge } from "@/components/trucks/truck-badges"
 import { buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -21,7 +22,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { needsAction, type ComplianceItem } from "@/lib/driver-format"
 import {
   TRUCK_STATUSES,
@@ -33,7 +40,7 @@ import {
   truckComplianceItems,
   truckDescription,
 } from "@/lib/truck-format"
-import type { TaxFiling, Truck } from "@/lib/trucks"
+import type { TaxFiling, Truck, TruckNow } from "@/lib/trucks"
 
 type Filter = TruckStatus | "all"
 
@@ -60,6 +67,9 @@ export function TrucksTable({
   base,
   today,
   canManage,
+  now,
+  loadsBase,
+  driversBase,
 }: {
   trucks: Truck[]
   filings: TaxFiling[]
@@ -68,6 +78,12 @@ export function TrucksTable({
   /** "YYYY-MM-DD", from the server so both renders warn about the same dates. */
   today: string
   canManage: boolean
+  /** The load each truck is on now, its next booked one and its last delivery. */
+  now: Record<string, TruckNow>
+  /** /org/<slug>/loads */
+  loadsBase: string
+  /** /org/<slug>/drivers */
+  driversBase: string
 }) {
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState<Filter>("active")
@@ -136,6 +152,25 @@ export function TrucksTable({
     )
   }
 
+  // The status filter's choices, each with how many trucks it shows.
+  const filterOptions: {
+    value: Filter
+    name: string
+    label: string
+    count: number
+  }[] = [
+    ...TRUCK_STATUSES.map((status) => ({
+      value: status,
+      name: TRUCK_STATUS_LABELS[status],
+      count: counts[status],
+    })),
+    { value: "all" as const, name: "All", count: trucks.length },
+  ].map((option) => ({
+    ...option,
+    // What the closed dropdown shows.
+    label: `${option.name} (${option.count})`,
+  }))
+
   const filtering = search.trim() !== "" || filter !== "all"
   const count = filtering
     ? `Showing ${filtered.length} of ${plural(trucks.length, "truck")}`
@@ -180,49 +215,48 @@ export function TrucksTable({
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <ToggleGroup
-          aria-label="Filter by status"
-          variant="outline"
-          size="sm"
-          spacing={1}
-          className="shrink-0 flex-wrap"
-          value={[filter]}
-          onValueChange={(value: string[]) =>
-            setFilter((value[0] as Filter | undefined) ?? "all")
+        <Select
+          value={filter}
+          onValueChange={(value) =>
+            setFilter((value as Filter | null) ?? "all")
           }
+          items={filterOptions}
         >
-          {TRUCK_STATUSES.map((status) => (
-            <ToggleGroupItem key={status} value={status}>
-              {TRUCK_STATUS_LABELS[status]}
-              <span className="text-muted-foreground tabular-nums">
-                {counts[status]}
-              </span>
-            </ToggleGroupItem>
-          ))}
-          <ToggleGroupItem value="all">
-            All
-            <span className="text-muted-foreground tabular-nums">
-              {trucks.length}
-            </span>
-          </ToggleGroupItem>
-        </ToggleGroup>
+          <SelectTrigger
+            aria-label="Filter by status"
+            className="w-full shrink-0 sm:w-44"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {filterOptions.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.name}
+                <span className="ml-auto pr-2 text-muted-foreground tabular-nums">
+                  {option.count}
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <Table className="[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6">
         <TableHeader className="bg-muted/40">
           <TableRow>
             <TableHead>Truck</TableHead>
-            <TableHead className="hidden lg:table-cell">Plate</TableHead>
-            <TableHead className="hidden md:table-cell">Driver</TableHead>
-            <TableHead className="hidden md:table-cell">ELD</TableHead>
+            <TableHead className="hidden md:table-cell">Now</TableHead>
+            <TableHead className="hidden lg:table-cell">
+              Last delivery
+            </TableHead>
+            <TableHead className="hidden xl:table-cell">Driver</TableHead>
             <TableHead className="hidden sm:table-cell">Compliance</TableHead>
-            <TableHead className="w-32">Status</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {filtered.length === 0 && (
             <TableRow>
               <TableCell
-                colSpan={6}
+                colSpan={5}
                 className="h-24 text-center text-muted-foreground"
               >
                 {search.trim() === "" && filter !== "all"
@@ -233,23 +267,36 @@ export function TrucksTable({
           )}
           {filtered.map(({ truck, items, warnings }) => {
             const description = truckDescription(truck)
+            // Parked and retired trucks aren't running loads.
+            const off = truck.status !== "active"
             return (
-              <TableRow key={truck.id}>
+              // The unit number's link covers the whole row, so any of it
+              // opens the truck; the load and driver links sit above it.
+              <TableRow key={truck.id} className="relative cursor-pointer">
                 <TableCell className="max-w-64 py-3">
                   <div className="flex items-center gap-3">
                     <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                       <TruckIcon className="size-4" />
                     </div>
                     <div className="min-w-0">
-                      <Link
-                        href={`${base}/${truck.id}`}
-                        className="block truncate font-medium hover:underline"
-                      >
-                        {truck.unit_number}
-                      </Link>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <Link
+                          href={`${base}/${truck.id}`}
+                          className="truncate font-medium after:absolute after:inset-0 hover:underline"
+                        >
+                          {truck.unit_number}
+                        </Link>
+                        {off && (
+                          <TruckStatusBadge
+                            status={truck.status}
+                            className="h-5 shrink-0 px-2"
+                          />
+                        )}
+                      </div>
                       <div className="truncate text-sm text-muted-foreground">
                         {description || truck.vin || "No details yet"}
                       </div>
+                      <NowLine off={off} now={now[truck.id]} />
                       {warnings.length > 0 && (
                         // The compliance column is hidden on phones; keep the warnings.
                         <div className="mt-1 flex flex-wrap gap-1 sm:hidden">
@@ -261,30 +308,34 @@ export function TrucksTable({
                     </div>
                   </div>
                 </TableCell>
-                <TableCell className="hidden text-muted-foreground lg:table-cell">
-                  {truck.plate_number ? (
-                    <>
-                      <span className="text-foreground">
-                        {truck.plate_number}
-                      </span>
-                      {truck.plate_state && ` · ${truck.plate_state}`}
-                    </>
-                  ) : (
-                    "Not set"
-                  )}
+                <TableCell className="hidden max-w-64 md:table-cell">
+                  <NowCell
+                    off={off}
+                    now={now[truck.id]}
+                    loadsBase={loadsBase}
+                  />
                 </TableCell>
-                <TableCell className="hidden text-sm md:table-cell">
+                <TableCell className="hidden lg:table-cell">
+                  <LastDeliveryCell
+                    last={now[truck.id]?.last ?? null}
+                    today={today}
+                    loadsBase={loadsBase}
+                  />
+                </TableCell>
+                <TableCell className="hidden text-sm xl:table-cell">
                   {truck.default_driver ? (
-                    truck.default_driver.full_name
+                    <Link
+                      href={`${driversBase}/${truck.default_driver.id}`}
+                      className="relative z-10 hover:underline"
+                    >
+                      {truck.default_driver.full_name}
+                    </Link>
                   ) : (
                     <span className="text-muted-foreground">None</span>
                   )}
                 </TableCell>
-                <TableCell className="hidden md:table-cell">
-                  <EldBadge connected={!!truck.motive_vehicle_id} />
-                </TableCell>
                 <TableCell className="hidden max-w-80 text-sm whitespace-normal sm:table-cell">
-                  {truck.status !== "active" ? (
+                  {off ? (
                     <span className="text-muted-foreground">Not tracked</span>
                   ) : warnings.length ? (
                     <div className="flex flex-wrap gap-1">
@@ -299,9 +350,6 @@ export function TrucksTable({
                         : `${items.filter((item) => item.due).length} of ${items.length} dates on file`}
                     </span>
                   )}
-                </TableCell>
-                <TableCell>
-                  <TruckStatusBadge status={truck.status} />
                 </TableCell>
               </TableRow>
             )

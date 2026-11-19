@@ -4,7 +4,7 @@ import { notFound } from "next/navigation"
 import { TrucksTable } from "@/components/trucks/trucks-table"
 import { today } from "@/lib/driver-format"
 import { canManage, getOrganization } from "@/lib/organizations"
-import { getTaxFilings, getTrucks } from "@/lib/trucks"
+import { getTaxFilings, getTrucks, getTrucksNow } from "@/lib/trucks"
 
 export const metadata: Metadata = { title: "Trucks" }
 
@@ -16,9 +16,10 @@ export default async function TrucksPage({
     notFound()
   }
 
-  const [trucks, filings] = await Promise.all([
+  const [trucks, filings, now] = await Promise.all([
     getTrucks(organization.id),
     getTaxFilings(organization.id),
+    getTrucksNow(organization.id, today()),
   ])
 
   return (
@@ -29,6 +30,9 @@ export default async function TrucksPage({
         base={`/org/${organization.slug}/equipment`}
         today={today()}
         canManage={canManage(organization)}
+        now={now}
+        loadsBase={`/org/${organization.slug}/loads`}
+        driversBase={`/org/${organization.slug}/drivers`}
       />
     </div>
   )

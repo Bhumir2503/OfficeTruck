@@ -32,9 +32,9 @@ function Line({ className }: { className?: string }) {
 }
 
 const TRUCK_ROWS = [
-  { unit: "w-16", desc: "w-36", plate: "w-20", driver: "w-24" },
-  { unit: "w-20", desc: "w-32", plate: "w-24", driver: "w-20" },
-  { unit: "w-14", desc: "w-40", plate: "w-16", driver: "w-28" },
+  { unit: "w-16", desc: "w-36", driver: "w-24" },
+  { unit: "w-20", desc: "w-32", driver: "w-20" },
+  { unit: "w-14", desc: "w-40", driver: "w-28" },
 ]
 
 export function TrucksListSkeleton() {
@@ -53,23 +53,19 @@ export function TrucksListSkeleton() {
       >
         <div className="flex flex-col gap-3 px-6 pb-4 sm:flex-row sm:items-center">
           <Skeleton className="h-9 w-full" />
-          {/* Active, Out of service, Inactive, All. */}
-          <div className="flex shrink-0 gap-1">
-            <Skeleton className="h-8 w-20 rounded-md" />
-            <Skeleton className="h-8 w-30 rounded-md" />
-            <Skeleton className="h-8 w-22 rounded-md" />
-            <Skeleton className="h-8 w-14 rounded-md" />
-          </div>
+          {/* The status filter's dropdown. */}
+          <Skeleton className="h-9 w-full shrink-0 rounded-md sm:w-44" />
         </div>
         <Table className="[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6">
           <TableHeader className="bg-muted/40">
             <TableRow>
               <TableHead>Truck</TableHead>
-              <TableHead className="hidden lg:table-cell">Plate</TableHead>
-              <TableHead className="hidden md:table-cell">Driver</TableHead>
-              <TableHead className="hidden md:table-cell">ELD</TableHead>
+              <TableHead className="hidden md:table-cell">Now</TableHead>
+              <TableHead className="hidden lg:table-cell">
+                Last delivery
+              </TableHead>
+              <TableHead className="hidden xl:table-cell">Driver</TableHead>
               <TableHead className="hidden sm:table-cell">Compliance</TableHead>
-              <TableHead className="w-32">Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -84,20 +80,19 @@ export function TrucksListSkeleton() {
                     </div>
                   </div>
                 </TableCell>
+                <TableCell className="hidden md:table-cell">
+                  <Line className="w-20" />
+                  <Line className="h-3.5 w-32" />
+                </TableCell>
                 <TableCell className="hidden lg:table-cell">
-                  <Skeleton className={cn("h-4", row.plate)} />
+                  <Line className="w-20" />
+                  <Line className="h-3.5 w-28" />
                 </TableCell>
-                <TableCell className="hidden md:table-cell">
+                <TableCell className="hidden xl:table-cell">
                   <Skeleton className={cn("h-4", row.driver)} />
-                </TableCell>
-                <TableCell className="hidden md:table-cell">
-                  <Skeleton className="h-6 w-24 rounded-full" />
                 </TableCell>
                 <TableCell className="hidden sm:table-cell">
                   <Skeleton className="h-6 w-36 rounded-full" />
-                </TableCell>
-                <TableCell>
-                  <Skeleton className="h-6 w-16 rounded-full" />
                 </TableCell>
               </TableRow>
             ))}
@@ -200,38 +195,33 @@ function TruckFormSkeleton({ editing = false }: { editing?: boolean }) {
           className="sm:col-span-3"
         />
       </SettingsCard>
-      <SettingsCard
-        title="Fixed costs"
-        description="Spread over the truck's miles, empty miles included, for cost per mile."
-        contentClassName="grid gap-5 sm:grid-cols-6"
-      >
-        <FieldSkeleton label="Payment or lease" className="sm:col-span-2" />
-        <FieldSkeleton label="Insurance" className="sm:col-span-2" />
-        <FieldSkeleton
-          label="Other fixed costs"
-          hint="Permits, ELD fees, parking."
-          className="sm:col-span-2"
-        />
-      </SettingsCard>
-      <SettingsCard
-        title="Notes"
-        footer={
-          <SettingsCardFooter
-            hint={
-              editing
-                ? "Changes are saved for everyone in your organization."
-                : "New trucks start as active."
+      {editing && (
+        <>
+          <SettingsCard
+            title="Fixed costs"
+            description="Spread over the truck's miles, empty miles included, for cost per mile."
+            contentClassName="grid gap-5 sm:grid-cols-6"
+          >
+            <FieldSkeleton label="Payment or lease" className="sm:col-span-2" />
+            <FieldSkeleton label="Insurance" className="sm:col-span-2" />
+            <FieldSkeleton
+              label="Other fixed costs"
+              hint="Permits, ELD fees, parking."
+              className="sm:col-span-2"
+            />
+          </SettingsCard>
+          <SettingsCard
+            title="Notes"
+            footer={
+              <SettingsCardFooter hint="Changes are saved for everyone in your organization.">
+                <Skeleton className="h-8 w-28 rounded-md bg-foreground/10" />
+              </SettingsCardFooter>
             }
           >
-            {!editing && (
-              <Skeleton className="h-8 w-16 rounded-md bg-foreground/10" />
-            )}
-            <Skeleton className="h-8 w-28 rounded-md bg-foreground/10" />
-          </SettingsCardFooter>
-        }
-      >
-        <Skeleton className="h-16 w-full" />
-      </SettingsCard>
+            <Skeleton className="h-16 w-full" />
+          </SettingsCard>
+        </>
+      )}
     </div>
   )
 }
@@ -239,8 +229,54 @@ function TruckFormSkeleton({ editing = false }: { editing?: boolean }) {
 export function NewTruckSkeleton() {
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
-      <div className="mx-auto max-w-5xl">
-        <TruckFormSkeleton />
+      <div className="mx-auto flex max-w-7xl flex-col gap-6">
+        {/* The "All trucks" link: a small ghost button. */}
+        <Skeleton className="h-8 w-26 rounded-md" />
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
+          <div className="min-w-0 lg:col-start-1 lg:row-start-1">
+            <TruckFormSkeleton />
+          </div>
+          <aside className="flex flex-col gap-6 lg:col-start-2 lg:row-start-1">
+            <section className="flex flex-col gap-4 rounded-xl border bg-card px-5 pt-4 pb-5 shadow-xs">
+              <div>
+                <h4 className="font-semibold">Fixed costs</h4>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Spread over the truck&apos;s miles, empty miles included, for
+                  cost per mile.
+                </p>
+              </div>
+              <div className="grid gap-4">
+                <FieldSkeleton label="Payment or lease" />
+                <FieldSkeleton label="Insurance" />
+                <FieldSkeleton
+                  label="Other fixed costs"
+                  hint="Permits, ELD fees, parking."
+                />
+              </div>
+            </section>
+            <section className="flex flex-col gap-3 rounded-xl border bg-card px-5 pt-4 pb-5 shadow-xs">
+              <h4 className="font-semibold">Notes</h4>
+              <Skeleton className="h-24 w-full" />
+            </section>
+            <section className="rounded-xl border bg-card px-5 pt-4 pb-5 shadow-xs">
+              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                New truck
+              </p>
+              <h4 className="mt-1 text-xl font-semibold tracking-tight">
+                Add a truck
+              </h4>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Fill in what you have. Only the unit number is needed to save,
+                and anything else can be added from its page later. New trucks
+                start as active.
+              </p>
+              <div className="mt-5 flex flex-col gap-2 border-t pt-5">
+                <Skeleton className="h-10 w-full rounded-md bg-foreground/10" />
+                <Skeleton className="mx-auto h-8 w-16 rounded-md" />
+              </div>
+            </section>
+          </aside>
+        </div>
       </div>
     </div>
   )
@@ -283,65 +319,76 @@ function StatSkeleton({ label, hint }: { label: string; hint?: string }) {
 }
 
 export function TruckDetailSkeleton() {
+  const panel = "rounded-xl border bg-card px-5 pt-4 pb-5 shadow-xs"
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
-      <div className="mx-auto flex max-w-5xl flex-col gap-4">
+      <div className="mx-auto flex max-w-7xl flex-col gap-6">
         {/* The "All trucks" link: a small ghost button. */}
         <Skeleton className="h-8 w-26 rounded-md" />
-        <section className="overflow-hidden rounded-xl border bg-card shadow-xs">
-          <div className="flex items-start justify-between gap-4 px-6 pt-5">
-            <div className="space-y-1">
-              <div className="flex h-6 items-center">
-                <Skeleton className="h-4 w-24" />
-              </div>
-              <Line className="h-3.5 w-64" />
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-col gap-1">
+            <div className="flex h-8 items-center gap-3">
+              <Skeleton className="h-6 w-28" />
+              <Skeleton className="h-6 w-16 rounded-full" />
             </div>
-            <Skeleton className="h-6 w-16 rounded-full" />
+            <Line className="w-72" />
           </div>
-          <div className="grid gap-5 px-6 pt-5 pb-6 sm:grid-cols-3">
-            <DetailSkeleton label="Annual inspection due" lines={2} />
-            <DetailSkeleton label="Registration expires" />
-            <DetailSkeleton label="Plate expires" />
-            <DetailSkeleton label="2290 heavy vehicle tax" lines={2} />
-            <DetailSkeleton label="Plate" width="w-20" />
-            <DetailSkeleton label="ELD" width="w-28" />
-            <DetailSkeleton label="Ownership" width="w-16" />
-            <DetailSkeleton label="Default driver" width="w-28" />
-            <DetailSkeleton label="Fixed costs" width="w-28" />
+          <Skeleton className="h-8 w-32 rounded-md" />
+        </div>
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
+          <div className="flex min-w-0 flex-col gap-4">
+            <SettingsCard
+              title="This week"
+              description={
+                // The description is a <p>, so an inline placeholder.
+                <span className="inline-block h-4 w-40 animate-pulse rounded-md bg-muted align-middle" />
+              }
+              footer={
+                <SettingsCardFooter
+                  hint={<Skeleton className="h-4 w-72 bg-foreground/10" />}
+                />
+              }
+            >
+              <div className="grid grid-cols-2 gap-5 sm:grid-cols-4">
+                <StatSkeleton label="Loads" />
+                <StatSkeleton label="Miles" hint="Loaded and empty" />
+                <StatSkeleton label="Revenue" />
+                <StatSkeleton
+                  label="Cost per mile"
+                  hint="Fixed costs and driver pay"
+                />
+              </div>
+            </SettingsCard>
+            <SettingsCard title="Loads" contentClassName="space-y-3">
+              <Skeleton className="h-9 w-full" />
+              <Skeleton className="h-9 w-full" />
+            </SettingsCard>
+            <TruckFormSkeleton editing />
           </div>
-          <div className="flex min-h-14 flex-col gap-3 border-t bg-muted/40 px-6 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <Skeleton className="h-4 w-80 max-w-full bg-foreground/10" />
-            <Skeleton className="h-8 w-32 rounded-md bg-foreground/10" />
-          </div>
-        </section>
-        <SettingsCard
-          title="This week"
-          description={
-            // The description is a <p>, so an inline placeholder.
-            <span className="inline-block h-4 w-40 animate-pulse rounded-md bg-muted align-middle" />
-          }
-          footer={
-            <SettingsCardFooter
-              hint={<Skeleton className="h-4 w-72 bg-foreground/10" />}
-            />
-          }
-        >
-          <div className="grid grid-cols-2 gap-5 sm:grid-cols-4">
-            <StatSkeleton label="Loads" />
-            <StatSkeleton label="Miles" hint="Loaded and empty" />
-            <StatSkeleton label="Revenue" />
-            <StatSkeleton
-              label="Cost per mile"
-              hint="Fixed costs and driver pay"
-            />
-          </div>
-        </SettingsCard>
-        <SettingsCard title="Loads" contentClassName="space-y-3">
-          <Skeleton className="h-9 w-full" />
-          <Skeleton className="h-9 w-full" />
-        </SettingsCard>
-        <div className="mt-2">
-          <TruckFormSkeleton editing />
+          <aside className="order-first flex flex-col gap-4 lg:order-none">
+            <section className={panel}>
+              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                Compliance
+              </p>
+              <div className="mt-3 grid gap-4">
+                <DetailSkeleton label="Annual inspection due" lines={2} />
+                <DetailSkeleton label="Registration expires" />
+                <DetailSkeleton label="Plate expires" />
+                <DetailSkeleton label="2290 heavy vehicle tax" lines={2} />
+              </div>
+            </section>
+            <section className={panel}>
+              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                Setup
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-4">
+                <DetailSkeleton label="ELD" width="w-28" />
+                <DetailSkeleton label="Ownership" width="w-16" />
+                <DetailSkeleton label="Default driver" width="w-28" />
+                <DetailSkeleton label="Fixed costs" width="w-28" />
+              </div>
+            </section>
+          </aside>
         </div>
       </div>
     </div>

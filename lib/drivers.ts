@@ -235,6 +235,20 @@ export async function getDriversNow(
   /** "YYYY-MM-DD" */
   today: string
 ): Promise<Record<string, DriverNow>> {
+  return getLoadsNow(organizationId, today, "driver_id")
+}
+
+/**
+ * The load each driver (or truck) is on, its next booked one and its last
+ * delivery, keyed by the load column given. Shared by the drivers and
+ * trucks lists.
+ */
+export async function getLoadsNow(
+  organizationId: string,
+  /** "YYYY-MM-DD" */
+  today: string,
+  by: "driver_id" | "truck_id"
+): Promise<Record<string, DriverNow>> {
   const supabase = await createClient()
   // Only recent deliveries, so the list doesn't read the whole history.
   const since = new Date(`${today}T00:00:00Z`)
@@ -243,19 +257,19 @@ export async function getDriversNow(
     supabase
       .from("loads")
       .select(
-        "id, driver_id, reference, pickup_location, delivery_location, pickup_start, status"
+        "id, driver_id, truck_id, reference, pickup_location, delivery_location, pickup_start, status"
       )
       .eq("organization_id", organizationId)
-      .not("driver_id", "is", null)
+      .not(by, "is", null)
       .in("status", ["booked", "dispatched", "loaded"])
       .order("pickup_start", { ascending: true }),
     supabase
       .from("loads")
       .select(
-        "id, driver_id, reference, delivery_location, delivery_start, completed_at, load_stops(kind, position, arrived_at, departed_at)"
+        "id, driver_id, truck_id, reference, delivery_location, delivery_start, completed_at, load_stops(kind, position, arrived_at, departed_at)"
       )
       .eq("organization_id", organizationId)
-      .not("driver_id", "is", null)
+      .not(by, "is", null)
       .in("status", DELIVERED)
       .gte("delivery_start", since.toISOString().slice(0, 10)),
   ])
@@ -270,7 +284,7 @@ export async function getDriversNow(
   const entryOf = (driverId: string) =>
     (byDriver[driverId] ??= { current: null, next: null, last: null })
   for (const row of delivered.data) {
-    const entry = entryOf(row.driver_id!)
+    const entry = entryOf(row[by]!)
     const on = deliveredOn(row, today)
     if (!entry.last || on > entry.last.delivered_on) {
       entry.last = {
@@ -290,7 +304,7 @@ export async function getDriversNow(
       status: row.status as DriverNowLoad["status"],
       pickup_start: row.pickup_start,
     }
-    const entry = entryOf(row.driver_id!)
+    const entry = entryOf(row[by]!)
     // In transit beats dispatched; otherwise the earliest pickup wins.
     if (load.status !== "booked") {
       if (
