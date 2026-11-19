@@ -334,7 +334,6 @@ export function TruckForm({
         >
           <SettingsCard
             title={truck ? "Truck details" : "Truck"}
-            description="The unit number is what your team calls it."
             contentClassName="grid gap-5 sm:grid-cols-6"
           >
             <TextField
@@ -430,7 +429,6 @@ export function TruckForm({
               id={fieldId("annual_inspection_on")}
               name="annual_inspection_on"
               label="Last annual inspection"
-              hint="Due again a year later."
               defaultValue={truck?.annual_inspection_on}
               errors={errors.annual_inspection_on}
               onUpdate={revalidate}
@@ -477,7 +475,7 @@ export function TruckForm({
               defaultValue={truck?.home_base ?? undefined}
               errors={errors}
               className="sm:col-span-6"
-              hint="Where the truck starts when it has no earlier load. Empty miles to the first pickup are estimated from its last delivery, or from here."
+              hint="Where it starts when it has no earlier load, for empty miles."
             />
           </SettingsCard>
 
@@ -495,7 +493,6 @@ export function TruckForm({
               errors={errors}
               className="sm:col-span-3"
               onChange={(event) => setMotiveId(event.currentTarget.value)}
-              hint="The vehicle's ID in Motive. Leave blank if it isn't on Motive."
             />
           </SettingsCard>
         </div>
@@ -515,10 +512,8 @@ export function TruckForm({
               footer={
                 <SettingsCardFooter
                   hint={
-                    formError ? (
+                    formError && (
                       <span className="text-destructive">{formError}</span>
-                    ) : (
-                      "Changes are saved for everyone in your organization."
                     )
                   }
                 >

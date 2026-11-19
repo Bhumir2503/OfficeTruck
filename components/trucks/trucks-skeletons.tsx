@@ -42,7 +42,6 @@ export function TrucksListSkeleton() {
     <div className="px-4 py-6 lg:px-6 lg:py-8">
       <SettingsCard
         title="Trucks"
-        description="Search by unit number, VIN or plate, or filter by status."
         action={<Skeleton className="h-8 w-24 rounded-md" />}
         contentClassName="px-0 pb-0"
         footer={
@@ -129,7 +128,6 @@ function TruckFormSkeleton({ editing = false }: { editing?: boolean }) {
     <div className="flex flex-col gap-6">
       <SettingsCard
         title={editing ? "Truck details" : "Truck"}
-        description="The unit number is what your team calls it."
         contentClassName="grid gap-5 sm:grid-cols-6"
       >
         <FieldSkeleton label="Unit number" className="sm:col-span-2" />
@@ -156,7 +154,6 @@ function TruckFormSkeleton({ editing = false }: { editing?: boolean }) {
         />
         <FieldSkeleton
           label="Last annual inspection"
-          hint="Due again a year later."
           className="sm:col-span-2"
         />
       </SettingsCard>
@@ -189,11 +186,7 @@ function TruckFormSkeleton({ editing = false }: { editing?: boolean }) {
         action={<Skeleton className="h-6 w-28 rounded-full" />}
         contentClassName="grid gap-5 sm:grid-cols-6"
       >
-        <FieldSkeleton
-          label="Motive vehicle ID"
-          hint="The vehicle's ID in Motive. Leave blank if it isn't on Motive."
-          className="sm:col-span-3"
-        />
+        <FieldSkeleton label="Motive vehicle ID" className="sm:col-span-3" />
       </SettingsCard>
       {editing && (
         <>
@@ -213,7 +206,7 @@ function TruckFormSkeleton({ editing = false }: { editing?: boolean }) {
           <SettingsCard
             title="Notes"
             footer={
-              <SettingsCardFooter hint="Changes are saved for everyone in your organization.">
+              <SettingsCardFooter>
                 <Skeleton className="h-8 w-28 rounded-md bg-foreground/10" />
               </SettingsCardFooter>
             }

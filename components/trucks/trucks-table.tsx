@@ -184,7 +184,6 @@ export function TrucksTable({
   return (
     <SettingsCard
       title="Trucks"
-      description="Search by unit number, VIN or plate, or filter by status."
       action={addButton("sm")}
       contentClassName="px-0 pb-0"
       footer={
