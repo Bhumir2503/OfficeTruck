@@ -24,23 +24,31 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   complianceItems,
   formatPay,
   type DqComplianceDates,
   needsAction,
   type ComplianceItem,
+  LAST_DELIVERY_DAYS,
 } from "@/lib/driver-format"
-import type { Driver } from "@/lib/drivers"
+import type { Driver, DriverLastDelivery, DriverNow } from "@/lib/drivers"
 import { initials } from "@/lib/initials"
-import { formatRate } from "@/lib/load-format"
+import { formatStopDate, STATUS_STYLES } from "@/lib/load-format"
 import { formatPhone } from "@/lib/phone"
 import {
   DRIVER_STATUSES,
   DRIVER_STATUS_LABELS,
   type DriverStatus,
 } from "@/lib/schemas/driver"
+import { LOAD_STATUS_LABELS } from "@/lib/schemas/load"
 
 type Filter = DriverStatus | "all"
 
@@ -94,13 +102,161 @@ function ComplianceSummary({
   )
 }
 
+/**
+ * What a driver is doing now: the load they're on, or Available with their
+ * next booked load. Its links sit above the row's own link.
+ */
+function NowCell({
+  status,
+  now,
+  loadsBase,
+}: {
+  status: Driver["status"]
+  now: DriverNow | undefined
+  loadsBase: string
+}) {
+  if (status === "inactive") {
+    return <span className="text-sm text-muted-foreground">—</span>
+  }
+  const current = now?.current
+  if (current) {
+    return (
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <Link
+            href={`${loadsBase}/${current.id}`}
+            className="relative z-10 font-medium tabular-nums hover:underline"
+          >
+            {current.reference}
+          </Link>
+          <span
+            className={`rounded-md px-1.5 py-0.5 text-xs font-medium ${STATUS_STYLES[current.status]}`}
+          >
+            {LOAD_STATUS_LABELS[current.status]}
+          </span>
+        </div>
+        <div className="truncate text-sm text-muted-foreground">
+          {current.from} → {current.to}
+        </div>
+      </div>
+    )
+  }
+  const next = now?.next
+  return (
+    <div className="min-w-0">
+      <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-300">
+        <span className="size-1.5 rounded-full bg-emerald-500" />
+        Available
+      </span>
+      {next && (
+        <div className="truncate text-sm text-muted-foreground">
+          Next:{" "}
+          <Link
+            href={`${loadsBase}/${next.id}`}
+            className="relative z-10 tabular-nums hover:underline"
+          >
+            {next.reference}
+          </Link>{" "}
+          · picks up {formatStopDate(next.pickup_start)}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * On a phone, where the Now column is hidden: what the driver is doing, in
+ * one line under their name. Plain text; the row opens the driver.
+ */
+function NowLine({
+  status,
+  now,
+}: {
+  status: Driver["status"]
+  now: DriverNow | undefined
+}) {
+  if (status === "inactive") return null
+  const current = now?.current
+  if (current) {
+    return (
+      <div className="mt-1 truncate text-xs md:hidden">
+        <span
+          className={`mr-1.5 rounded-md px-1.5 py-0.5 font-medium ${STATUS_STYLES[current.status]}`}
+        >
+          {LOAD_STATUS_LABELS[current.status]}
+        </span>
+        <span className="text-muted-foreground">
+          {current.from} → {current.to}
+        </span>
+      </div>
+    )
+  }
+  return (
+    <div className="mt-1 truncate text-xs md:hidden">
+      <span className="font-medium text-emerald-700 dark:text-emerald-300">
+        Available
+      </span>
+      {now?.next && (
+        <span className="text-muted-foreground">
+          {" "}
+          · next picks up {formatStopDate(now.next.pickup_start)}
+        </span>
+      )}
+    </div>
+  )
+}
+
+/** Whole days from one "YYYY-MM-DD" date to another. */
+function daysBetween(from: string, to: string) {
+  const day = (value: string) => Date.parse(`${value.slice(0, 10)}T00:00:00Z`)
+  return Math.round((day(to) - day(from)) / 86_400_000)
+}
+
+/** When and where a driver last delivered, and how long ago. */
+function LastDeliveryCell({
+  last,
+  today,
+  loadsBase,
+}: {
+  last: DriverLastDelivery | null
+  /** "YYYY-MM-DD" */
+  today: string
+  loadsBase: string
+}) {
+  if (!last) {
+    return (
+      <span className="text-sm text-muted-foreground">
+        None in {LAST_DELIVERY_DAYS} days
+      </span>
+    )
+  }
+  const days = Math.max(0, daysBetween(last.delivered_on, today))
+  const ago =
+    days === 0 ? "Today" : days === 1 ? "Yesterday" : `${days} days ago`
+  return (
+    <div className="min-w-0">
+      <Link
+        href={`${loadsBase}/${last.id}`}
+        title={`Load ${last.reference}`}
+        className="relative z-10 text-sm font-medium hover:underline"
+      >
+        {ago}
+      </Link>
+      <div className="truncate text-sm text-muted-foreground">
+        {formatStopDate(`${last.delivered_on}T00:00`)} · {last.to}
+      </div>
+    </div>
+  )
+}
+
 export function DriversTable({
   drivers,
   base,
   today,
   canManage,
-  pay,
   dqDates,
+  now,
+  loadsBase,
 }: {
   drivers: Driver[]
   /** /org/<slug>/drivers */
@@ -108,18 +264,12 @@ export function DriversTable({
   /** "YYYY-MM-DD", from the server so both renders warn about the same dates. */
   today: string
   canManage: boolean
-  /** Last week's pay status by driver, for owners and admins; null otherwise. */
-  pay: {
-    week: string
-    /** "Nov 9 – 15, 2026" */
-    label: string
-    byDriver: Record<
-      string,
-      { status: "paid" | "to_pay" | "none"; net: number }
-    >
-  } | null
   /** Each driver's file dates (medical, annual review, Clearinghouse). */
   dqDates: Record<string, DqComplianceDates>
+  /** The load each driver is on now, their next booked one and their last delivery. */
+  now: Record<string, DriverNow>
+  /** /org/<slug>/loads */
+  loadsBase: string
 }) {
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState<Filter>("active")
@@ -182,6 +332,25 @@ export function DriversTable({
     )
   }
 
+  // The status filter's choices, each with how many drivers it shows.
+  const filterOptions: {
+    value: Filter
+    name: string
+    label: string
+    count: number
+  }[] = [
+    ...DRIVER_STATUSES.map((status) => ({
+      value: status,
+      name: DRIVER_STATUS_LABELS[status],
+      count: counts[status],
+    })),
+    { value: "all" as const, name: "All", count: drivers.length },
+  ].map((option) => ({
+    ...option,
+    // What the closed dropdown shows.
+    label: `${option.name} (${option.count})`,
+  }))
+
   const filtering = search.trim() !== "" || filter !== "all"
   const count = filtering
     ? `Showing ${filtered.length} of ${plural(drivers.length, "driver")}`
@@ -222,56 +391,48 @@ export function DriversTable({
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <ToggleGroup
-          aria-label="Filter by status"
-          variant="outline"
-          size="sm"
-          spacing={1}
-          className="shrink-0"
-          value={[filter]}
-          onValueChange={(value: string[]) =>
-            setFilter((value[0] as Filter | undefined) ?? "all")
+        <Select
+          value={filter}
+          onValueChange={(value) =>
+            setFilter((value as Filter | null) ?? "all")
           }
+          items={filterOptions}
         >
-          {DRIVER_STATUSES.map((status) => (
-            <ToggleGroupItem key={status} value={status}>
-              {DRIVER_STATUS_LABELS[status]}
-              <span className="text-muted-foreground tabular-nums">
-                {counts[status]}
-              </span>
-            </ToggleGroupItem>
-          ))}
-          <ToggleGroupItem value="all">
-            All
-            <span className="text-muted-foreground tabular-nums">
-              {drivers.length}
-            </span>
-          </ToggleGroupItem>
-        </ToggleGroup>
+          <SelectTrigger
+            aria-label="Filter by status"
+            className="w-full shrink-0 sm:w-40"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {filterOptions.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.name}
+                <span className="ml-auto pr-2 text-muted-foreground tabular-nums">
+                  {option.count}
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <Table className="[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6">
         <TableHeader className="bg-muted/40">
           <TableRow>
             <TableHead>Driver</TableHead>
-            <TableHead className="hidden 2xl:table-cell">CDL</TableHead>
+            <TableHead className="hidden md:table-cell">Now</TableHead>
+            <TableHead className="hidden lg:table-cell">
+              Last delivery
+            </TableHead>
             <TableHead className="hidden xl:table-cell">Pay rate</TableHead>
-            {pay && (
-              <TableHead
-                className="hidden md:table-cell"
-                title={`Still owed for ${pay.label}`}
-              >
-                Pay due
-              </TableHead>
-            )}
             <TableHead className="hidden sm:table-cell">Compliance</TableHead>
-            <TableHead className="w-24">Status</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {filtered.length === 0 && (
             <TableRow>
               <TableCell
-                colSpan={pay ? 6 : 5}
+                colSpan={5}
                 className="h-24 text-center text-muted-foreground"
               >
                 {search.trim() === "" && filter !== "all"
@@ -283,7 +444,9 @@ export function DriversTable({
           {filtered.map(({ driver, items }) => {
             const warnings = driver.status === "active" ? flagged(items) : []
             return (
-              <TableRow key={driver.id}>
+              // The name's link covers the whole row, so any of it opens
+              // the driver; the load links sit above it.
+              <TableRow key={driver.id} className="relative cursor-pointer">
                 <TableCell className="max-w-64 py-3">
                   <div className="flex items-center gap-3">
                     <Avatar>
@@ -292,17 +455,26 @@ export function DriversTable({
                       </AvatarFallback>
                     </Avatar>
                     <div className="min-w-0">
-                      <Link
-                        href={`${base}/${driver.id}`}
-                        className="block truncate font-medium hover:underline"
-                      >
-                        {driver.full_name}
-                      </Link>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <Link
+                          href={`${base}/${driver.id}`}
+                          className="truncate font-medium after:absolute after:inset-0 hover:underline"
+                        >
+                          {driver.full_name}
+                        </Link>
+                        {driver.status === "inactive" && (
+                          <DriverStatusBadge
+                            status={driver.status}
+                            className="shrink-0"
+                          />
+                        )}
+                      </div>
                       <div className="truncate text-sm text-muted-foreground">
                         {driver.phone
                           ? formatPhone(driver.phone)
                           : (driver.email ?? "No contact info")}
                       </div>
+                      <NowLine status={driver.status} now={now[driver.id]} />
                       {warnings.length > 0 && (
                         // The compliance column is hidden on phones; keep the warnings.
                         <div className="mt-1 flex flex-wrap gap-1 sm:hidden">
@@ -314,43 +486,27 @@ export function DriversTable({
                     </div>
                   </div>
                 </TableCell>
-                <TableCell className="hidden text-muted-foreground 2xl:table-cell">
-                  {driver.cdl_number ? (
-                    <>
-                      <span className="text-foreground">
-                        {driver.cdl_number}
-                      </span>
-                      {driver.cdl_state && ` · ${driver.cdl_state}`}
-                    </>
-                  ) : (
-                    "Not set"
-                  )}
+                <TableCell className="hidden max-w-64 md:table-cell">
+                  <NowCell
+                    status={driver.status}
+                    now={now[driver.id]}
+                    loadsBase={loadsBase}
+                  />
+                </TableCell>
+                <TableCell className="hidden lg:table-cell">
+                  <LastDeliveryCell
+                    last={now[driver.id]?.last ?? null}
+                    today={today}
+                    loadsBase={loadsBase}
+                  />
                 </TableCell>
                 <TableCell className="hidden text-sm xl:table-cell">
                   {formatPay(driver.pay_type, driver.pay_rate) ?? (
                     <span className="text-muted-foreground">Not set</span>
                   )}
                 </TableCell>
-                {pay && (
-                  <TableCell className="hidden md:table-cell">
-                    {pay.byDriver[driver.id]?.status === "to_pay" ? (
-                      <Link
-                        href={`${base}/${driver.id}?week=${pay.week}#pay`}
-                        title={`${formatRate(pay.byDriver[driver.id].net)} for ${pay.label}`}
-                        className="inline-flex rounded-md bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-700 hover:underline dark:text-amber-300"
-                      >
-                        Yes
-                      </Link>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">No</span>
-                    )}
-                  </TableCell>
-                )}
                 <TableCell className="hidden max-w-80 text-sm whitespace-normal sm:table-cell">
                   <ComplianceSummary items={items} status={driver.status} />
-                </TableCell>
-                <TableCell>
-                  <DriverStatusBadge status={driver.status} />
                 </TableCell>
               </TableRow>
             )

@@ -18,6 +18,9 @@ export function formatDate(value: string) {
   return dateFormat.format(new Date(`${value}T00:00:00Z`))
 }
 
+/** How far back the drivers list looks for each driver's last delivery. */
+export const LAST_DELIVERY_DAYS = 90
+
 /** Today's calendar date, "YYYY-MM-DD", in the server's time zone. */
 export function today() {
   const now = new Date()

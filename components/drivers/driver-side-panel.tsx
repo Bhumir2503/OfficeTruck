@@ -7,7 +7,6 @@ import {
   DRIVER_CARD_IDS,
   driverNextSteps,
   type ComplianceItem,
-  type DriverStep,
 } from "@/lib/driver-format"
 import type { Driver, DriverLoad } from "@/lib/drivers"
 
@@ -37,23 +36,12 @@ export function DriverSidePanel({
   /** Kinds of document on file, e.g. "cdl", "medical_card". */
   documentKinds?: readonly string[]
 }) {
-  const steps = driverNextSteps(
+  const step = driverNextSteps(
     { ...driver, documents: documentKinds },
     items,
     loads
-  )
-  const step = steps[0]!
+  )[0]!
   const action = step.action
-  // What comes after, briefly; everything is still worked out each visit.
-  const later = steps.slice(1, 5)
-  const hrefOf = (s: DriverStep) =>
-    s.action?.type === "edit"
-      ? `#${DRIVER_CARD_IDS[s.action.target]}`
-      : s.action?.type === "load"
-        ? `${loadsBase}/${s.action.id}`
-        : s.action?.type === "new_load"
-          ? `${loadsBase}/new`
-          : null
   return (
     <div className="flex flex-col gap-4">
       {/* Next action */}
@@ -112,47 +100,6 @@ export function DriverSidePanel({
             </div>
           )}
         </div>
-        {later.length > 0 && (
-          <div className="border-t bg-muted/30 px-5 py-3">
-            <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              Then
-            </p>
-            <ol className="mt-2 flex flex-col gap-1.5">
-              {later.map((s) => {
-                const href =
-                  manager || s.action?.type === "load" ? hrefOf(s) : null
-                const dot =
-                  s.tone === "danger"
-                    ? "bg-destructive"
-                    : s.tone === "warning"
-                      ? "bg-amber-500"
-                      : "bg-muted-foreground/40"
-                const label = (
-                  <>
-                    <span
-                      className={`mt-1.5 size-1.5 shrink-0 rounded-full ${dot}`}
-                    />
-                    <span className="min-w-0">{s.title}</span>
-                  </>
-                )
-                return (
-                  <li key={s.id}>
-                    {href ? (
-                      <a
-                        href={href}
-                        className="flex gap-2 text-sm hover:underline"
-                      >
-                        {label}
-                      </a>
-                    ) : (
-                      <span className="flex gap-2 text-sm">{label}</span>
-                    )}
-                  </li>
-                )
-              })}
-            </ol>
-          </div>
-        )}
       </section>
     </div>
   )
