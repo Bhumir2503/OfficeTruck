@@ -3,7 +3,6 @@
 import { cn } from "cn"
 
 import { CornerDownLeft, FileText, IdCard, Pencil, Upload } from "lucide-react"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
@@ -24,7 +23,8 @@ import {
   SettingsCard,
   SettingsCardFooter,
 } from "@/components/settings/settings-card"
-import { Button, buttonVariants } from "@/components/ui/button"
+import { AddRecordPanel } from "@/components/add-record-panel"
+import { Button } from "@/components/ui/button"
 import {
   Field,
   FieldDescription,
@@ -49,6 +49,10 @@ import {
 } from "@/lib/schemas/driver"
 
 type Name = keyof DriverInput
+
+/** The Pay and Notes cards on Add driver, for the panel's links. */
+const PAY_CARD_ID = "pay-card"
+const NOTES_CARD_ID = "notes-card"
 export type DriverFormCard =
   "details" | "cdl" | "medical" | "annual" | "pay" | "notes"
 type Errors = Partial<Record<Name, { message: string }[]>>
@@ -902,77 +906,68 @@ export function DriverForm({
               className="sm:col-span-3"
             />
           </SettingsCard>
+
+          {!driver && (
+            // On the driver page these save from their own boxes beside it.
+            <>
+              <SettingsCard
+                title="Pay"
+                description="It works out the driver's cut and your profit on each load."
+                id={PAY_CARD_ID}
+                className="scroll-mt-6"
+                data-card="pay"
+                contentClassName="grid gap-5 sm:grid-cols-6"
+              >
+                <PayFields
+                  defaultType={null}
+                  defaultRate={null}
+                  errors={errors}
+                  onUpdate={onUpdate}
+                />
+              </SettingsCard>
+              <SettingsCard
+                title="Notes"
+                id={NOTES_CARD_ID}
+                className="scroll-mt-6"
+              >
+                <Textarea
+                  aria-label="Notes"
+                  // Saved on its own once the driver is added, so it has no
+                  // name; the panel still counts it.
+                  data-panel-field="notes"
+                  rows={3}
+                  maxLength={2000}
+                  placeholder="Endorsements, home terminal, preferred lanes…"
+                  value={notes}
+                  onChange={(event) => setNotes(event.target.value)}
+                />
+              </SettingsCard>
+            </>
+          )}
         </div>
 
         {!driver && (
-          // Beside the cards, pay, notes and saving stay in view; on a phone
-          // they come after them, as on New load.
-          <aside className="flex flex-col gap-6 lg:sticky lg:top-6 lg:col-start-2 lg:row-start-1">
-            {/* Like the Pay box beside the form on the driver page. */}
-            <section
-              data-card="pay"
-              className="flex flex-col gap-4 rounded-xl border bg-card px-5 pt-4 pb-5 text-card-foreground shadow-xs"
-            >
-              <div>
-                <h4 className="font-semibold">Pay</h4>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  It works out the driver&apos;s cut and your profit on each
-                  load.
-                </p>
-              </div>
-              <PayFields
-                defaultType={null}
-                defaultRate={null}
-                errors={errors}
-                onUpdate={onUpdate}
-              />
-            </section>
-            {/* Like the Notes box beside the driver page. */}
-            <section className="flex flex-col gap-3 rounded-xl border bg-card px-5 pt-4 pb-5 text-card-foreground shadow-xs">
-              <h4 className="font-semibold">Notes</h4>
-              <Textarea
-                aria-label="Notes"
-                rows={4}
-                maxLength={2000}
-                placeholder="Endorsements, home terminal, preferred lanes…"
-                value={notes}
-                onChange={(event) => setNotes(event.target.value)}
-              />
-            </section>
-            <section className="rounded-xl border bg-card px-5 pt-4 pb-5 text-card-foreground shadow-xs">
-              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                New driver
-              </p>
-              <h4 className="mt-1 text-xl font-semibold tracking-tight">
-                Add a driver
-              </h4>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Fill in what you have. Only their name is needed to save, and
-                anything else can be added from their page later.
-              </p>
-              <div className="mt-5 flex flex-col gap-2 border-t pt-5">
-                {/* Adding a driver saves everything at once. */}
-                <Button
-                  type="submit"
-                  size="lg"
-                  className="w-full"
-                  disabled={pending}
-                >
-                  {pending ? "Saving…" : "Save driver"} <CornerDownLeft />
-                </Button>
-                <Link
-                  href={base}
-                  className={buttonVariants({ variant: "ghost", size: "sm" })}
-                >
-                  Cancel
-                </Link>
-                {formError && (
-                  <p role="alert" className="text-sm text-destructive">
-                    {formError}
-                  </p>
-                )}
-              </div>
-            </section>
+          // Beside the cards, what's filled in and saving stay in view; on a
+          // phone they come after them, as on New load.
+          <aside className="lg:sticky lg:top-6 lg:col-start-2 lg:row-start-1">
+            <AddRecordPanel
+              eyebrow="New driver"
+              placeholderTitle="Add a driver"
+              nameField="full_name"
+              sections={[
+                { id: DRIVER_CARD_IDS.details, label: "Driver" },
+                { id: DRIVER_CDL_ID, label: "CDL" },
+                { id: DRIVER_CARD_IDS.medical, label: "Medical card" },
+                { id: DRIVER_CARD_IDS.annual, label: "Annual checks" },
+                { id: PAY_CARD_ID, label: "Pay" },
+                { id: NOTES_CARD_ID, label: "Notes", optional: true },
+              ]}
+              hint="Only their name is needed to save. Anything else can be added from their page later."
+              submitLabel="Save driver"
+              pending={pending}
+              cancelHref={base}
+              formError={formError}
+            />
           </aside>
         )}
       </fieldset>

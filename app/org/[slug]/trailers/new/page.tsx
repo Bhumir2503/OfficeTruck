@@ -26,7 +26,7 @@ export default async function NewTrailerPage({
 
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
-      <div className="mx-auto flex max-w-5xl flex-col gap-6">
+      <div className="mx-auto flex max-w-7xl flex-col gap-6">
         <Link
           href={base}
           className={buttonVariants({

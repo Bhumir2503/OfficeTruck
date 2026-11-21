@@ -1,5 +1,6 @@
 import { cn } from "cn"
 
+import { AddRecordPanelSkeleton } from "@/components/add-record-panel"
 import {
   SettingsCard,
   SettingsCardFooter,
@@ -190,37 +191,40 @@ export function NewTruckSkeleton() {
         {/* The "All trucks" link: a small ghost button. */}
         <Skeleton className="h-8 w-26 rounded-md" />
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
-          <div className="min-w-0 lg:col-start-1 lg:row-start-1">
+          <div className="flex min-w-0 flex-col gap-6 lg:col-start-1 lg:row-start-1">
             <TruckFormSkeleton />
+            <SettingsCard
+              title="Fixed costs"
+              contentClassName="grid gap-5 sm:grid-cols-6"
+            >
+              <FieldSkeleton
+                label="Payment or lease"
+                className="sm:col-span-2"
+              />
+              <FieldSkeleton label="Insurance" className="sm:col-span-2" />
+              <FieldSkeleton
+                label="Other fixed costs"
+                className="sm:col-span-2"
+              />
+            </SettingsCard>
+            <SettingsCard title="Notes">
+              <Skeleton className="h-16 w-full" />
+            </SettingsCard>
           </div>
-          <aside className="flex flex-col gap-6 lg:col-start-2 lg:row-start-1">
-            <section className="flex flex-col gap-4 rounded-xl border bg-card px-5 pt-4 pb-5 shadow-xs">
-              <h4 className="font-semibold">Fixed costs</h4>
-              <div className="grid gap-4">
-                <FieldSkeleton label="Payment or lease" />
-                <FieldSkeleton label="Insurance" />
-                <FieldSkeleton label="Other fixed costs" />
-              </div>
-            </section>
-            <section className="flex flex-col gap-3 rounded-xl border bg-card px-5 pt-4 pb-5 shadow-xs">
-              <h4 className="font-semibold">Notes</h4>
-              <Skeleton className="h-24 w-full" />
-            </section>
-            <section className="rounded-xl border bg-card px-5 pt-4 pb-5 shadow-xs">
-              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                New truck
-              </p>
-              <h4 className="mt-1 text-xl font-semibold tracking-tight">
-                Add a truck
-              </h4>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Only the unit number is needed to save.
-              </p>
-              <div className="mt-5 flex flex-col gap-2 border-t pt-5">
-                <Skeleton className="h-10 w-full rounded-md bg-foreground/10" />
-                <Skeleton className="mx-auto h-8 w-16 rounded-md" />
-              </div>
-            </section>
+          <aside className="lg:col-start-2 lg:row-start-1">
+            <AddRecordPanelSkeleton
+              eyebrow="New truck"
+              placeholderTitle="Add a truck"
+              hint="Only the unit number is needed to save. Anything else can be added from its page later."
+              sections={[
+                { label: "Truck" },
+                { label: "Plate and compliance" },
+                { label: "Ownership and driver" },
+                { label: "Maintenance schedule" },
+                { label: "Fixed costs" },
+                { label: "Notes", optional: true },
+              ]}
+            />
           </aside>
         </div>
       </div>

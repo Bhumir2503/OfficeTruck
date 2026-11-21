@@ -1,3 +1,4 @@
+import { AddRecordPanelSkeleton } from "@/components/add-record-panel"
 import { SettingsCard } from "@/components/settings/settings-card"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -38,6 +39,40 @@ export function TrailerPageSkeleton() {
         <SettingsCard title="Plate and compliance">
           <Skeleton className="h-32 w-full" />
         </SettingsCard>
+      </div>
+    </div>
+  )
+}
+
+/** Add trailer: the cards, with the panel beside them. */
+export function NewTrailerSkeleton() {
+  return (
+    <div className="px-4 py-6 lg:px-6 lg:py-8">
+      <div className="mx-auto flex max-w-7xl flex-col gap-6">
+        <Skeleton className="h-8 w-28 rounded-md" />
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
+          <div className="flex min-w-0 flex-col gap-6 lg:col-start-1 lg:row-start-1">
+            <SettingsCard title="Trailer">
+              <Skeleton className="h-32 w-full" />
+            </SettingsCard>
+            <SettingsCard title="Plate and compliance">
+              <Skeleton className="h-32 w-full" />
+            </SettingsCard>
+          </div>
+          <aside className="lg:col-start-2 lg:row-start-1">
+            <AddRecordPanelSkeleton
+              eyebrow="New trailer"
+              placeholderTitle="Add a trailer"
+              hint="Only the unit number is needed to save. Anything else can be added from its page later."
+              sections={[
+                { label: "Trailer" },
+                { label: "Plate and compliance" },
+                { label: "Ownership and truck" },
+                { label: "Notes", optional: true },
+              ]}
+            />
+          </aside>
+        </div>
       </div>
     </div>
   )

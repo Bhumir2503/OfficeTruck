@@ -1,3 +1,3 @@
-import { TrailerPageSkeleton } from "@/components/trailers/trailers-skeletons"
+import { NewTrailerSkeleton } from "@/components/trailers/trailers-skeletons"
 
-export default TrailerPageSkeleton
+export default NewTrailerSkeleton

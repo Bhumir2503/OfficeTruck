@@ -1,7 +1,6 @@
 "use client"
 
 import { CornerDownLeft } from "lucide-react"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
@@ -13,7 +12,8 @@ import {
   SettingsCard,
   SettingsCardFooter,
 } from "@/components/settings/settings-card"
-import { Button, buttonVariants } from "@/components/ui/button"
+import { AddRecordPanel } from "@/components/add-record-panel"
+import { Button } from "@/components/ui/button"
 import {
   Field,
   FieldDescription,
@@ -231,6 +231,15 @@ export function OwnershipField({
       <FieldError errors={errors} />
     </Field>
   )
+}
+
+/** The form's cards, for the Add truck panel's links. */
+const CARD_IDS = {
+  details: "truck-card",
+  ownership: "ownership-card",
+  schedule: "schedule-card",
+  costs: "costs-card",
+  notes: "notes-card",
 }
 
 type TruckFormCard = "details" | "plate" | "ownership" | "maintenance"
@@ -475,6 +484,8 @@ export function TruckForm({
         >
           <SettingsCard
             title={truck ? "Truck details" : "Truck"}
+            id={CARD_IDS.details}
+            className="scroll-mt-6"
             data-card="details"
             footer={cardFooter("details")}
             contentClassName="grid gap-5 sm:grid-cols-6"
@@ -605,6 +616,8 @@ export function TruckForm({
 
           <SettingsCard
             title="Ownership and driver"
+            id={CARD_IDS.ownership}
+            className="scroll-mt-6"
             data-card="ownership"
             footer={cardFooter("ownership")}
             contentClassName="grid gap-5 sm:grid-cols-6"
@@ -643,6 +656,8 @@ export function TruckForm({
 
           <SettingsCard
             title="Maintenance schedule"
+            id={CARD_IDS.schedule}
+            className="scroll-mt-6"
             data-card="maintenance"
             footer={cardFooter("maintenance")}
             contentClassName="grid gap-5 sm:grid-cols-6"
@@ -691,52 +706,50 @@ export function TruckForm({
               hint="Whichever comes first, counted from the last preventive service logged."
             />
           </SettingsCard>
+          {!truck && (
+            // On the truck page these save from their own boxes beside it.
+            <>
+              <SettingsCard
+                title="Fixed costs"
+                id={CARD_IDS.costs}
+                className="scroll-mt-6"
+                contentClassName="grid gap-5 sm:grid-cols-6"
+              >
+                {costFields("sm:col-span-2")}
+              </SettingsCard>
+              <SettingsCard
+                title="Notes"
+                id={CARD_IDS.notes}
+                className="scroll-mt-6"
+              >
+                {notesField(3)}
+              </SettingsCard>
+            </>
+          )}
         </div>
 
         {!truck && (
-          // Beside the cards, costs, notes and saving stay in view; on a
-          // phone they come after them, as on Add driver.
-          <aside className="flex flex-col gap-6 lg:sticky lg:top-6 lg:col-start-2 lg:row-start-1">
-            <section className="flex flex-col gap-4 rounded-xl border bg-card px-5 pt-4 pb-5 text-card-foreground shadow-xs">
-              <h4 className="font-semibold">Fixed costs</h4>
-              <div className="grid gap-4">{costFields("")}</div>
-            </section>
-            <section className="flex flex-col gap-3 rounded-xl border bg-card px-5 pt-4 pb-5 text-card-foreground shadow-xs">
-              <h4 className="font-semibold">Notes</h4>
-              {notesField(4)}
-            </section>
-            <section className="rounded-xl border bg-card px-5 pt-4 pb-5 text-card-foreground shadow-xs">
-              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                New truck
-              </p>
-              <h4 className="mt-1 text-xl font-semibold tracking-tight">
-                Add a truck
-              </h4>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Only the unit number is needed to save.
-              </p>
-              <div className="mt-5 flex flex-col gap-2 border-t pt-5">
-                <Button
-                  type="submit"
-                  size="lg"
-                  className="w-full"
-                  disabled={pending}
-                >
-                  {pending ? "Saving…" : "Save truck"} <CornerDownLeft />
-                </Button>
-                <Link
-                  href={base}
-                  className={buttonVariants({ variant: "ghost", size: "sm" })}
-                >
-                  Cancel
-                </Link>
-                {formError && (
-                  <p role="alert" className="text-sm text-destructive">
-                    {formError}
-                  </p>
-                )}
-              </div>
-            </section>
+          // Beside the cards, what's filled in and saving stay in view; on
+          // a phone they come after them, as on New load.
+          <aside className="lg:sticky lg:top-6 lg:col-start-2 lg:row-start-1">
+            <AddRecordPanel
+              eyebrow="New truck"
+              placeholderTitle="Add a truck"
+              nameField="unit_number"
+              sections={[
+                { id: CARD_IDS.details, label: "Truck" },
+                { id: TRUCK_DATES_ID, label: "Plate and compliance" },
+                { id: CARD_IDS.ownership, label: "Ownership and driver" },
+                { id: CARD_IDS.schedule, label: "Maintenance schedule" },
+                { id: CARD_IDS.costs, label: "Fixed costs" },
+                { id: CARD_IDS.notes, label: "Notes", optional: true },
+              ]}
+              hint="Only the unit number is needed to save. Anything else can be added from its page later."
+              submitLabel="Save truck"
+              pending={pending}
+              cancelHref={base}
+              formError={formError}
+            />
           </aside>
         )}
       </fieldset>
