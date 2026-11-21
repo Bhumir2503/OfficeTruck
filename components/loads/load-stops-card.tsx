@@ -60,11 +60,14 @@ function StopTimeForm({
   organizationId,
   stop,
   event,
+  askOdometer,
   onDone,
 }: {
   organizationId: string
   stop: LoadStop
   event: TimeEvent
+  /** At the first pickup and the last stop, the odometer is asked too. */
+  askOdometer: boolean
   onDone: () => void
 }) {
   const current = event === "arrived" ? stop.arrived_at : stop.departed_at
@@ -73,6 +76,11 @@ function StopTimeForm({
   )
   const [reason, setReason] = useState(
     (event === "arrived" ? stop.arrived_note : stop.departed_note) ?? ""
+  )
+  const currentReading =
+    event === "arrived" ? stop.arrived_odometer : stop.departed_odometer
+  const [odometer, setOdometer] = useState(
+    currentReading === null ? "" : miles.format(currentReading)
   )
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -87,6 +95,13 @@ function StopTimeForm({
       setError('Say why, e.g. "Driver called it in".')
       return
     }
+    const reading = odometer.trim()
+      ? Number(odometer.replace(/[^\d]/g, ""))
+      : null
+    if (reading !== null && !Number.isInteger(reading)) {
+      setError("Enter the odometer in miles.")
+      return
+    }
     setPending(true)
     setError(null)
     // The input is in this computer's time zone; send it as an exact moment.
@@ -97,14 +112,32 @@ function StopTimeForm({
       new Date(when).toISOString(),
       reason
     )
-    setPending(false)
     if ("error" in result) {
+      setPending(false)
       setError(result.error)
       return
     }
-    toast.success(
-      `Stop ${stop.position} ${event === "arrived" ? "arrival" : "departure"} saved.`
-    )
+    const what = `Stop ${stop.position} ${event === "arrived" ? "arrival" : "departure"}`
+    // The reading needs the time in first, so it's saved second.
+    if (askOdometer && reading !== null && reading !== currentReading) {
+      const saved = await setStopOdometer(
+        organizationId,
+        stop.id,
+        event,
+        reading
+      )
+      setPending(false)
+      if ("error" in saved) {
+        toast.warning(`${what} saved, but not the odometer: ${saved.error}`)
+        onDone()
+        return
+      }
+      toast.success(`${what} and odometer saved.`)
+      onDone()
+      return
+    }
+    setPending(false)
+    toast.success(`${what} saved.`)
     onDone()
   }
 
@@ -140,6 +173,27 @@ function StopTimeForm({
           Kept with the time and in the load&apos;s history.
         </p>
       </div>
+      {askOdometer && (
+        <div className="flex flex-col gap-2">
+          <label htmlFor="stop-time-odometer" className="text-sm font-medium">
+            Odometer (optional)
+          </label>
+          <Input
+            id="stop-time-odometer"
+            inputMode="numeric"
+            placeholder="Miles"
+            value={odometer}
+            onChange={(change) =>
+              setOdometer(change.target.value.replace(/[^\d,]/g, ""))
+            }
+          />
+          <p className="text-sm text-muted-foreground">
+            {event === "arrived"
+              ? "At the first pickup, for the load's loaded miles."
+              : "Leaving the last stop. A higher reading also moves the truck's odometer up."}
+          </p>
+        </div>
+      )}
       <DialogFooter className="items-center">
         {error && <p className="mr-auto text-sm text-destructive">{error}</p>}
         <Button type="button" variant="outline" onClick={onDone}>
@@ -684,6 +738,12 @@ export function LoadStopsCard({
               organizationId={organizationId}
               stop={entering.stop}
               event={entering.event}
+              askOdometer={
+                entering.event === "arrived"
+                  ? entering.stop.position === firstPickup &&
+                    firstPickup !== lastStop
+                  : entering.stop.position === lastStop
+              }
               onDone={() => setTimeOpen(false)}
             />
           )}
