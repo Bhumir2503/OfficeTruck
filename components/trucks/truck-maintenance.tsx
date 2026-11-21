@@ -413,8 +413,10 @@ export function TruckMaintenance({
         )
       }
       contentClassName={entries.length ? "px-0 pb-0" : undefined}
+      // The page footer shows whenever there's an entry; with one page its
+      // buttons are just disabled.
       footer={
-        pages > 1 && (
+        entries.length > 0 && (
           <SettingsCardFooter
             hint={range(
               current * PAGE_SIZE + 1,
