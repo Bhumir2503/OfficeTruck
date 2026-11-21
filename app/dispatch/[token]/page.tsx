@@ -4,7 +4,7 @@ import { Ban, MapPin, PackageCheck } from "lucide-react"
 import { StopCheckIn } from "@/components/dispatch/stop-check-in"
 import { Logo } from "@/components/logo"
 import { SettingsCard } from "@/components/settings/settings-card"
-import { formatRate, formatStopWindow } from "@/lib/load-format"
+import { formatRate, formatStopWindow, odometerStops } from "@/lib/load-format"
 import {
   CHARGE_KIND_LABELS,
   EQUIPMENT_LABELS,
@@ -57,12 +57,17 @@ type Packet = {
 /** The load's stops as they are now, for checking in. */
 type LiveStops = {
   status: string
+  /** The load's estimated loaded miles, and the truck's last odometer. */
+  miles: number | null
+  truck_odometer: number | null
   stops: {
     position: number
     kind: "pickup" | "delivery"
     location: string
     arrived_at: string | null
     departed_at: string | null
+    arrived_odometer: number | null
+    departed_odometer: number | null
   }[]
 }
 
@@ -140,6 +145,20 @@ export default async function DispatchPage({
   const live = liveData as LiveStops | null
   const onTheRoad =
     !!live && ["dispatched", "loaded", "delivered"].includes(live.status)
+  // The odometer is asked arriving at the first pickup and leaving the last
+  // stop. What we'd expect there catches typos: the truck's last reading at
+  // pickup, then the pickup reading plus the load's estimated miles.
+  const { firstPickup, lastStop } = odometerStops(live?.stops ?? [])
+  const pickupReading =
+    live?.stops.find((stop) => stop.position === firstPickup)
+      ?.arrived_odometer ?? null
+  const startReading = pickupReading ?? live?.truck_odometer ?? null
+  const expectedAt = (event: "arrived" | "departed") =>
+    event === "arrived"
+      ? (live?.truck_odometer ?? null)
+      : startReading === null
+        ? null
+        : startReading + (live?.miles ?? 0)
   // A stop can be checked in only if it's still the same stop as was sent.
   const liveStop = (stop: Packet["stops"][number]) =>
     live?.stops.find(
@@ -262,6 +281,12 @@ export default async function DispatchPage({
                       </p>
                     )
                   }
+                  const ask =
+                    stop.position === lastStop
+                      ? "departed"
+                      : stop.position === firstPickup
+                        ? "arrived"
+                        : null
                   return (
                     <StopCheckIn
                       token={token}
@@ -269,6 +294,10 @@ export default async function DispatchPage({
                       arrivedAt={current.arrived_at}
                       departedAt={current.departed_at}
                       open={onTheRoad}
+                      askOdometer={ask}
+                      arrivedOdometer={current.arrived_odometer ?? null}
+                      departedOdometer={current.departed_odometer ?? null}
+                      expectedOdometer={ask ? expectedAt(ask) : null}
                     />
                   )
                 })()}

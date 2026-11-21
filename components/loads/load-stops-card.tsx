@@ -2,13 +2,14 @@
 
 import { cn } from "cn"
 import { format } from "date-fns"
-import { Clock, LogIn, LogOut, Pencil, Timer } from "lucide-react"
+import { Clock, Gauge, LogIn, LogOut, Pencil, Timer } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
 
 import {
   addAccessorial,
   saveLoadStops,
+  setStopOdometer,
   setStopTime,
 } from "@/app/org/[slug]/loads/actions"
 import { StopsEditor } from "@/components/loads/stops-editor"
@@ -26,10 +27,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useZodForm } from "@/hooks/use-zod-form"
+import { Input } from "@/components/ui/input"
 import {
   formatDuration,
   formatRate,
   formatStopWindow,
+  odometerMiles,
+  odometerStops,
   stopDetention,
 } from "@/lib/load-format"
 import type { Load, LoadStop, StopTimeSource } from "@/lib/loads"
@@ -222,6 +226,145 @@ function StopTime({
   )
 }
 
+const miles = new Intl.NumberFormat("en-US")
+
+/**
+ * The odometer at a stop where the driver is asked for it: the reading, or
+ * a way for the office to add it once the time is recorded.
+ */
+function StopOdometer({
+  stop,
+  event,
+  canEnter,
+  onEnter,
+}: {
+  stop: LoadStop
+  event: TimeEvent
+  canEnter: boolean
+  onEnter: () => void
+}) {
+  const reading =
+    event === "arrived" ? stop.arrived_odometer : stop.departed_odometer
+  const at = event === "arrived" ? stop.arrived_at : stop.departed_at
+  if (reading !== null) {
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <Gauge className="size-3.5 text-muted-foreground" />
+        <span className="text-muted-foreground">Odometer</span>
+        <span className="tabular-nums">{miles.format(reading)} mi</span>
+        {canEnter && (
+          <button
+            type="button"
+            aria-label={`Fix the odometer at stop ${stop.position}`}
+            onClick={onEnter}
+            className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <Pencil className="size-3" />
+          </button>
+        )}
+      </span>
+    )
+  }
+  // Asked for only after the time is in, so the stop can't be removed.
+  if (!at) return null
+  return (
+    <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+      <Gauge className="size-3.5" />
+      No odometer
+      {canEnter && (
+        <Button size="xs" variant="ghost" onClick={onEnter}>
+          Add
+        </Button>
+      )}
+    </span>
+  )
+}
+
+/** The office entering, fixing or clearing a stop's odometer reading. */
+function StopOdometerForm({
+  organizationId,
+  stop,
+  event,
+  onDone,
+}: {
+  organizationId: string
+  stop: LoadStop
+  event: TimeEvent
+  onDone: () => void
+}) {
+  const current =
+    event === "arrived" ? stop.arrived_odometer : stop.departed_odometer
+  const [value, setValue] = useState(
+    current === null ? "" : miles.format(current)
+  )
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function save(reading: number | null) {
+    setPending(true)
+    setError(null)
+    const result = await setStopOdometer(
+      organizationId,
+      stop.id,
+      event,
+      reading
+    )
+    setPending(false)
+    if ("error" in result) {
+      setError(result.error)
+      return
+    }
+    toast.success(reading === null ? "Odometer cleared." : "Odometer saved.")
+    onDone()
+  }
+
+  return (
+    <form
+      onSubmit={(submit) => {
+        submit.preventDefault()
+        const reading = Number(value.replace(/[^\d]/g, ""))
+        if (!value.trim() || !Number.isInteger(reading)) {
+          setError("Enter the odometer in miles.")
+          return
+        }
+        void save(reading)
+      }}
+      className="flex flex-col gap-4"
+    >
+      <Input
+        aria-label="Odometer in miles"
+        inputMode="numeric"
+        autoFocus
+        placeholder="Miles"
+        value={value}
+        onChange={(change) =>
+          setValue(change.target.value.replace(/[^\d,]/g, ""))
+        }
+      />
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <DialogFooter>
+        {current !== null && (
+          <Button
+            type="button"
+            variant="ghost"
+            className="mr-auto hover:text-destructive"
+            disabled={pending}
+            onClick={() => save(null)}
+          >
+            Clear
+          </Button>
+        )}
+        <Button type="button" variant="outline" onClick={onDone}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={pending}>
+          {pending ? "Saving…" : "Save"}
+        </Button>
+      </DialogFooter>
+    </form>
+  )
+}
+
 // Arrival and departure are real moments, shown in the viewer's time zone.
 // The server renders in its own zone, so the text may differ on hydration.
 const momentFormat = new Intl.DateTimeFormat(undefined, {
@@ -305,7 +448,10 @@ export function LoadStopsCard({
   organizationId: string
   /** Notes on detention charges already added, to avoid billing a stop twice. */
   billedNotes: string[]
-  load: Pick<Load, "id" | "status" | "detention_free_hours" | "detention_rate">
+  load: Pick<
+    Load,
+    "id" | "status" | "detention_free_hours" | "detention_rate" | "miles"
+  >
   stops: LoadStop[]
 }) {
   const [editing, setEditing] = useState(false)
@@ -317,6 +463,19 @@ export function LoadStopsCard({
     event: TimeEvent
   } | null>(null)
   const [timeOpen, setTimeOpen] = useState(false)
+  // The stop and reading the office is entering, if any.
+  const [reading, setReading] = useState<{
+    stop: LoadStop
+    event: TimeEvent
+  } | null>(null)
+  const [readingOpen, setReadingOpen] = useState(false)
+  const { firstPickup, lastStop } = odometerStops(stops)
+  const actualMiles = odometerMiles(stops)
+
+  function enterReading(stop: LoadStop, event: TimeEvent) {
+    setReading({ stop, event })
+    setReadingOpen(true)
+  }
   const hasTerms =
     load.detention_free_hours !== null && load.detention_rate !== null
 
@@ -354,9 +513,18 @@ export function LoadStopsCard({
       footer={
         <SettingsCardFooter
           hint={
-            load.status === "booked"
-              ? "The driver checks in at each stop once the load is dispatched."
-              : "The driver records arrival and departure. Add a time here only if they couldn't."
+            actualMiles !== null ? (
+              <>
+                <Gauge className="mr-1.5 inline size-3.5 align-[-2px]" />
+                {miles.format(actualMiles)} loaded mi by the odometer
+                {load.miles !== null &&
+                  ` · ${miles.format(load.miles)} estimated`}
+              </>
+            ) : load.status === "booked" ? (
+              "The driver checks in at each stop once the load is dispatched."
+            ) : (
+              "The driver records arrival, departure and the odometer. Add them here only if they couldn't."
+            )
           }
         />
       }
@@ -445,6 +613,25 @@ export function LoadStopsCard({
                     canEnter={canEnter}
                     onEnter={() => enter(stop, "departed")}
                   />
+                  {/* The odometer is asked arriving at the first pickup and
+                      leaving the last stop. */}
+                  {stop.position === firstPickup &&
+                    stop.position !== lastStop && (
+                      <StopOdometer
+                        stop={stop}
+                        event="arrived"
+                        canEnter={canEnter}
+                        onEnter={() => enterReading(stop, "arrived")}
+                      />
+                    )}
+                  {stop.position === lastStop && (
+                    <StopOdometer
+                      stop={stop}
+                      event="departed"
+                      canEnter={canEnter}
+                      onEnter={() => enterReading(stop, "departed")}
+                    />
+                  )}
                 </div>
                 {detention && (
                   <div className="flex flex-wrap items-center gap-2 text-muted-foreground sm:justify-end">
@@ -498,6 +685,30 @@ export function LoadStopsCard({
               stop={entering.stop}
               event={entering.event}
               onDone={() => setTimeOpen(false)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={readingOpen} onOpenChange={setReadingOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {reading
+                ? `Odometer ${reading.event === "arrived" ? "arriving at" : "leaving"} stop ${reading.stop.position}`
+                : "Odometer"}
+            </DialogTitle>
+            <DialogDescription>
+              For when the driver skipped it or got it wrong. A higher reading
+              also moves the truck&apos;s odometer up.
+            </DialogDescription>
+          </DialogHeader>
+          {reading && (
+            <StopOdometerForm
+              key={`${reading.stop.id}:${reading.event}`}
+              organizationId={organizationId}
+              stop={reading.stop}
+              event={reading.event}
+              onDone={() => setReadingOpen(false)}
             />
           )}
         </DialogContent>
