@@ -439,6 +439,8 @@ export function DriverForm({
   const formRef = useRef<HTMLFormElement>(null)
   // The values as loaded (or last saved), to tell which cards have changes.
   const baseline = useRef<Map<string, string> | null>(null)
+  // Set by a save, so the baseline is retaken once saving has finished.
+  const rebase = useRef(false)
   const [dirtyCards, setDirtyCards] = useState<Set<DriverFormCard>>(new Set())
 
   // Adding a driver: the CDL and medical card attached beside the form,
@@ -464,7 +466,9 @@ export function DriverForm({
         }
         toast.success(`${values.full_name} saved.`)
         // What's saved is the new starting point, so the buttons go quiet.
-        baseline.current = snapshot(formRef.current)
+        // The snapshot waits until saving ends: the form is disabled while
+        // saving, and disabled fields are left out of its values.
+        rebase.current = true
         setDirtyCards(new Set())
         return
       }
@@ -524,6 +528,14 @@ export function DriverForm({
   useEffect(() => {
     baseline.current = snapshot(formRef.current)
   }, [])
+
+  // After a save, once the form is enabled again, take the new baseline.
+  useEffect(() => {
+    if (!pending && rebase.current) {
+      rebase.current = false
+      baseline.current = snapshot(formRef.current)
+    }
+  }, [pending])
 
   /** Which cards have a field that differs from the baseline. */
   function checkDirty(form: HTMLFormElement | null) {

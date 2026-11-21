@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useMemo, useState } from "react"
 
 import {
+  AllCurrent,
   DriverStatusBadge,
   ExpiryBadge,
 } from "@/components/drivers/driver-badges"
@@ -91,11 +92,11 @@ function ComplianceSummary({
     )
   }
   const onFile = items.filter((item) => item.due).length
-  return (
+  return onFile === items.length ? (
+    <AllCurrent />
+  ) : (
     <span className="text-muted-foreground">
-      {onFile === items.length
-        ? "All current"
-        : `${onFile} of ${items.length} dates on file`}
+      {onFile} of {items.length} dates on file
     </span>
   )
 }

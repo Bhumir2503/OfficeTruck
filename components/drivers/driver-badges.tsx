@@ -1,5 +1,5 @@
 import { cn } from "cn"
-import { AlertTriangle, Clock } from "lucide-react"
+import { AlertTriangle, CircleCheck, Clock } from "lucide-react"
 
 import {
   formatDate,
@@ -101,6 +101,19 @@ export function ExpiryDate({
     <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
       <span>{formatDate(item.due)}</span>
       {warn && <ExpiryBadge item={item} />}
+    </span>
+  )
+}
+
+/**
+ * Every date on file and none due soon: green, so a clean record stands out
+ * from one with gaps or warnings.
+ */
+export function AllCurrent() {
+  return (
+    <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-300">
+      <CircleCheck className="size-4" aria-hidden />
+      All current
     </span>
   )
 }

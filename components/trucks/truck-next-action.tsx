@@ -1,4 +1,5 @@
-import { ArrowRight } from "lucide-react"
+import { cn } from "cn"
+import { ArrowRight, CircleCheck } from "lucide-react"
 import Link from "next/link"
 
 import { buttonVariants } from "@/components/ui/button"
@@ -93,6 +94,7 @@ export function TruckNextAction({
   let title: string
   let detail: string
   let action: { href: string; label: string } | null = null
+  let allCurrent = false
 
   // Anything overdue on paper comes before maintenance; maintenance that's
   // overdue comes before paperwork that's merely coming up.
@@ -156,6 +158,7 @@ export function TruckNextAction({
       .filter((item) => item.due)
       .sort((a, b) => a.due!.localeCompare(b.due!))[0]
     title = "All current"
+    allCurrent = true
     detail = upcoming
       ? `Next up: ${upcoming.key === "form_2290" ? "2290" : upcoming.label.toLowerCase()} on ${formatDate(upcoming.due!)}.`
       : "Nothing is due."
@@ -167,7 +170,17 @@ export function TruckNextAction({
         <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
           Next action
         </p>
-        <h4 className="mt-1 text-lg font-semibold tracking-tight">{title}</h4>
+        <h4
+          className={cn(
+            "mt-1 flex items-center gap-2 text-lg font-semibold tracking-tight",
+            allCurrent && "text-emerald-700 dark:text-emerald-300"
+          )}
+        >
+          {allCurrent && (
+            <CircleCheck className="size-5 shrink-0" aria-hidden />
+          )}
+          {title}
+        </h4>
         <p className="mt-1 text-sm text-muted-foreground">{detail}</p>
         {action && (
           <Link

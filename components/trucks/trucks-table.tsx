@@ -4,7 +4,7 @@ import { Search, Truck as TruckIcon } from "lucide-react"
 import Link from "next/link"
 import { useMemo, useState } from "react"
 
-import { ExpiryBadge } from "@/components/drivers/driver-badges"
+import { AllCurrent, ExpiryBadge } from "@/components/drivers/driver-badges"
 import {
   SettingsCard,
   SettingsCardFooter,
@@ -340,11 +340,12 @@ export function TrucksTable({
                         <ExpiryBadge key={item.key} item={item} showLabel />
                       ))}
                     </div>
+                  ) : items.every((item) => item.due) ? (
+                    <AllCurrent />
                   ) : (
                     <span className="text-muted-foreground">
-                      {items.every((item) => item.due)
-                        ? "All current"
-                        : `${items.filter((item) => item.due).length} of ${items.length} dates on file`}
+                      {items.filter((item) => item.due).length} of{" "}
+                      {items.length} dates on file
                     </span>
                   )}
                 </TableCell>
