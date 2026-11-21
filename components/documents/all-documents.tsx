@@ -141,7 +141,7 @@ export function AllDocuments({
                 className="h-24 text-center text-muted-foreground"
               >
                 {entries.length === 0
-                  ? "No documents yet. Rate cons, BOLs, PODs, receipts and driver papers show up here."
+                  ? "No documents yet. Rate cons, BOLs, PODs, receipts, driver and truck papers show up here."
                   : "No documents match."}
               </TableCell>
             </TableRow>

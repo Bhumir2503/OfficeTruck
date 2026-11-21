@@ -125,9 +125,6 @@ export function TrucksTable({
   }, [rows, filter, search])
 
   const attention = rows.filter((row) => row.warnings.length > 0).length
-  const unlinked = trucks.filter(
-    (truck) => truck.status === "active" && !truck.motive_vehicle_id
-  ).length
 
   const addButton = (size: "sm" | "default") =>
     canManage && (
@@ -142,7 +139,7 @@ export function TrucksTable({
       <SettingsCard title="Trucks">
         <SettingsEmptyState icon={TruckIcon} title="No trucks yet">
           {canManage
-            ? "Add your trucks to track inspections and registrations, link them to Motive for IFTA, and see cost per mile and profit for each."
+            ? "Add your trucks to track inspections and registrations, and see cost per mile and profit for each."
             : "Owners and admins can add trucks. Once they do, you'll see them here."}
         </SettingsEmptyState>
         {canManage && (
@@ -178,7 +175,6 @@ export function TrucksTable({
   const notes = [
     attention > 0 &&
       `${plural(attention, "active truck")} with something due in the next 60 days`,
-    unlinked > 0 && `${unlinked} not connected to Motive`,
   ].filter(Boolean)
 
   return (

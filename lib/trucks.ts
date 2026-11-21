@@ -2,6 +2,7 @@ import type { PayType } from "@/lib/schemas/driver"
 import type { LoadStatus } from "@/lib/schemas/load"
 import type { Ownership, TruckStatus } from "@/lib/schemas/truck"
 import { type DriverNow, getLoadsNow } from "@/lib/drivers"
+import type { TruckDocumentKind } from "@/lib/truck-document-format"
 import { createClient } from "@/lib/supabase/server"
 
 /** The load a truck is on, its next booked one and its last delivery. */
@@ -20,7 +21,6 @@ export type Truck = {
   ownership: Ownership | null
   default_driver_id: string | null
   default_driver: { id: string; full_name: string } | null
-  motive_vehicle_id: string | null
   /** Where it starts when it has no earlier load, for empty miles. */
   home_base: string | null
   /** Dollars per month. */
@@ -37,7 +37,7 @@ export type Truck = {
 }
 
 const TRUCK_COLUMNS =
-  "id, unit_number, vin, year, make, model, plate_number, plate_state, status, ownership, default_driver_id, default_driver:drivers!trucks_default_driver_fkey (id, full_name), motive_vehicle_id, home_base, monthly_payment, monthly_insurance, monthly_other_costs, annual_inspection_on, registration_expires_on, plate_expires_on, notes, created_at, updated_at"
+  "id, unit_number, vin, year, make, model, plate_number, plate_state, status, ownership, default_driver_id, default_driver:drivers!trucks_default_driver_fkey (id, full_name), home_base, monthly_payment, monthly_insurance, monthly_other_costs, annual_inspection_on, registration_expires_on, plate_expires_on, notes, created_at, updated_at"
 
 /** Every truck in the organization, by unit number. */
 export async function getTrucks(organizationId: string): Promise<Truck[]> {
@@ -185,4 +185,56 @@ export function getTrucksNow(
   today: string
 ): Promise<Record<string, TruckNow>> {
   return getLoadsNow(organizationId, today, "truck_id")
+}
+
+export type TruckDocument = {
+  id: string
+  kind: TruckDocumentKind
+  title: string | null
+  expires_on: string | null
+  file_name: string
+  content_type: string
+  created_at: string
+  /** A link that works for an hour, or null. */
+  url: string | null
+}
+
+/** A truck's papers, by kind then newest first, with links to open them. */
+export async function getTruckDocuments(
+  organizationId: string,
+  truckId: string
+): Promise<TruckDocument[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("truck_documents")
+    .select(
+      "id, kind, title, expires_on, path, file_name, content_type, created_at"
+    )
+    .eq("organization_id", organizationId)
+    .eq("truck_id", truckId)
+    .order("kind")
+    .order("created_at", { ascending: false })
+  if (error) {
+    throw error
+  }
+  const urls = new Map<string, string>()
+  if (data.length) {
+    // The bucket is private, so links are signed and short-lived.
+    const { data: signed } = await supabase.storage
+      .from("truck-documents")
+      .createSignedUrls(
+        data.map((row) => row.path),
+        60 * 60
+      )
+    for (const item of signed ?? []) {
+      if (item.path && item.signedUrl) {
+        urls.set(item.path, item.signedUrl)
+      }
+    }
+  }
+  return data.map(({ path, ...row }) => ({
+    ...row,
+    kind: row.kind as TruckDocumentKind,
+    url: urls.get(path) ?? null,
+  }))
 }

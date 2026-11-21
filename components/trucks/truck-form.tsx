@@ -13,7 +13,6 @@ import {
   SettingsCard,
   SettingsCardFooter,
 } from "@/components/settings/settings-card"
-import { EldBadge } from "@/components/trucks/truck-badges"
 import { Button, buttonVariants } from "@/components/ui/button"
 import {
   Field,
@@ -23,7 +22,14 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { TRUCK_DATES_ID } from "@/components/trucks/truck-next-action"
 import { useZodForm } from "@/hooks/use-zod-form"
 import {
   formatCurrency,
@@ -46,7 +52,7 @@ type Errors = Partial<Record<Name, { message: string }[]>>
 
 const fieldId = (name: Name) => `truck-${name.replaceAll("_", "-")}`
 
-function TextField({
+export function TextField({
   name,
   label,
   errors,
@@ -146,7 +152,7 @@ function handleYearInput(event: React.ChangeEvent<HTMLInputElement>) {
   }
 }
 
-const money = (value: number | null) =>
+export const money = (value: number | null) =>
   value === null ? undefined : formatCurrency(Number(value).toFixed(2))
 
 /** Owned, leased or owner-operator, filling a hidden `ownership` input. */
@@ -174,38 +180,68 @@ function OwnershipField({
   }, [value])
 
   return (
-    <Field data-invalid={!!errors} className="sm:col-span-6">
-      <FieldLabel id="truck-ownership-label">Ownership</FieldLabel>
+    <Field data-invalid={!!errors} className="sm:col-span-3">
+      <FieldLabel htmlFor="truck-ownership">Ownership</FieldLabel>
       <input ref={hiddenRef} type="hidden" name="ownership" value={value} />
-      <ToggleGroup
-        aria-labelledby="truck-ownership-label"
-        variant="outline"
-        size="sm"
-        spacing={1}
-        className="flex-wrap"
-        value={[value || "none"]}
-        onValueChange={(next: string[]) => {
-          if (next[0] !== undefined) {
-            setValue(next[0] === "none" ? "" : (next[0] as Ownership))
-          }
-        }}
+      <Select
+        value={value || "none"}
+        onValueChange={(next) =>
+          setValue(!next || next === "none" ? "" : (next as Ownership))
+        }
+        items={[
+          { value: "none", label: "Not set" },
+          ...OWNERSHIPS.map((ownership) => ({
+            value: ownership,
+            label: OWNERSHIP_LABELS[ownership],
+          })),
+        ]}
       >
-        <ToggleGroupItem value="none">Not set</ToggleGroupItem>
-        {OWNERSHIPS.map((ownership) => (
-          <ToggleGroupItem key={ownership} value={ownership}>
-            {OWNERSHIP_LABELS[ownership]}
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
-      {errors ? (
-        <FieldError errors={errors} />
-      ) : (
-        <FieldDescription>
-          Owner-operator means a driver&apos;s own truck, leased on to you.
-        </FieldDescription>
-      )}
+        <SelectTrigger
+          id="truck-ownership"
+          aria-invalid={!!errors}
+          className="w-full"
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">
+            <span className="text-muted-foreground">Not set</span>
+          </SelectItem>
+          {OWNERSHIPS.map((ownership) => (
+            <SelectItem key={ownership} value={ownership}>
+              {OWNERSHIP_LABELS[ownership]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <FieldError errors={errors} />
     </Field>
   )
+}
+
+type TruckFormCard = "details" | "plate" | "ownership"
+
+/** Every named field's value, to tell which cards have unsaved changes. */
+function snapshot(form: HTMLFormElement | null) {
+  const values = new Map<string, string>()
+  if (form) {
+    const data = new FormData(form)
+    for (const name of new Set(data.keys())) {
+      values.set(name, data.getAll(name).map(String).join("\u0000"))
+    }
+  }
+  return values
+}
+
+/** The card an element (or the field with this name) sits in. */
+function cardOf(from: Element | HTMLFormElement, name?: string) {
+  let element: Element | null = from
+  if (name !== undefined) {
+    const item = (from as HTMLFormElement).elements.namedItem(name)
+    element = item instanceof RadioNodeList ? (item[0] as Element) : item
+  }
+  return element?.closest<HTMLElement>("[data-card]")?.dataset.card as
+    TruckFormCard | undefined
 }
 
 /**
@@ -225,7 +261,13 @@ export function TruckForm({
   truck?: Truck
 }) {
   const router = useRouter()
-  const [motiveId, setMotiveId] = useState(truck?.motive_vehicle_id ?? "")
+  const formRef = useRef<HTMLFormElement>(null)
+  // The values as loaded (or last saved), to tell which cards have changes.
+  const baseline = useRef<Map<string, string> | null>(null)
+  const [dirtyCards, setDirtyCards] = useState<Set<TruckFormCard>>(new Set())
+  // Every card saves the same form; remember which one was pressed so only
+  // it says "Saving…" and shows errors.
+  const [savingCard, setSavingCard] = useState<TruckFormCard>("details")
   const { errors, formError, pending, formProps, revalidate } = useZodForm(
     truckSchema,
     async (values) => {
@@ -235,6 +277,9 @@ export function TruckForm({
           return result.error
         }
         toast.success(`${values.unit_number} saved.`)
+        // What's saved is the new starting point, so the buttons go quiet.
+        baseline.current = snapshot(formRef.current)
+        setDirtyCards(new Set())
         return
       }
 
@@ -247,7 +292,8 @@ export function TruckForm({
     }
   )
 
-  // The fixed costs: a card when editing, beside the form when adding.
+  // The fixed costs, beside the form when adding. On the truck page they
+  // save from their own box.
   const costFields = (className: string) => (
     <>
       <TextField
@@ -291,7 +337,6 @@ export function TruckForm({
         onChange={handleCurrencyInput}
         onKeyDown={handleCurrencyKeyDown}
         onBlur={handleCurrencyBlur}
-        hint="Permits, ELD fees, parking."
       />
     </>
   )
@@ -313,8 +358,90 @@ export function TruckForm({
     </Field>
   )
 
+  useEffect(() => {
+    baseline.current = snapshot(formRef.current)
+  }, [])
+
+  /** Which cards have a field that differs from the baseline. */
+  function checkDirty(form: HTMLFormElement | null) {
+    if (!form || !baseline.current || !truck) {
+      return
+    }
+    const now = snapshot(form)
+    const dirty = new Set<TruckFormCard>()
+    for (const name of new Set([...baseline.current.keys(), ...now.keys()])) {
+      if (baseline.current.get(name) !== now.get(name)) {
+        const card = cardOf(form, name)
+        if (card) {
+          dirty.add(card)
+        }
+      }
+    }
+    setDirtyCards(dirty)
+  }
+
+  /** For fields a custom control fills in, which fire no change events. */
+  function onUpdate(form: HTMLFormElement | null) {
+    revalidate(form)
+    checkDirty(form)
+  }
+
+  // Enter in a field would press the form's first save button. Save from
+  // the field's own card instead, if it has changes.
+  function onKeyDown(event: React.KeyboardEvent<HTMLFormElement>) {
+    const target = event.target
+    if (
+      !truck ||
+      event.key !== "Enter" ||
+      !(target instanceof HTMLInputElement) ||
+      ["button", "submit", "checkbox", "radio"].includes(target.type)
+    ) {
+      return
+    }
+    event.preventDefault()
+    const card = cardOf(target)
+    const button =
+      card &&
+      event.currentTarget.querySelector<HTMLButtonElement>(
+        `[data-card="${card}"] button[type="submit"]`
+      )
+    if (button && !button.disabled) {
+      setSavingCard(card)
+      event.currentTarget.requestSubmit(button)
+    }
+  }
+
+  const cardFooter = (card: TruckFormCard) =>
+    truck ? (
+      <SettingsCardFooter
+        hint={
+          savingCard === card &&
+          formError && <span className="text-destructive">{formError}</span>
+        }
+      >
+        <Button
+          type="submit"
+          size="sm"
+          disabled={pending || !dirtyCards.has(card)}
+          onClick={() => setSavingCard(card)}
+        >
+          {pending && savingCard === card ? "Saving…" : "Save"}{" "}
+          <CornerDownLeft />
+        </Button>
+      </SettingsCardFooter>
+    ) : undefined
+
   return (
-    <form {...formProps} autoComplete="off">
+    <form
+      {...formProps}
+      ref={formRef}
+      autoComplete="off"
+      onChange={(event) => {
+        formProps.onChange(event)
+        checkDirty(event.currentTarget)
+      }}
+      onKeyDown={onKeyDown}
+    >
       <fieldset
         disabled={pending}
         className={
@@ -334,6 +461,8 @@ export function TruckForm({
         >
           <SettingsCard
             title={truck ? "Truck details" : "Truck"}
+            data-card="details"
+            footer={cardFooter("details")}
             contentClassName="grid gap-5 sm:grid-cols-6"
           >
             <TextField
@@ -353,7 +482,6 @@ export function TruckForm({
               errors={errors}
               className="sm:col-span-4"
               onChange={upperAlnum(17)}
-              hint="Matches IFTA rows when there's no ELD link."
             />
             <TextField
               name="year"
@@ -385,7 +513,10 @@ export function TruckForm({
 
           <SettingsCard
             title="Plate and compliance"
-            description="You'll see a warning 60, 30 and 7 days before each one is due."
+            id={TRUCK_DATES_ID}
+            className="scroll-mt-6"
+            data-card="plate"
+            footer={cardFooter("plate")}
             contentClassName="grid gap-5 sm:grid-cols-6"
           >
             <TextField
@@ -413,7 +544,7 @@ export function TruckForm({
               label="Plate expires"
               defaultValue={truck?.plate_expires_on}
               errors={errors.plate_expires_on}
-              onUpdate={revalidate}
+              onUpdate={onUpdate}
               className="sm:col-span-2"
             />
             <DateField
@@ -422,7 +553,7 @@ export function TruckForm({
               label="Registration or IRP expires"
               defaultValue={truck?.registration_expires_on}
               errors={errors.registration_expires_on}
-              onUpdate={revalidate}
+              onUpdate={onUpdate}
               className="sm:col-span-2"
             />
             <DateField
@@ -431,19 +562,21 @@ export function TruckForm({
               label="Last annual inspection"
               defaultValue={truck?.annual_inspection_on}
               errors={errors.annual_inspection_on}
-              onUpdate={revalidate}
+              onUpdate={onUpdate}
               className="sm:col-span-2"
             />
           </SettingsCard>
 
           <SettingsCard
             title="Ownership and driver"
+            data-card="ownership"
+            footer={cardFooter("ownership")}
             contentClassName="grid gap-5 sm:grid-cols-6"
           >
             <OwnershipField
               defaultValue={truck?.ownership ?? null}
               errors={errors.ownership}
-              onUpdate={revalidate}
+              onUpdate={onUpdate}
             />
             <Field
               data-invalid={!!errors.default_driver_id}
@@ -458,15 +591,9 @@ export function TruckForm({
                 drivers={drivers}
                 defaultValue={truck?.default_driver_id}
                 invalid={!!errors.default_driver_id}
-                onUpdate={revalidate}
+                onUpdate={onUpdate}
               />
-              {errors.default_driver_id ? (
-                <FieldError errors={errors.default_driver_id} />
-              ) : (
-                <FieldDescription>
-                  Filled in on new loads with this truck.
-                </FieldDescription>
-              )}
+              <FieldError errors={errors.default_driver_id} />
             </Field>
             <TextField
               name="home_base"
@@ -475,69 +602,16 @@ export function TruckForm({
               defaultValue={truck?.home_base ?? undefined}
               errors={errors}
               className="sm:col-span-6"
-              hint="Where it starts when it has no earlier load, for empty miles."
-            />
-          </SettingsCard>
-
-          <SettingsCard
-            title="ELD"
-            description="Links this truck to Motive, so its miles by state land here for IFTA."
-            action={<EldBadge connected={motiveId.trim() !== ""} />}
-            contentClassName="grid gap-5 sm:grid-cols-6"
-          >
-            <TextField
-              name="motive_vehicle_id"
-              label="Motive vehicle ID"
-              placeholder="e.g. 1234567"
-              value={motiveId}
-              errors={errors}
-              className="sm:col-span-3"
-              onChange={(event) => setMotiveId(event.currentTarget.value)}
             />
           </SettingsCard>
         </div>
 
-        {truck ? (
-          <>
-            <SettingsCard
-              title="Fixed costs"
-              description="Spread over the truck's miles, empty miles included, for cost per mile."
-              contentClassName="grid gap-5 sm:grid-cols-6"
-            >
-              {costFields("sm:col-span-2")}
-            </SettingsCard>
-
-            <SettingsCard
-              title="Notes"
-              footer={
-                <SettingsCardFooter
-                  hint={
-                    formError && (
-                      <span className="text-destructive">{formError}</span>
-                    )
-                  }
-                >
-                  <Button type="submit" size="sm" disabled={pending}>
-                    {pending ? "Saving…" : "Save changes"} <CornerDownLeft />
-                  </Button>
-                </SettingsCardFooter>
-              }
-            >
-              {notesField(3)}
-            </SettingsCard>
-          </>
-        ) : (
+        {!truck && (
           // Beside the cards, costs, notes and saving stay in view; on a
           // phone they come after them, as on Add driver.
           <aside className="flex flex-col gap-6 lg:sticky lg:top-6 lg:col-start-2 lg:row-start-1">
             <section className="flex flex-col gap-4 rounded-xl border bg-card px-5 pt-4 pb-5 text-card-foreground shadow-xs">
-              <div>
-                <h4 className="font-semibold">Fixed costs</h4>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Spread over the truck&apos;s miles, empty miles included, for
-                  cost per mile.
-                </p>
-              </div>
+              <h4 className="font-semibold">Fixed costs</h4>
               <div className="grid gap-4">{costFields("")}</div>
             </section>
             <section className="flex flex-col gap-3 rounded-xl border bg-card px-5 pt-4 pb-5 text-card-foreground shadow-xs">
@@ -552,9 +626,7 @@ export function TruckForm({
                 Add a truck
               </h4>
               <p className="mt-2 text-sm text-muted-foreground">
-                Fill in what you have. Only the unit number is needed to save,
-                and anything else can be added from its page later. New trucks
-                start as active.
+                Only the unit number is needed to save.
               </p>
               <div className="mt-5 flex flex-col gap-2 border-t pt-5">
                 <Button

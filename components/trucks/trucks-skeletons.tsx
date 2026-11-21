@@ -131,18 +131,13 @@ function TruckFormSkeleton({ editing = false }: { editing?: boolean }) {
         contentClassName="grid gap-5 sm:grid-cols-6"
       >
         <FieldSkeleton label="Unit number" className="sm:col-span-2" />
-        <FieldSkeleton
-          label="VIN"
-          hint="Matches IFTA rows when there's no ELD link."
-          className="sm:col-span-4"
-        />
+        <FieldSkeleton label="VIN" className="sm:col-span-4" />
         <FieldSkeleton label="Year" className="sm:col-span-2" />
         <FieldSkeleton label="Make" className="sm:col-span-2" />
         <FieldSkeleton label="Model" className="sm:col-span-2" />
       </SettingsCard>
       <SettingsCard
         title="Plate and compliance"
-        description="You'll see a warning 60, 30 and 7 days before each one is due."
         contentClassName="grid gap-5 sm:grid-cols-6"
       >
         <FieldSkeleton label="Plate number" className="sm:col-span-4" />
@@ -161,60 +156,9 @@ function TruckFormSkeleton({ editing = false }: { editing?: boolean }) {
         title="Ownership and driver"
         contentClassName="grid gap-5 sm:grid-cols-6"
       >
-        <Field className="sm:col-span-6">
-          <FieldLabel>Ownership</FieldLabel>
-          {/* Not set, Owned, Leased, Owner-operator. */}
-          <div className="flex flex-wrap gap-1">
-            <Skeleton className="h-8 w-18 rounded-md" />
-            <Skeleton className="h-8 w-18 rounded-md" />
-            <Skeleton className="h-8 w-18 rounded-md" />
-            <Skeleton className="h-8 w-30 rounded-md" />
-          </div>
-          <FieldDescription>
-            Owner-operator means a driver&apos;s own truck, leased on to you.
-          </FieldDescription>
-        </Field>
-        <FieldSkeleton
-          label="Default driver"
-          hint="Filled in on new loads with this truck."
-          className="sm:col-span-3"
-        />
+        <FieldSkeleton label="Ownership" className="sm:col-span-3" />
+        <FieldSkeleton label="Default driver" className="sm:col-span-3" />
       </SettingsCard>
-      <SettingsCard
-        title="ELD"
-        description="Links this truck to Motive, so its miles by state land here for IFTA."
-        action={<Skeleton className="h-6 w-28 rounded-full" />}
-        contentClassName="grid gap-5 sm:grid-cols-6"
-      >
-        <FieldSkeleton label="Motive vehicle ID" className="sm:col-span-3" />
-      </SettingsCard>
-      {editing && (
-        <>
-          <SettingsCard
-            title="Fixed costs"
-            description="Spread over the truck's miles, empty miles included, for cost per mile."
-            contentClassName="grid gap-5 sm:grid-cols-6"
-          >
-            <FieldSkeleton label="Payment or lease" className="sm:col-span-2" />
-            <FieldSkeleton label="Insurance" className="sm:col-span-2" />
-            <FieldSkeleton
-              label="Other fixed costs"
-              hint="Permits, ELD fees, parking."
-              className="sm:col-span-2"
-            />
-          </SettingsCard>
-          <SettingsCard
-            title="Notes"
-            footer={
-              <SettingsCardFooter>
-                <Skeleton className="h-8 w-28 rounded-md bg-foreground/10" />
-              </SettingsCardFooter>
-            }
-          >
-            <Skeleton className="h-16 w-full" />
-          </SettingsCard>
-        </>
-      )}
     </div>
   )
 }
@@ -231,20 +175,11 @@ export function NewTruckSkeleton() {
           </div>
           <aside className="flex flex-col gap-6 lg:col-start-2 lg:row-start-1">
             <section className="flex flex-col gap-4 rounded-xl border bg-card px-5 pt-4 pb-5 shadow-xs">
-              <div>
-                <h4 className="font-semibold">Fixed costs</h4>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Spread over the truck&apos;s miles, empty miles included, for
-                  cost per mile.
-                </p>
-              </div>
+              <h4 className="font-semibold">Fixed costs</h4>
               <div className="grid gap-4">
                 <FieldSkeleton label="Payment or lease" />
                 <FieldSkeleton label="Insurance" />
-                <FieldSkeleton
-                  label="Other fixed costs"
-                  hint="Permits, ELD fees, parking."
-                />
+                <FieldSkeleton label="Other fixed costs" />
               </div>
             </section>
             <section className="flex flex-col gap-3 rounded-xl border bg-card px-5 pt-4 pb-5 shadow-xs">
@@ -259,9 +194,7 @@ export function NewTruckSkeleton() {
                 Add a truck
               </h4>
               <p className="mt-2 text-sm text-muted-foreground">
-                Fill in what you have. Only the unit number is needed to save,
-                and anything else can be added from its page later. New trucks
-                start as active.
+                Only the unit number is needed to save.
               </p>
               <div className="mt-5 flex flex-col gap-2 border-t pt-5">
                 <Skeleton className="h-10 w-full rounded-md bg-foreground/10" />
@@ -271,42 +204,6 @@ export function NewTruckSkeleton() {
           </aside>
         </div>
       </div>
-    </div>
-  )
-}
-
-function DetailSkeleton({
-  label,
-  width = "w-24",
-  lines = 1,
-}: {
-  label: string
-  width?: string
-  lines?: 1 | 2
-}) {
-  return (
-    <div>
-      <div className="text-sm text-muted-foreground">{label}</div>
-      <div className="mt-1">
-        <Line className={width} />
-        {lines === 2 && (
-          <div className="mt-0.5">
-            <Line className="w-32" />
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function StatSkeleton({ label, hint }: { label: string; hint?: string }) {
-  return (
-    <div>
-      <div className="text-sm text-muted-foreground">{label}</div>
-      <div className="mt-1 flex h-7 items-center">
-        <Skeleton className="h-5 w-16" />
-      </div>
-      {hint && <div className="text-xs text-muted-foreground">{hint}</div>}
     </div>
   )
 }
@@ -330,56 +227,35 @@ export function TruckDetailSkeleton() {
         </div>
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
           <div className="flex min-w-0 flex-col gap-4">
-            <SettingsCard
-              title="This week"
-              description={
-                // The description is a <p>, so an inline placeholder.
-                <span className="inline-block h-4 w-40 animate-pulse rounded-md bg-muted align-middle" />
-              }
-              footer={
-                <SettingsCardFooter
-                  hint={<Skeleton className="h-4 w-72 bg-foreground/10" />}
-                />
-              }
-            >
-              <div className="grid grid-cols-2 gap-5 sm:grid-cols-4">
-                <StatSkeleton label="Loads" />
-                <StatSkeleton label="Miles" hint="Loaded and empty" />
-                <StatSkeleton label="Revenue" />
-                <StatSkeleton
-                  label="Cost per mile"
-                  hint="Fixed costs and driver pay"
-                />
-              </div>
-            </SettingsCard>
-            <SettingsCard title="Loads" contentClassName="space-y-3">
-              <Skeleton className="h-9 w-full" />
-              <Skeleton className="h-9 w-full" />
-            </SettingsCard>
             <TruckFormSkeleton editing />
+            <SettingsCard
+              title="Documents"
+              description="Kept private to your organization."
+              action={<Skeleton className="h-8 w-32 rounded-md" />}
+            >
+              <Skeleton className="h-24 w-full" />
+            </SettingsCard>
           </div>
           <aside className="order-first flex flex-col gap-4 lg:order-none">
             <section className={panel}>
               <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                Compliance
+                Next action
               </p>
-              <div className="mt-3 grid gap-4">
-                <DetailSkeleton label="Annual inspection due" lines={2} />
-                <DetailSkeleton label="Registration expires" />
-                <DetailSkeleton label="Plate expires" />
-                <DetailSkeleton label="2290 heavy vehicle tax" lines={2} />
+              <div className="mt-2 flex h-7 items-center">
+                <Skeleton className="h-5 w-48" />
               </div>
+              <Line className="mt-1 w-56" />
+              <Skeleton className="mt-4 h-10 w-full rounded-md" />
             </section>
-            <section className={panel}>
-              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                Setup
-              </p>
-              <div className="mt-3 grid grid-cols-2 gap-4">
-                <DetailSkeleton label="ELD" width="w-28" />
-                <DetailSkeleton label="Ownership" width="w-16" />
-                <DetailSkeleton label="Default driver" width="w-28" />
-                <DetailSkeleton label="Fixed costs" width="w-28" />
-              </div>
+            <section className={cn(panel, "flex flex-col gap-4")}>
+              <h4 className="font-semibold">Fixed costs</h4>
+              <FieldSkeleton label="Payment or lease" />
+              <FieldSkeleton label="Insurance" />
+              <FieldSkeleton label="Other fixed costs" />
+            </section>
+            <section className={cn(panel, "flex flex-col gap-3")}>
+              <h4 className="font-semibold">Notes</h4>
+              <Skeleton className="h-24 w-full" />
             </section>
           </aside>
         </div>

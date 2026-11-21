@@ -109,7 +109,6 @@ export const truckSchema = z.object({
     (value) => (typeof value === "string" && value !== "" ? value : null),
     z.uuid("Choose a driver.").nullable()
   ),
-  motive_vehicle_id: optional(max(50)),
   home_base: optional(max(200)),
   monthly_payment: monthly,
   monthly_insurance: monthly,
@@ -122,6 +121,26 @@ export const truckSchema = z.object({
 
 export type TruckInput = z.input<typeof truckSchema>
 export type TruckValues = z.output<typeof truckSchema>
+
+const COST_FIELDS = {
+  monthly_payment: true,
+  monthly_insurance: true,
+  monthly_other_costs: true,
+} as const
+
+/**
+ * Editing a truck: everything but its fixed costs and notes, which save
+ * from their own boxes beside the truck page.
+ */
+export const truckDetailsSchema = truckSchema.omit({
+  ...COST_FIELDS,
+  notes: true,
+})
+export type TruckDetailsValues = z.output<typeof truckDetailsSchema>
+
+/** A truck's fixed costs, from the box beside the truck page. */
+export const truckCostsSchema = truckSchema.pick(COST_FIELDS)
+export type TruckCostsValues = z.output<typeof truckCostsSchema>
 
 /** A 2290 return: the tax year it's for, when it was filed, and its trucks. */
 export const taxFilingSchema = z.object({
