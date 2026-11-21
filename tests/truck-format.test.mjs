@@ -1,13 +1,7 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 
-import {
-  owes2290,
-  pmItem,
-  pmStatus,
-  taxItem,
-  truckServiceItem,
-} from "../lib/truck-format.ts"
+import { pmItem, pmStatus, truckServiceItem } from "../lib/truck-format.ts"
 
 const TODAY = "2026-11-21"
 
@@ -17,49 +11,6 @@ const truck = (overrides = {}) => ({
   pm_interval_days: 90,
   odometer: 400000,
   ...overrides,
-})
-
-describe("owes2290", () => {
-  it("applies at 55,000 lbs and up", () => {
-    assert.equal(owes2290({ registered_weight_lbs: 55000 }), true)
-    assert.equal(owes2290({ registered_weight_lbs: 80000 }), true)
-  })
-
-  it("doesn't apply under 55,000 lbs", () => {
-    assert.equal(owes2290({ registered_weight_lbs: 54999 }), false)
-    assert.equal(owes2290({ registered_weight_lbs: 26000 }), false)
-  })
-
-  it("assumes it applies when no weight is on file", () => {
-    assert.equal(owes2290({ registered_weight_lbs: null }), true)
-  })
-})
-
-describe("taxItem", () => {
-  const filings = [{ tax_year: 2026, truck_ids: ["t1"] }]
-
-  it("is due next August once this year's return covers the truck", () => {
-    const item = taxItem("t1", filings, TODAY)
-    assert.equal(item.covered, true)
-    assert.equal(item.due, "2027-08-31")
-  })
-
-  it("counts a truck covered by a later return in the same tax year", () => {
-    const returns = [
-      { id: "yearly", tax_year: 2026, filed_on: "2026-08-12", truck_ids: ["t1"] },
-      { id: "march", tax_year: 2026, filed_on: "2027-04-20", truck_ids: ["t3"] },
-    ]
-    const item = taxItem("t3", returns, TODAY)
-    assert.equal(item.covered, true)
-    assert.equal(item.filing.id, "march")
-  })
-
-  it("is overdue when this year's return doesn't list the truck", () => {
-    const item = taxItem("t2", filings, TODAY)
-    assert.equal(item.covered, false)
-    assert.equal(item.due, "2026-08-31")
-    assert.equal(item.expiry.state, "expired")
-  })
 })
 
 describe("pmStatus", () => {
@@ -77,7 +28,11 @@ describe("pmStatus", () => {
   })
 
   it("is ok well inside both the miles and the days", () => {
-    const pm = pmStatus(truck(), { done_on: "2026-11-01", odometer: 399000 }, TODAY)
+    const pm = pmStatus(
+      truck(),
+      { done_on: "2026-11-01", odometer: 399000 },
+      TODAY
+    )
     assert.equal(pm.state, "ok")
     assert.equal(pm.dueOn, "2027-01-30")
     assert.equal(pm.dueAtMiles, 414000)
@@ -85,31 +40,51 @@ describe("pmStatus", () => {
   })
 
   it("is due when the mileage is past, even with days to spare", () => {
-    const pm = pmStatus(truck(), { done_on: "2026-11-01", odometer: 380000 }, TODAY)
+    const pm = pmStatus(
+      truck(),
+      { done_on: "2026-11-01", odometer: 380000 },
+      TODAY
+    )
     assert.equal(pm.state, "due")
     assert.equal(pm.milesLeft, -5000)
   })
 
   it("is due when the date is past, even with miles to spare", () => {
-    const pm = pmStatus(truck(), { done_on: "2026-08-01", odometer: 399000 }, TODAY)
+    const pm = pmStatus(
+      truck(),
+      { done_on: "2026-08-01", odometer: 399000 },
+      TODAY
+    )
     assert.equal(pm.dueOn, "2026-10-30")
     assert.equal(pm.state, "due")
   })
 
   it("is soon within 1,000 miles", () => {
-    const pm = pmStatus(truck(), { done_on: "2026-11-01", odometer: 385500 }, TODAY)
+    const pm = pmStatus(
+      truck(),
+      { done_on: "2026-11-01", odometer: 385500 },
+      TODAY
+    )
     assert.equal(pm.milesLeft, 500)
     assert.equal(pm.state, "soon")
   })
 
   it("is soon within 14 days", () => {
-    const pm = pmStatus(truck(), { done_on: "2026-08-30", odometer: 399000 }, TODAY)
+    const pm = pmStatus(
+      truck(),
+      { done_on: "2026-08-30", odometer: 399000 },
+      TODAY
+    )
     assert.equal(pm.dueOn, "2026-11-28")
     assert.equal(pm.state, "soon")
   })
 
   it("counts by days alone when the last service has no odometer", () => {
-    const pm = pmStatus(truck(), { done_on: "2026-11-01", odometer: null }, TODAY)
+    const pm = pmStatus(
+      truck(),
+      { done_on: "2026-11-01", odometer: null },
+      TODAY
+    )
     assert.equal(pm.dueAtMiles, null)
     assert.equal(pm.milesLeft, null)
     assert.equal(pm.state, "ok")
@@ -118,7 +93,11 @@ describe("pmStatus", () => {
 
 describe("pmItem", () => {
   it("is nothing while service is fine", () => {
-    const pm = pmStatus(truck(), { done_on: "2026-11-01", odometer: 399000 }, TODAY)
+    const pm = pmStatus(
+      truck(),
+      { done_on: "2026-11-01", odometer: 399000 },
+      TODAY
+    )
     assert.equal(pmItem(pm, TODAY), null)
   })
 
@@ -127,7 +106,11 @@ describe("pmItem", () => {
   })
 
   it("is overdue by date with the date it was due", () => {
-    const pm = pmStatus(truck(), { done_on: "2026-08-01", odometer: 399000 }, TODAY)
+    const pm = pmStatus(
+      truck(),
+      { done_on: "2026-08-01", odometer: 399000 },
+      TODAY
+    )
     const item = pmItem(pm, TODAY)
     assert.equal(item.label, "Service")
     assert.equal(item.due, "2026-10-30")
@@ -136,7 +119,11 @@ describe("pmItem", () => {
   })
 
   it("is overdue by miles with how far over, and no date", () => {
-    const pm = pmStatus(truck(), { done_on: "2026-11-01", odometer: 380000 }, TODAY)
+    const pm = pmStatus(
+      truck(),
+      { done_on: "2026-11-01", odometer: 380000 },
+      TODAY
+    )
     const item = pmItem(pm, TODAY)
     assert.equal(item.due, null)
     assert.equal(item.expiry.state, "expired")
@@ -144,7 +131,11 @@ describe("pmItem", () => {
   })
 
   it("is coming up by miles with how far to go", () => {
-    const pm = pmStatus(truck(), { done_on: "2026-11-01", odometer: 385500 }, TODAY)
+    const pm = pmStatus(
+      truck(),
+      { done_on: "2026-11-01", odometer: 385500 },
+      TODAY
+    )
     const item = pmItem(pm, TODAY)
     assert.equal(item.due, null)
     assert.equal(item.expiry.state, "urgent")
@@ -152,7 +143,11 @@ describe("pmItem", () => {
   })
 
   it("is coming up by date with the date", () => {
-    const pm = pmStatus(truck(), { done_on: "2026-08-30", odometer: 399000 }, TODAY)
+    const pm = pmStatus(
+      truck(),
+      { done_on: "2026-08-30", odometer: 399000 },
+      TODAY
+    )
     const item = pmItem(pm, TODAY)
     assert.equal(item.due, "2026-11-28")
     assert.equal(item.expiry.state, "urgent")

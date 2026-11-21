@@ -14,15 +14,8 @@ import { getInvoices, getLoadsToInvoice } from "@/lib/invoices"
 import { cityState } from "@/lib/report-format"
 import type { AppointmentType, LoadStatus } from "@/lib/schemas/load"
 import { createClient } from "@/lib/supabase/server"
-import {
-  formatTaxYear,
-  owes2290,
-  taxYearDueDate,
-  taxYearOf,
-  truckComplianceItems,
-  truckServiceItem,
-} from "@/lib/truck-format"
-import { getLastServiceByTruck, getTaxFilings, getTrucks } from "@/lib/trucks"
+import { truckComplianceItems, truckServiceItem } from "@/lib/truck-format"
+import { getLastServiceByTruck, getTrucks } from "@/lib/trucks"
 
 /**
  * Everything the owner should act on, most pressing first. Cached for the
@@ -31,34 +24,24 @@ import { getLastServiceByTruck, getTaxFilings, getTrucks } from "@/lib/trucks"
 export const getAttention = cache(async (organizationId: string) => {
   const today = getToday()
   const supabase = await createClient()
-  const [
-    invoices,
-    ready,
-    booked,
-    drivers,
-    trucks,
-    filings,
-    papers,
-    dq,
-    lastService,
-  ] = await Promise.all([
-    getInvoices(organizationId),
-    getLoadsToInvoice(organizationId),
-    supabase
-      .from("loads")
-      .select(
-        "id, reference, pickup_location, pickup_start, driver_id, truck_id"
-      )
-      .eq("organization_id", organizationId)
-      .eq("status", "booked")
-      .order("pickup_start"),
-    getDrivers(organizationId),
-    getTrucks(organizationId),
-    getTaxFilings(organizationId),
-    getCompanyDocuments(organizationId),
-    getDqDatesByDriver(organizationId),
-    getLastServiceByTruck(organizationId),
-  ])
+  const [invoices, ready, booked, drivers, trucks, papers, dq, lastService] =
+    await Promise.all([
+      getInvoices(organizationId),
+      getLoadsToInvoice(organizationId),
+      supabase
+        .from("loads")
+        .select(
+          "id, reference, pickup_location, pickup_start, driver_id, truck_id"
+        )
+        .eq("organization_id", organizationId)
+        .eq("status", "booked")
+        .order("pickup_start"),
+      getDrivers(organizationId),
+      getTrucks(organizationId),
+      getCompanyDocuments(organizationId),
+      getDqDatesByDriver(organizationId),
+      getLastServiceByTruck(organizationId),
+    ])
   if (booked.error) {
     throw booked.error
   }
@@ -102,26 +85,6 @@ export const getAttention = cache(async (organizationId: string) => {
       path: "documents",
     })
   }
-  // The company's 2290, as the Compliance page shows it: only while some
-  // active truck is heavy enough to owe it.
-  if (activeTrucks.some(owes2290)) {
-    const taxYear = taxYearOf(today)
-    const filed = filings.some((filing) => filing.tax_year === taxYear)
-    const year = filed ? taxYear + 1 : taxYear
-    const due = taxYearDueDate(year)
-    documents.push({
-      owner: "Company",
-      item: {
-        key: "form_2290",
-        label: `2290 for ${formatTaxYear(year)}`,
-        kind: "due",
-        due,
-        expiry: expiry(due, today),
-      },
-      path: "compliance",
-    })
-  }
-
   const items = buildAttention({
     today,
     invoices,

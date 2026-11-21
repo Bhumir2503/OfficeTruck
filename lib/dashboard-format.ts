@@ -59,7 +59,7 @@ export type AttentionInput = {
     driver_id: string | null
     truck_id: string | null
   }[]
-  /** Compliance dates for active drivers and trucks, and the company 2290. */
+  /** Compliance dates for active drivers and trucks. */
   documents: {
     owner: string
     item: ComplianceItem

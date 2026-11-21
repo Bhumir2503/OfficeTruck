@@ -139,7 +139,7 @@ export async function setTruckStatus(
 
 /**
  * Deletes a truck added by mistake, with its documents and maintenance.
- * One that has run loads or is on a 2290 is refused by the database; those
+ * One that has run loads is refused by the database; those
  * are marked inactive instead, so their history stays.
  */
 export async function deleteTruck(
@@ -166,7 +166,7 @@ export async function deleteTruck(
     return {
       error:
         error.code === "23503"
-          ? "This truck has loads or is on a 2290, so it can't be deleted. Mark it inactive instead."
+          ? "This truck has loads linked to it, so it can't be deleted. Mark it inactive instead."
           : error.message,
     }
   }
@@ -292,7 +292,7 @@ export async function addTruckDocument(
     truck_id: truckId,
     kind: input.kind,
     title: title ? title.slice(0, 200) : null,
-    // Registration and 2290 dates are kept on the truck and its filings;
+    // The registration date is kept on the truck;
     // the inspection report's date is when it was done, not an expiry.
     expires_on:
       (!DATED_ON_TRUCK[input.kind] &&

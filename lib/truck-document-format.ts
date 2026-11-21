@@ -28,12 +28,11 @@ export const TRUCK_DOCUMENT_LABELS: Record<TruckDocumentKind, string> = {
 }
 
 /**
- * Kinds whose date is kept on the truck (or its 2290 filing), so the upload
+ * Kinds whose date is kept on the truck, so the upload
  * doesn't ask for it again. The value says where it's set.
  */
 export const DATED_ON_TRUCK: Partial<Record<TruckDocumentKind, string>> = {
   registration: "Set on the Plate and compliance card.",
-  form_2290: "Set by the 2290 filings on Compliance.",
 }
 
 /**

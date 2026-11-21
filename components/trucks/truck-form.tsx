@@ -556,7 +556,6 @@ export function TruckForm({
               errors={errors}
               className="sm:col-span-3"
               onChange={handleNumberInput}
-              hint="The 2290 applies at 55,000 lbs and up."
             />
             <TextField
               name="axles"

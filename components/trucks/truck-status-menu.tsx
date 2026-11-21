@@ -225,8 +225,7 @@ export function TruckStatusMenu({
             <DialogDescription>
               For a truck added by mistake. Its documents and maintenance log
               are deleted too, and this can&apos;t be undone. A truck that has
-              run loads or is on a 2290 can&apos;t be deleted; mark it inactive
-              instead.
+              run loads can&apos;t be deleted; mark it inactive instead.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

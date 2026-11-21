@@ -8,7 +8,7 @@ import {
   formatDate,
   needsAction,
 } from "@/lib/driver-format"
-import { formatTaxYear, type PmStatus } from "@/lib/truck-format"
+import type { PmStatus } from "@/lib/truck-format"
 import type { TruckStatus } from "@/lib/schemas/truck"
 
 /** The Plate and compliance card on the truck page, where its dates are edited. */
@@ -17,8 +17,6 @@ export const TRUCK_DATES_ID = "dates"
 export const TRUCK_MAINTENANCE_ID = "maintenance"
 
 const miles = new Intl.NumberFormat("en-US")
-
-type Tax = ComplianceItem & { covered: boolean; taxYear: number }
 
 const plural = (count: number, word: string) =>
   `${count} ${count === 1 ? word : `${word}s`}`
@@ -31,10 +29,9 @@ function rank(item: ComplianceItem) {
   return expiry.days
 }
 
-function wording(item: ComplianceItem, taxYear: number) {
+function wording(item: ComplianceItem) {
   const { expiry, label, kind } = item
-  const name =
-    item.key === "form_2290" ? `2290 for ${formatTaxYear(taxYear)}` : label
+  const name = label
   if (expiry.state === "missing") {
     return {
       title: `Add the ${label.toLowerCase()} date`,
@@ -64,26 +61,20 @@ export function TruckNextAction({
   status,
   outOfService,
   items,
-  tax,
   pm,
   manager,
-  complianceHref,
   today,
 }: {
   status: TruckStatus
   /** Why it's out of service and when it's expected back. */
   outOfService: { reason: string | null; until: string | null }
   items: ComplianceItem[]
-  /** Null when the truck is too light to owe the 2290. */
-  tax: Tax | null
   pm: PmStatus
   manager: boolean
-  /** /org/<slug>/compliance, where 2290s are filed. */
-  complianceHref: string
   /** "YYYY-MM-DD" */
   today: string
 }) {
-  const all = !tax || tax.covered ? items : [...items, tax]
+  const all = items
   const pressing = all
     .filter(
       (item) =>
@@ -146,11 +137,8 @@ export function TruckNextAction({
     }
   } else if (pressing.length) {
     const next = pressing[0]!
-    ;({ title, detail } = wording(next, tax?.taxYear ?? 0))
-    if (next.key === "form_2290") {
-      detail = `Not on the ${formatTaxYear(tax!.taxYear)} return. ${detail}`
-      action = { href: complianceHref, label: "Open Compliance" }
-    } else if (manager) {
+    ;({ title, detail } = wording(next))
+    if (manager) {
       action = { href: `#${TRUCK_DATES_ID}`, label: "Update dates" }
     }
     if (pressing.length > 1) {
@@ -163,7 +151,7 @@ export function TruckNextAction({
     title = "All current"
     allCurrent = true
     detail = upcoming
-      ? `Next up: ${upcoming.key === "form_2290" ? "2290" : upcoming.label.toLowerCase()} on ${formatDate(upcoming.due!)}.`
+      ? `Next up: ${upcoming.label.toLowerCase()} on ${formatDate(upcoming.due!)}.`
       : "Nothing is due."
   }
 

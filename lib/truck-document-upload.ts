@@ -15,7 +15,7 @@ export type TruckFile = { path: string; name: string; type: string }
 
 /**
  * Puts a photo or PDF in a folder of the truck-documents bucket, shrinking
- * photos first: a truck's own folder (its id), or "2290" for Schedule 1s.
+ * photos first, here a truck's own folder (its id).
  * The file name starts with `prefix` ("insurance", "receipt"). Returns
  * where it went, or an error message.
  */

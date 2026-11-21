@@ -83,9 +83,6 @@ function optionalInteger(min: number, max: number, message: string) {
   )
 }
 
-/** The weight at and above which a truck owes the 2290. */
-export const TAXABLE_WEIGHT_LBS = 55000
-
 export const truckSchema = z.object({
   unit_number: z
     .string()
@@ -179,25 +176,6 @@ export type TruckDetailsValues = z.output<typeof truckDetailsSchema>
 /** A truck's fixed costs, from the box beside the truck page. */
 export const truckCostsSchema = truckSchema.pick(COST_FIELDS)
 export type TruckCostsValues = z.output<typeof truckCostsSchema>
-
-/** A 2290 return: the tax year it's for, when it was filed, and its trucks. */
-export const taxFilingSchema = z.object({
-  tax_year: z.preprocess(
-    (value) => (typeof value === "string" ? Number(value) : value),
-    z.number("Choose a tax year.").int().min(2000).max(2100)
-  ),
-  filed_on: z
-    .string("Enter the date it was filed.")
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Enter the date it was filed."),
-  truck_ids: z.array(z.uuid()).max(500),
-  notes: z.preprocess(
-    (value) =>
-      typeof value === "string" && value.trim() !== "" ? value.trim() : null,
-    max(2000).nullable()
-  ),
-})
-
-export type TaxFilingValues = z.output<typeof taxFilingSchema>
 
 /** Taking a truck out of service: why, and when it's expected back. */
 export const outOfServiceSchema = z.object({

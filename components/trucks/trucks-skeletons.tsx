@@ -136,11 +136,7 @@ function TruckFormSkeleton({ editing = false }: { editing?: boolean }) {
         <FieldSkeleton label="Year" className="sm:col-span-2" />
         <FieldSkeleton label="Make" className="sm:col-span-2" />
         <FieldSkeleton label="Model" className="sm:col-span-2" />
-        <FieldSkeleton
-          label="Registered weight"
-          hint="The 2290 applies at 55,000 lbs and up."
-          className="sm:col-span-3"
-        />
+        <FieldSkeleton label="Registered weight" className="sm:col-span-3" />
         <FieldSkeleton label="Axles" className="sm:col-span-3" />
       </SettingsCard>
       <SettingsCard

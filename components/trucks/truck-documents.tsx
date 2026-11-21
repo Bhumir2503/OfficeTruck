@@ -13,8 +13,7 @@ import { uploadTruckDocument } from "@/lib/truck-document-upload"
 import type { TruckDocument } from "@/lib/trucks"
 
 const KINDS = {
-  // The 2290's Schedule 1 is one document for the whole return, so it's
-  // kept on the return on Compliance; older uploads here still show.
+  // The 2290 is set aside until v2; older 2290 uploads still show.
   addable: TRUCK_DOCUMENT_KINDS.filter((kind) => kind !== "form_2290"),
   labels: TRUCK_DOCUMENT_LABELS,
   datedElsewhere: DATED_ON_TRUCK,
@@ -22,8 +21,8 @@ const KINDS = {
 }
 
 /**
- * A truck's papers as a table. The registration, inspection report and
- * 2290 show the dates kept on the truck and its filings.
+ * A truck's papers as a table. The registration and inspection report
+ * show the dates kept on the truck.
  */
 export function TruckDocuments({
   organizationId,

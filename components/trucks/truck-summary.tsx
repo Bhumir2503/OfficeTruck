@@ -5,7 +5,7 @@ import { SettingsCard } from "@/components/settings/settings-card"
 import { type ComplianceItem, formatDate } from "@/lib/driver-format"
 import { formatRate } from "@/lib/load-format"
 import { OWNERSHIP_LABELS } from "@/lib/schemas/truck"
-import { formatTaxYear, monthlyFixedCosts } from "@/lib/truck-format"
+import { monthlyFixedCosts } from "@/lib/truck-format"
 import type { Truck } from "@/lib/trucks"
 
 const thousands = new Intl.NumberFormat("en-US")
@@ -34,14 +34,11 @@ function Detail({
 export function TruckSummary({
   truck,
   items,
-  tax,
   warn,
   driversBase,
 }: {
   truck: Truck
   items: ComplianceItem[]
-  /** Null when the truck is too light to owe the 2290. */
-  tax: (ComplianceItem & { covered: boolean; taxYear: number }) | null
   warn: boolean
   /** /org/<slug>/drivers */
   driversBase: string
@@ -74,17 +71,6 @@ export function TruckSummary({
             )}
           </Detail>
         ))}
-        <Detail label="2290 heavy vehicle tax">
-          {!tax ? (
-            <span className="font-normal text-muted-foreground">
-              Not needed under 55,000 lbs
-            </span>
-          ) : tax.covered ? (
-            `Covered for ${formatTaxYear(tax.taxYear)}`
-          ) : (
-            <ExpiryDate item={tax} warn={warn} />
-          )}
-        </Detail>
         <Detail label="Plate">
           {truck.plate_number
             ? `${truck.plate_number}${truck.plate_state ? ` · ${truck.plate_state}` : ""}`

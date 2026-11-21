@@ -4,91 +4,13 @@ import {
   loadDriverPay,
   type ComplianceItem,
 } from "@/lib/driver-format"
-import { TAXABLE_WEIGHT_LBS } from "@/lib/schemas/truck"
-import type { TaxFiling, Truck, TruckLoad } from "@/lib/trucks"
+import type { Truck, TruckLoad } from "@/lib/trucks"
 
 /** "Truck 12 · 2021 Freightliner Cascadia", or just the unit number. */
 export function truckDescription(
   truck: Pick<Truck, "year" | "make" | "model">
 ) {
   return [truck.year, truck.make, truck.model].filter(Boolean).join(" ")
-}
-
-// ---------------------------------------------------------------- 2290 ----
-
-/**
- * The 2290 tax year `date` falls in, by the year it starts: the period runs
- * July 1 to June 30, so 2026-11-12 is in tax year 2026 (2026–27).
- */
-export function taxYearOf(date: string) {
-  const [year, month] = date.split("-").map(Number)
-  return month >= 7 ? year : year - 1
-}
-
-/** 2026 → "2026–27" */
-export function formatTaxYear(taxYear: number) {
-  return `${taxYear}–${String((taxYear + 1) % 100).padStart(2, "0")}`
-}
-
-/** The return for a tax year is due by August 31 of its first year. */
-export function taxYearDueDate(taxYear: number) {
-  return `${taxYear}-08-31`
-}
-
-/**
- * Whether a truck owes the 2290: registered at 55,000 lbs or more. With no
- * weight on file it's assumed to, so nothing quietly drops off the list.
- */
-export function owes2290(truck: Pick<Truck, "registered_weight_lbs">) {
-  return (
-    truck.registered_weight_lbs === null ||
-    truck.registered_weight_lbs >= TAXABLE_WEIGHT_LBS
-  )
-}
-
-/** The filing for a tax year that lists this truck, if there is one. */
-export function coveringFiling(
-  truckId: string,
-  taxYear: number,
-  filings: TaxFiling[]
-) {
-  return (
-    filings.find(
-      (filing) =>
-        filing.tax_year === taxYear && filing.truck_ids.includes(truckId)
-    ) ?? null
-  )
-}
-
-/**
- * The 2290 as a compliance item for one truck. Covered for this tax year,
- * it's next due for the following one; not covered, it's due (or overdue)
- * for this one.
- */
-export function taxItem(
-  truckId: string,
-  filings: TaxFiling[],
-  today: string
-): ComplianceItem & {
-  covered: boolean
-  taxYear: number
-  /** The return that lists this truck for the tax year, if any. */
-  filing: TaxFiling | null
-} {
-  const taxYear = taxYearOf(today)
-  const filing = coveringFiling(truckId, taxYear, filings)
-  const covered = !!filing
-  const due = taxYearDueDate(covered ? taxYear + 1 : taxYear)
-  return {
-    key: "form_2290",
-    label: "2290",
-    kind: "due",
-    due,
-    expiry: expiry(due, today),
-    covered,
-    taxYear,
-    filing,
-  }
 }
 
 // ---------------------------------------------------------- Compliance ----

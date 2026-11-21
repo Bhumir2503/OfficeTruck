@@ -36,13 +36,11 @@ import {
   type TruckStatus,
 } from "@/lib/schemas/truck"
 import {
-  owes2290,
-  taxItem,
   truckServiceItem,
   truckComplianceItems,
   truckDescription,
 } from "@/lib/truck-format"
-import type { LastService, TaxFiling, Truck, TruckNow } from "@/lib/trucks"
+import type { LastService, Truck, TruckNow } from "@/lib/trucks"
 
 type Filter = TruckStatus | "all"
 
@@ -65,7 +63,6 @@ function flagged(items: ComplianceItem[]) {
 
 export function TrucksTable({
   trucks,
-  filings,
   base,
   today,
   canManage,
@@ -75,7 +72,6 @@ export function TrucksTable({
   driversBase,
 }: {
   trucks: Truck[]
-  filings: TaxFiling[]
   /** /org/<slug>/equipment */
   base: string
   /** "YYYY-MM-DD", from the server so both renders warn about the same dates. */
@@ -96,11 +92,7 @@ export function TrucksTable({
   const rows = useMemo(
     () =>
       trucks.map((truck) => {
-        const items = [
-          ...truckComplianceItems(truck, today),
-          // Trucks under 55,000 lbs don't owe the 2290.
-          ...(owes2290(truck) ? [taxItem(truck.id, filings, today)] : []),
-        ]
+        const items = [...truckComplianceItems(truck, today)]
         // Service only shows once it's due soon or overdue.
         const service = truckServiceItem(truck, lastService[truck.id], today)
         if (service) items.push(service)
@@ -111,7 +103,7 @@ export function TrucksTable({
           warnings: truck.status === "active" ? flagged(items) : [],
         }
       }),
-    [trucks, filings, today, lastService]
+    [trucks, today, lastService]
   )
 
   const counts = useMemo(() => {
