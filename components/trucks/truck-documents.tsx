@@ -13,8 +13,7 @@ import { uploadTruckDocument } from "@/lib/truck-document-upload"
 import type { TruckDocument } from "@/lib/trucks"
 
 const KINDS = {
-  // The 2290 is set aside until v2; older 2290 uploads still show.
-  addable: TRUCK_DOCUMENT_KINDS.filter((kind) => kind !== "form_2290"),
+  addable: TRUCK_DOCUMENT_KINDS,
   labels: TRUCK_DOCUMENT_LABELS,
   datedElsewhere: DATED_ON_TRUCK,
   dateLabels: TRUCK_DOCUMENT_DATE_LABELS,
