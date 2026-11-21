@@ -27,18 +27,26 @@ function OdometerPrompt({
   position,
   event,
   expected,
+  initial,
   onSaved,
   onSkip,
+  onCancel,
 }: {
   token: string
   position: number
   event: Event
   /** The reading we'd expect, to catch typos; null if we don't know. */
   expected: number | null
+  /** The saved reading, when the driver is changing it. */
+  initial?: number | null
   onSaved: (reading: number) => void
-  onSkip: () => void
+  onSkip?: () => void
+  /** Closes the box without changing the saved reading. */
+  onCancel?: () => void
 }) {
-  const [value, setValue] = useState("")
+  const [value, setValue] = useState(
+    initial == null ? "" : miles.format(initial)
+  )
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // A reading far from what's expected, waiting for a second tap to save.
@@ -62,6 +70,10 @@ function OdometerPrompt({
     const reading = Number(value.replace(/[^\d]/g, ""))
     if (!value.trim() || !Number.isInteger(reading)) {
       setError("Enter the odometer in miles.")
+      return
+    }
+    if (initial != null && reading === initial) {
+      onCancel?.()
       return
     }
     if (
@@ -121,13 +133,23 @@ function OdometerPrompt({
         )
       )}
       {error && <p className="text-sm text-destructive">{error}</p>}
-      <button
-        type="button"
-        onClick={onSkip}
-        className="self-start text-sm text-muted-foreground underline underline-offset-2"
-      >
-        Skip for now
-      </button>
+      {onCancel ? (
+        <button
+          type="button"
+          onClick={onCancel}
+          className="self-start text-sm text-muted-foreground underline underline-offset-2"
+        >
+          Cancel
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={onSkip}
+          className="self-start text-sm text-muted-foreground underline underline-offset-2"
+        >
+          Skip for now
+        </button>
+      )}
     </form>
   )
 }
@@ -169,6 +191,8 @@ export function StopCheckIn({
     askOdometer === "arrived" ? arrivedOdometer : departedOdometer
   )
   const [skipped, setSkipped] = useState(false)
+  // Changing a reading already saved, e.g. to fix a typo.
+  const [editing, setEditing] = useState(false)
 
   async function tap(event: Event) {
     setPending(event)
@@ -223,12 +247,36 @@ export function StopCheckIn({
           </Button>
         )}
       </div>
-      {reading !== null && askOdometer !== null && (
-        <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <Gauge className="size-4" />
-          Odometer {miles.format(reading)} mi
-        </p>
-      )}
+      {reading !== null &&
+        askOdometer !== null &&
+        (editing ? (
+          <OdometerPrompt
+            token={token}
+            position={position}
+            event={askOdometer}
+            expected={expectedOdometer}
+            initial={reading}
+            onSaved={(next) => {
+              setReading(next)
+              setEditing(false)
+            }}
+            onCancel={() => setEditing(false)}
+          />
+        ) : (
+          <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <Gauge className="size-4" />
+            Odometer {miles.format(reading)} mi
+            {open && (
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="ml-1 font-medium text-foreground underline underline-offset-2"
+              >
+                Edit
+              </button>
+            )}
+          </p>
+        ))}
       {asking &&
         (skipped ? (
           <button
