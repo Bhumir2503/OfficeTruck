@@ -29,7 +29,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { needsAction, type ComplianceItem } from "@/lib/driver-format"
+import {
+  formatDate,
+  needsAction,
+  type ComplianceItem,
+} from "@/lib/driver-format"
 import {
   TRUCK_STATUSES,
   TRUCK_STATUS_LABELS,
@@ -43,6 +47,8 @@ import {
 import type { LastService, Truck, TruckNow } from "@/lib/trucks"
 
 type Filter = TruckStatus | "all"
+
+const thousands = new Intl.NumberFormat("en-US")
 
 function plural(count: number, word: string) {
   return `${count} ${count === 1 ? word : `${word}s`}`
@@ -244,6 +250,7 @@ export function TrucksTable({
             <TableHead className="hidden lg:table-cell">
               Last delivery
             </TableHead>
+            <TableHead className="hidden lg:table-cell">Odometer</TableHead>
             <TableHead className="hidden xl:table-cell">Driver</TableHead>
             <TableHead className="hidden sm:table-cell">Compliance</TableHead>
           </TableRow>
@@ -252,7 +259,7 @@ export function TrucksTable({
           {filtered.length === 0 && (
             <TableRow>
               <TableCell
-                colSpan={5}
+                colSpan={6}
                 className="h-24 text-center text-muted-foreground"
               >
                 {search.trim() === "" && filter !== "all"
@@ -317,6 +324,26 @@ export function TrucksTable({
                     today={today}
                     loadsBase={loadsBase}
                   />
+                </TableCell>
+                <TableCell className="hidden lg:table-cell">
+                  {/* The latest reading: from a driver, the office or a
+                      service, whichever was highest. */}
+                  {truck.odometer !== null ? (
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium tabular-nums">
+                        {thousands.format(truck.odometer)} mi
+                      </div>
+                      {truck.odometer_on && (
+                        <div className="text-sm text-muted-foreground">
+                          {formatDate(truck.odometer_on)}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">
+                      Not recorded
+                    </span>
+                  )}
                 </TableCell>
                 <TableCell className="hidden text-sm xl:table-cell">
                   {truck.default_driver ? (

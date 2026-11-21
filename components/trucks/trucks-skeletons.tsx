@@ -64,6 +64,7 @@ export function TrucksListSkeleton() {
               <TableHead className="hidden lg:table-cell">
                 Last delivery
               </TableHead>
+              <TableHead className="hidden lg:table-cell">Odometer</TableHead>
               <TableHead className="hidden xl:table-cell">Driver</TableHead>
               <TableHead className="hidden sm:table-cell">Compliance</TableHead>
             </TableRow>
@@ -87,6 +88,10 @@ export function TrucksListSkeleton() {
                 <TableCell className="hidden lg:table-cell">
                   <Line className="w-20" />
                   <Line className="h-3.5 w-28" />
+                </TableCell>
+                <TableCell className="hidden lg:table-cell">
+                  <Line className="w-20" />
+                  <Line className="h-3.5 w-20" />
                 </TableCell>
                 <TableCell className="hidden xl:table-cell">
                   <Skeleton className={cn("h-4", row.driver)} />
