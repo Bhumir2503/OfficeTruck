@@ -1,7 +1,15 @@
 "use client"
 
 import { cn } from "cn"
-import { Plus, Trash2, Wrench } from "lucide-react"
+import {
+  FileText,
+  ImageIcon,
+  Paperclip,
+  Plus,
+  Trash2,
+  Upload,
+  Wrench,
+} from "lucide-react"
 import { useState, useTransition } from "react"
 import { toast } from "sonner"
 
@@ -14,7 +22,7 @@ import {
   SettingsCardFooter,
   SettingsEmptyState,
 } from "@/components/settings/settings-card"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
@@ -40,6 +48,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { FILE_TYPES, driverFileError } from "@/lib/driver-document-upload"
 import { formatDate } from "@/lib/driver-format"
 import { formatRate } from "@/lib/load-format"
 import {
@@ -48,6 +57,7 @@ import {
   maintenanceSchema,
   type MaintenanceKind,
 } from "@/lib/schemas/truck"
+import { removeTruckFile, uploadTruckFile } from "@/lib/truck-document-upload"
 import type { PmStatus } from "@/lib/truck-format"
 import type { TruckMaintenance as Entry } from "@/lib/trucks"
 
@@ -93,6 +103,19 @@ function AddEntryDialog({
   const [kind, setKind] = useState<MaintenanceKind>("preventive")
   const [error, setError] = useState<string | null>(null)
   const [pending, start] = useTransition()
+  const [receipt, setReceipt] = useState<File | null>(null)
+  const [dragging, setDragging] = useState(false)
+
+  function pickReceipt(file: File | null | undefined) {
+    if (!file) return
+    const problem = driverFileError(file)
+    if (problem) {
+      setError(problem)
+      return
+    }
+    setError(null)
+    setReceipt(file)
+  }
 
   return (
     <Dialog open={open} onOpenChange={(next) => !pending && onOpenChange(next)}>
@@ -115,12 +138,29 @@ function AddEntryDialog({
               return
             }
             start(async () => {
+              // Upload the receipt first, so the entry points at a real file.
+              let uploaded = null
+              if (receipt) {
+                const result = await uploadTruckFile(
+                  organizationId,
+                  truckId,
+                  "receipt",
+                  receipt
+                )
+                if ("error" in result) {
+                  setError(result.error)
+                  return
+                }
+                uploaded = result
+              }
               const result = await addTruckMaintenance(
                 organizationId,
                 truckId,
-                parsed.data
+                parsed.data,
+                uploaded
               )
               if ("error" in result) {
+                if (uploaded) await removeTruckFile(uploaded.path)
                 setError(result.error)
                 return
               }
@@ -200,6 +240,60 @@ function AddEntryDialog({
               maxLength={120}
               placeholder="e.g. Rush Truck Center, Dallas"
             />
+          </Field>
+          {/* A drop zone that's also the file picker. No name: it's
+              uploaded on its own, not sent with the entry's fields. */}
+          <Field className="sm:col-span-2">
+            <FieldLabel htmlFor="maintenance-receipt">
+              Receipt (optional)
+            </FieldLabel>
+            <label
+              htmlFor="maintenance-receipt"
+              className={cn(
+                "flex cursor-pointer items-center gap-3 rounded-lg border border-dashed px-4 py-3 transition-colors hover:bg-muted/50",
+                dragging && "border-primary bg-muted/50"
+              )}
+              onDragOver={(event) => {
+                event.preventDefault()
+                setDragging(true)
+              }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={(event) => {
+                event.preventDefault()
+                setDragging(false)
+                pickReceipt(event.dataTransfer.files[0])
+              }}
+            >
+              <input
+                id="maintenance-receipt"
+                type="file"
+                className="sr-only"
+                accept={FILE_TYPES.join(",")}
+                onChange={(event) => pickReceipt(event.target.files?.[0])}
+              />
+              {receipt ? (
+                <>
+                  {receipt.type === "application/pdf" ? (
+                    <FileText className="size-5 shrink-0 text-muted-foreground" />
+                  ) : (
+                    <ImageIcon className="size-5 shrink-0 text-muted-foreground" />
+                  )}
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                    {receipt.name}
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    Change
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Upload className="size-5 shrink-0 text-muted-foreground" />
+                  <span className="text-sm">
+                    Drop the receipt or invoice here, or click to choose
+                  </span>
+                </>
+              )}
+            </label>
           </Field>
           {error && (
             <p role="alert" className="text-sm text-destructive sm:col-span-2">
@@ -331,6 +425,9 @@ export function TruckMaintenance({
               <TableHead className="hidden text-right @md:table-cell">
                 Cost
               </TableHead>
+              <TableHead className="w-12">
+                <span className="sr-only">Receipt</span>
+              </TableHead>
               {canManage && (
                 <TableHead className="w-12">
                   <span className="sr-only">Actions</span>
@@ -361,6 +458,23 @@ export function TruckMaintenance({
                 </TableCell>
                 <TableCell className="hidden text-right text-sm tabular-nums @md:table-cell">
                   {entry.cost === null ? "—" : formatRate(entry.cost)}
+                </TableCell>
+                <TableCell>
+                  {entry.receipt?.url && (
+                    <a
+                      href={entry.receipt.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={entry.receipt.name}
+                      aria-label={`Open the receipt, ${entry.receipt.name}`}
+                      className={buttonVariants({
+                        variant: "ghost",
+                        size: "icon-sm",
+                      })}
+                    >
+                      <Paperclip />
+                    </a>
+                  )}
                 </TableCell>
                 {canManage && (
                   <TableCell>
@@ -400,7 +514,7 @@ export function TruckMaintenance({
             <DialogTitle>Delete this entry?</DialogTitle>
             <DialogDescription>
               {deleting
-                ? `${deleting.description} on ${formatDate(deleting.done_on)} will be deleted. This can't be undone.`
+                ? `${deleting.description} on ${formatDate(deleting.done_on)}${deleting.receipt ? ", and its receipt," : ""} will be deleted. This can't be undone.`
                 : "This can't be undone."}
             </DialogDescription>
           </DialogHeader>

@@ -263,6 +263,8 @@ export type TruckMaintenance = {
   odometer: number | null
   cost: number | null
   vendor: string | null
+  /** The shop's receipt or invoice, with a link that works for an hour. */
+  receipt: { name: string; type: string; url: string | null } | null
 }
 
 /** A truck's maintenance log, newest first. */
@@ -273,7 +275,9 @@ export async function getTruckMaintenance(
   const supabase = await createClient()
   const { data, error } = await supabase
     .from("truck_maintenance")
-    .select("id, done_on, kind, description, odometer, cost, vendor")
+    .select(
+      "id, done_on, kind, description, odometer, cost, vendor, receipt_path, receipt_name, receipt_type"
+    )
     .eq("organization_id", organizationId)
     .eq("truck_id", truckId)
     .order("done_on", { ascending: false })
@@ -281,9 +285,36 @@ export async function getTruckMaintenance(
   if (error) {
     throw error
   }
-  return (data as TruckMaintenance[]).map((row) => ({
+  type Row = Omit<TruckMaintenance, "receipt"> & {
+    receipt_path: string | null
+    receipt_name: string | null
+    receipt_type: string | null
+  }
+  const rows = data as Row[]
+  const urls = new Map<string, string>()
+  const paths = rows.flatMap((row) =>
+    row.receipt_path ? [row.receipt_path] : []
+  )
+  if (paths.length) {
+    // The bucket is private, so links are signed and short-lived.
+    const { data: signed } = await supabase.storage
+      .from("truck-documents")
+      .createSignedUrls(paths, 60 * 60)
+    for (const item of signed ?? []) {
+      if (item.path && item.signedUrl) urls.set(item.path, item.signedUrl)
+    }
+  }
+  return rows.map(({ receipt_path, receipt_name, receipt_type, ...row }) => ({
     ...row,
     cost: row.cost === null ? null : Number(row.cost),
+    receipt:
+      receipt_path && receipt_name && receipt_type
+        ? {
+            name: receipt_name,
+            type: receipt_type,
+            url: urls.get(receipt_path) ?? null,
+          }
+        : null,
   }))
 }
 

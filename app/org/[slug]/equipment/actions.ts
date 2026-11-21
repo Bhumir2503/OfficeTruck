@@ -368,7 +368,9 @@ export async function removeTruckDocument(
 export async function addTruckMaintenance(
   organizationId: string,
   truckId: string,
-  input: MaintenanceValues
+  input: MaintenanceValues,
+  /** A receipt already uploaded to the truck's folder, if any. */
+  receipt: { path: string; name: string; type: string } | null = null
 ): Promise<ActionResult> {
   if (!(await canManageTrucks(organizationId))) {
     return { error: NOT_ALLOWED }
@@ -378,12 +380,32 @@ export async function addTruckMaintenance(
     return { error: parsed.error.issues[0]?.message ?? "Check the entry." }
   }
   const entry = parsed.data
+  if (receipt) {
+    // Only files directly in this truck's own folder, of a type we keep.
+    // Both ids are UUIDs, so they're safe in the pattern once checked.
+    if (
+      !/^[0-9a-f-]{36}$/.test(truckId) ||
+      !new RegExp(
+        `^${organizationId}/${truckId}/receipt-[\\w-]+\\.(webp|pdf)$`
+      ).test(receipt.path) ||
+      !["image/webp", "application/pdf"].includes(receipt.type)
+    ) {
+      return {
+        error: "That receipt couldn't be added. Try uploading it again.",
+      }
+    }
+  }
 
   const supabase = await createClient()
   const { error } = await supabase.from("truck_maintenance").insert({
     organization_id: organizationId,
     truck_id: truckId,
     ...entry,
+    receipt_path: receipt?.path ?? null,
+    receipt_name: receipt
+      ? receipt.name.trim().slice(0, 200) || "Receipt"
+      : null,
+    receipt_type: receipt?.type ?? null,
   })
   if (error) {
     return {
@@ -431,12 +453,19 @@ export async function removeTruckMaintenance(
     .eq("organization_id", organizationId)
     .eq("truck_id", truckId)
     .eq("id", id)
-    .select("id")
+    .select("receipt_path")
   if (error) {
     return { error: error.message }
   }
   if (!data.length) {
     return { error: "That entry is already gone." }
+  }
+  // Best effort: a leftover file is harmless, and the entry is already gone.
+  const receipts = data
+    .map((row) => row.receipt_path)
+    .filter((path): path is string => !!path)
+  if (receipts.length) {
+    await supabase.storage.from("truck-documents").remove(receipts)
   }
   refresh()
   return { ok: true }
