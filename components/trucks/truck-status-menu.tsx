@@ -64,6 +64,7 @@ export function TruckStatusMenu({
 }) {
   const router = useRouter()
   const [pending, start] = useTransition()
+  const [menuOpen, setMenuOpen] = useState(false)
   const [parking, setParking] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [reason, setReason] = useState(truck.out_of_service_reason ?? "")
@@ -106,7 +107,7 @@ export function TruckStatusMenu({
 
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger
           disabled={pending}
           render={<Button variant="outline" size="sm" />}
@@ -120,6 +121,8 @@ export function TruckStatusMenu({
             <DropdownMenuRadioGroup
               value={truck.status}
               onValueChange={(value) => {
+                // Radio items keep the menu open; close it once one is picked.
+                setMenuOpen(false)
                 const next = value as TruckStatus
                 if (next === "out_of_service") {
                   // Ask why first, even when it's already parked, so the

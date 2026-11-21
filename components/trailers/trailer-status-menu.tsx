@@ -54,6 +54,7 @@ export function TrailerStatusMenu({
 }) {
   const router = useRouter()
   const [pending, start] = useTransition()
+  const [menuOpen, setMenuOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
   function change(next: TruckStatus) {
@@ -85,7 +86,7 @@ export function TrailerStatusMenu({
 
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger
           disabled={pending}
           render={<Button variant="outline" size="sm" />}
@@ -98,7 +99,11 @@ export function TrailerStatusMenu({
             <DropdownMenuLabel>Status</DropdownMenuLabel>
             <DropdownMenuRadioGroup
               value={trailer.status}
-              onValueChange={(value) => change(value as TruckStatus)}
+              onValueChange={(value) => {
+                // Radio items keep the menu open; close it once one is picked.
+                setMenuOpen(false)
+                change(value as TruckStatus)
+              }}
             >
               {TRUCK_STATUSES.map((status) => (
                 <DropdownMenuRadioItem key={status} value={status}>
