@@ -13,7 +13,9 @@ import { uploadTruckDocument } from "@/lib/truck-document-upload"
 import type { TruckDocument } from "@/lib/trucks"
 
 const KINDS = {
-  addable: TRUCK_DOCUMENT_KINDS,
+  // The 2290's Schedule 1 is one document for the whole return, so it's
+  // kept on the return on Compliance; older uploads here still show.
+  addable: TRUCK_DOCUMENT_KINDS.filter((kind) => kind !== "form_2290"),
   labels: TRUCK_DOCUMENT_LABELS,
   datedElsewhere: DATED_ON_TRUCK,
   dateLabels: TRUCK_DOCUMENT_DATE_LABELS,
@@ -58,7 +60,7 @@ export function TruckDocuments({
       canManage={canManage}
       warn={warn}
       today={today}
-      emptyText="Add the cab card, insurance card, inspection report, 2290 Schedule 1, lease and permits."
+      emptyText="Add the cab card, insurance card, inspection report, lease and permits."
     />
   )
 }

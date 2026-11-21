@@ -14,13 +14,14 @@ const BUCKET = "truck-documents"
 export type TruckFile = { path: string; name: string; type: string }
 
 /**
- * Puts a photo or PDF in the truck's folder, shrinking photos first. The
- * file name starts with `prefix` ("insurance", "receipt"). Returns where it
- * went, or an error message.
+ * Puts a photo or PDF in a folder of the truck-documents bucket, shrinking
+ * photos first: a truck's own folder (its id), or "2290" for Schedule 1s.
+ * The file name starts with `prefix` ("insurance", "receipt"). Returns
+ * where it went, or an error message.
  */
 export async function uploadTruckFile(
   organizationId: string,
-  truckId: string,
+  folder: string,
   prefix: string,
   file: File
 ): Promise<(TruckFile & { size: number }) | { error: string }> {
@@ -33,7 +34,7 @@ export async function uploadTruckFile(
     const pdf = file.type === "application/pdf"
     const body = pdf ? file : await shrink(file)
     const type = pdf ? "application/pdf" : "image/webp"
-    const path = `${organizationId}/${truckId}/${prefix}-${crypto.randomUUID()}.${pdf ? "pdf" : "webp"}`
+    const path = `${organizationId}/${folder}/${prefix}-${crypto.randomUUID()}.${pdf ? "pdf" : "webp"}`
     const { error } = await createClient()
       .storage.from(BUCKET)
       .upload(path, body, { contentType: type })

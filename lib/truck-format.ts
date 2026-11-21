@@ -69,9 +69,15 @@ export function taxItem(
   truckId: string,
   filings: TaxFiling[],
   today: string
-): ComplianceItem & { covered: boolean; taxYear: number } {
+): ComplianceItem & {
+  covered: boolean
+  taxYear: number
+  /** The return that lists this truck for the tax year, if any. */
+  filing: TaxFiling | null
+} {
   const taxYear = taxYearOf(today)
-  const covered = !!coveringFiling(truckId, taxYear, filings)
+  const filing = coveringFiling(truckId, taxYear, filings)
+  const covered = !!filing
   const due = taxYearDueDate(covered ? taxYear + 1 : taxYear)
   return {
     key: "form_2290",
@@ -81,6 +87,7 @@ export function taxItem(
     expiry: expiry(due, today),
     covered,
     taxYear,
+    filing,
   }
 }
 

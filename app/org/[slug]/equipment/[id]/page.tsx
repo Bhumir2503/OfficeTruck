@@ -14,6 +14,7 @@ import {
 } from "@/components/trucks/truck-next-action"
 import { TruckNotes } from "@/components/trucks/truck-notes"
 import { TruckStatusMenu } from "@/components/trucks/truck-status-menu"
+import { TruckTaxBox } from "@/components/trucks/truck-tax-box"
 import { TruckSummary } from "@/components/trucks/truck-summary"
 import { buttonVariants } from "@/components/ui/button"
 import { today as getToday } from "@/lib/driver-format"
@@ -191,6 +192,10 @@ export default async function TruckPage({
               pm={pm}
               today={today}
               manager={manager}
+              complianceHref={`/org/${organization.slug}/compliance`}
+            />
+            <TruckTaxBox
+              tax={tax}
               complianceHref={`/org/${organization.slug}/compliance`}
             />
             {manager && (

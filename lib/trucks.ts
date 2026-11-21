@@ -166,9 +166,14 @@ export type TaxFiling = {
   filed_on: string
   notes: string | null
   truck_ids: string[]
+  /** The stamped Schedule 1, with a link that works for an hour. */
+  schedule1: { name: string; type: string; url: string | null } | null
 }
 
-/** Every 2290 the organization has on file, newest tax year first. */
+/**
+ * Every 2290 return the organization has on file, newest tax year first
+ * (a year can have several), with links to their Schedule 1s.
+ */
 export async function getTaxFilings(
   organizationId: string
 ): Promise<TaxFiling[]> {
@@ -176,22 +181,49 @@ export async function getTaxFilings(
   const { data, error } = await supabase
     .from("heavy_vehicle_tax_filings")
     .select(
-      "id, tax_year, filed_on, notes, trucks:heavy_vehicle_tax_filing_trucks (truck_id)"
+      "id, tax_year, filed_on, notes, schedule1_path, schedule1_name, schedule1_type, trucks:heavy_vehicle_tax_filing_trucks (truck_id)"
     )
     .eq("organization_id", organizationId)
     .order("tax_year", { ascending: false })
+    .order("filed_on", { ascending: false })
 
   if (error) {
     throw error
   }
-  return (
-    data as unknown as (Omit<TaxFiling, "truck_ids"> & {
-      trucks: { truck_id: string }[]
-    })[]
-  ).map(({ trucks, ...filing }) => ({
-    ...filing,
-    truck_ids: trucks.map((truck) => truck.truck_id),
-  }))
+  type Row = Omit<TaxFiling, "truck_ids" | "schedule1"> & {
+    schedule1_path: string | null
+    schedule1_name: string | null
+    schedule1_type: string | null
+    trucks: { truck_id: string }[]
+  }
+  const rows = data as unknown as Row[]
+  const urls = new Map<string, string>()
+  const paths = rows.flatMap((row) =>
+    row.schedule1_path ? [row.schedule1_path] : []
+  )
+  if (paths.length) {
+    // The bucket is private, so links are signed and short-lived.
+    const { data: signed } = await supabase.storage
+      .from("truck-documents")
+      .createSignedUrls(paths, 60 * 60)
+    for (const item of signed ?? []) {
+      if (item.path && item.signedUrl) urls.set(item.path, item.signedUrl)
+    }
+  }
+  return rows.map(
+    ({ trucks, schedule1_path, schedule1_name, schedule1_type, ...filing }) => ({
+      ...filing,
+      truck_ids: trucks.map((truck) => truck.truck_id),
+      schedule1:
+        schedule1_path && schedule1_name && schedule1_type
+          ? {
+              name: schedule1_name,
+              type: schedule1_type,
+              url: urls.get(schedule1_path) ?? null,
+            }
+          : null,
+    })
+  )
 }
 
 /** What each truck is doing, for the trucks list, by truck id. */

@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { ShieldCheck } from "lucide-react"
+import { Paperclip, ShieldCheck } from "lucide-react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 
@@ -77,12 +77,15 @@ export default async function CompliancePage({
     ])
 
   const currentTaxYear = taxYearOf(today)
-  const currentFiling = filings.find((f) => f.tax_year === currentTaxYear)
+  // A tax year can have several returns: the yearly one, then one for each
+  // truck put on the road later. A truck is covered if any of them lists it.
+  const currentFilings = filings.filter((f) => f.tax_year === currentTaxYear)
+  const currentFiling = currentFilings[0]
   const activeTrucks = trucks.filter((truck) => truck.status === "active")
   // Trucks under 55,000 lbs don't owe the 2290.
   const taxable = activeTrucks.filter(owes2290)
   const uncovered = taxable.filter(
-    (truck) => !currentFiling?.truck_ids.includes(truck.id)
+    (truck) => !currentFilings.some((f) => f.truck_ids.includes(truck.id))
   )
 
   // Everything late or due in the next 60 days, for active drivers, trucks
@@ -238,6 +241,7 @@ export default async function CompliancePage({
                   <TableHead>Filed</TableHead>
                   <TableHead>Trucks</TableHead>
                   <TableHead className="hidden md:table-cell">Notes</TableHead>
+                  <TableHead className="w-28">Schedule 1</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -262,6 +266,24 @@ export default async function CompliancePage({
                       </TableCell>
                       <TableCell className="hidden max-w-64 truncate text-sm text-muted-foreground md:table-cell">
                         {filing.notes ?? "—"}
+                      </TableCell>
+                      <TableCell>
+                        {filing.schedule1?.url ? (
+                          <a
+                            href={filing.schedule1.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            title={filing.schedule1.name}
+                            className="inline-flex items-center gap-1.5 text-sm hover:underline"
+                          >
+                            <Paperclip className="size-3.5" />
+                            Open
+                          </a>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">
+                            Not added
+                          </span>
+                        )}
                       </TableCell>
                     </TableRow>
                   )

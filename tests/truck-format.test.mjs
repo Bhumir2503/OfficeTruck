@@ -44,6 +44,16 @@ describe("taxItem", () => {
     assert.equal(item.due, "2027-08-31")
   })
 
+  it("counts a truck covered by a later return in the same tax year", () => {
+    const returns = [
+      { id: "yearly", tax_year: 2026, filed_on: "2026-08-12", truck_ids: ["t1"] },
+      { id: "march", tax_year: 2026, filed_on: "2027-04-20", truck_ids: ["t3"] },
+    ]
+    const item = taxItem("t3", returns, TODAY)
+    assert.equal(item.covered, true)
+    assert.equal(item.filing.id, "march")
+  })
+
   it("is overdue when this year's return doesn't list the truck", () => {
     const item = taxItem("t2", filings, TODAY)
     assert.equal(item.covered, false)
