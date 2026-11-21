@@ -41,10 +41,16 @@ import {
 } from "@/lib/schemas/truck"
 import {
   truckServiceItem,
+  withEstimatedOdometer,
   truckComplianceItems,
   truckDescription,
 } from "@/lib/truck-format"
-import type { LastService, Truck, TruckNow } from "@/lib/trucks"
+import type {
+  LastService,
+  MilesSinceReading,
+  Truck,
+  TruckNow,
+} from "@/lib/trucks"
 
 type Filter = TruckStatus | "all"
 
@@ -67,6 +73,50 @@ function flagged(items: ComplianceItem[]) {
     .sort((a, b) => days(a) - days(b))
 }
 
+/**
+ * The truck's odometer: the last reading, or an estimate when loads have run
+ * since it ("≈ 108,940 mi", with the reading it's counted from).
+ */
+function OdometerCell({
+  reading,
+  readOn,
+  since,
+}: {
+  reading: number
+  readOn: string | null
+  since: MilesSinceReading | undefined
+}) {
+  if (since?.miles) {
+    return (
+      <div className="min-w-0">
+        <div
+          className="text-sm font-medium tabular-nums"
+          title="Estimated from the miles of loads run since the last reading"
+        >
+          ≈ {thousands.format(reading + since.miles)} mi
+        </div>
+        <div className="text-sm text-muted-foreground">
+          {thousands.format(reading)}
+          {readOn && ` on ${formatDate(readOn)}`} +{" "}
+          {since.loads === 1 ? "1 load" : `${since.loads} loads`}
+        </div>
+      </div>
+    )
+  }
+  return (
+    <div className="min-w-0">
+      <div className="text-sm font-medium tabular-nums">
+        {thousands.format(reading)} mi
+      </div>
+      {readOn && (
+        <div className="text-sm text-muted-foreground">
+          {formatDate(readOn)}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function TrucksTable({
   trucks,
   base,
@@ -74,6 +124,7 @@ export function TrucksTable({
   canManage,
   now,
   lastService,
+  milesSince,
   loadsBase,
   driversBase,
 }: {
@@ -87,6 +138,8 @@ export function TrucksTable({
   now: Record<string, TruckNow>
   /** Each truck's last preventive service, for service reminders. */
   lastService: Record<string, LastService>
+  /** Load miles run since each truck's last odometer reading. */
+  milesSince: Record<string, MilesSinceReading>
   /** /org/<slug>/loads */
   loadsBase: string
   /** /org/<slug>/drivers */
@@ -100,7 +153,11 @@ export function TrucksTable({
       trucks.map((truck) => {
         const items = [...truckComplianceItems(truck, today)]
         // Service only shows once it's due soon or overdue.
-        const service = truckServiceItem(truck, lastService[truck.id], today)
+        const service = truckServiceItem(
+          withEstimatedOdometer(truck, milesSince[truck.id]),
+          lastService[truck.id],
+          today
+        )
         if (service) items.push(service)
         return {
           truck,
@@ -109,7 +166,7 @@ export function TrucksTable({
           warnings: truck.status === "active" ? flagged(items) : [],
         }
       }),
-    [trucks, today, lastService]
+    [trucks, today, lastService, milesSince]
   )
 
   const counts = useMemo(() => {
@@ -329,16 +386,11 @@ export function TrucksTable({
                   {/* The latest reading: from a driver, the office or a
                       service, whichever was highest. */}
                   {truck.odometer !== null ? (
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium tabular-nums">
-                        {thousands.format(truck.odometer)} mi
-                      </div>
-                      {truck.odometer_on && (
-                        <div className="text-sm text-muted-foreground">
-                          {formatDate(truck.odometer_on)}
-                        </div>
-                      )}
-                    </div>
+                    <OdometerCell
+                      reading={truck.odometer}
+                      readOn={truck.odometer_on}
+                      since={milesSince[truck.id]}
+                    />
                   ) : (
                     <span className="text-sm text-muted-foreground">
                       Not recorded

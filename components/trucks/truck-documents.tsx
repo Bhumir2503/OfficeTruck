@@ -17,6 +17,8 @@ const KINDS = {
   labels: TRUCK_DOCUMENT_LABELS,
   datedElsewhere: DATED_ON_TRUCK,
   dateLabels: TRUCK_DOCUMENT_DATE_LABELS,
+  // The inspection report's date is when the next inspection is due.
+  dueKinds: ["annual_inspection"] as const,
 }
 
 /**

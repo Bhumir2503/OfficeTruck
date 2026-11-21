@@ -16,15 +16,21 @@ import { TruckNotes } from "@/components/trucks/truck-notes"
 import { TruckStatusMenu } from "@/components/trucks/truck-status-menu"
 import { TruckSummary } from "@/components/trucks/truck-summary"
 import { buttonVariants } from "@/components/ui/button"
-import { today as getToday } from "@/lib/driver-format"
+import { formatDate, today as getToday } from "@/lib/driver-format"
 import { getDriverOptions } from "@/lib/drivers"
 import { canManage, getOrganization } from "@/lib/organizations"
 import {
   pmStatus,
+  withEstimatedOdometer,
   truckComplianceItems,
   truckDescription,
 } from "@/lib/truck-format"
-import { getTruck, getTruckDocuments, getTruckMaintenance } from "@/lib/trucks"
+import {
+  getMilesSinceReading,
+  getTruck,
+  getTruckDocuments,
+  getTruckMaintenance,
+} from "@/lib/trucks"
 
 async function truckFor(
   params: PageProps<"/org/[slug]/equipment/[id]">["params"]
@@ -55,15 +61,20 @@ export default async function TruckPage({
   const today = getToday()
   const warn = truck.status === "active"
   // The This week and Loads cards are set aside for now.
-  const [drivers, documents, maintenance] = await Promise.all([
+  const [drivers, documents, maintenance, milesSince] = await Promise.all([
     manager ? getDriverOptions(organization.id) : Promise.resolve([]),
     getTruckDocuments(organization.id, truck.id),
     getTruckMaintenance(organization.id, truck.id),
+    getMilesSinceReading(organization.id, [truck]),
   ])
+  // Service by mileage counts from the odometer estimated from loads run
+  // since the last reading.
+  const since = milesSince[truck.id]
+  const estimated = withEstimatedOdometer(truck, since)
   const items = truckComplianceItems(truck, today)
   const lastPm = maintenance.find((entry) => entry.kind === "preventive")
   const pm = pmStatus(
-    truck,
+    estimated,
     lastPm ? { done_on: lastPm.done_on, odometer: lastPm.odometer } : null,
     today
   )
@@ -146,6 +157,14 @@ export default async function TruckPage({
                 truckId={truck.id}
                 entries={maintenance}
                 pm={pm}
+                printHref={`/print/${organization.slug}/trucks/${truck.id}/maintenance`}
+                odometerNote={
+                  since?.miles && truck.odometer !== null
+                    ? `Odometer ≈ ${new Intl.NumberFormat("en-US").format(
+                        estimated.odometer!
+                      )} mi, estimated from ${since.loads === 1 ? "1 load" : `${since.loads} loads`} since ${formatDate(truck.odometer_on!)}.`
+                    : null
+                }
                 canManage={manager}
                 today={today}
               />

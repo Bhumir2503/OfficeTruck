@@ -150,11 +150,24 @@ export async function deleteTruck(
     return { error: NOT_ALLOWED }
   }
   const supabase = await createClient()
-  const { data: files } = await supabase
-    .from("truck_documents")
-    .select("path")
-    .eq("organization_id", organizationId)
-    .eq("truck_id", truckId)
+  // Its files go with it: documents, and maintenance receipts.
+  const [{ data: documents }, { data: receipts }] = await Promise.all([
+    supabase
+      .from("truck_documents")
+      .select("path")
+      .eq("organization_id", organizationId)
+      .eq("truck_id", truckId),
+    supabase
+      .from("truck_maintenance")
+      .select("receipt_path")
+      .eq("organization_id", organizationId)
+      .eq("truck_id", truckId)
+      .not("receipt_path", "is", null),
+  ])
+  const files = [
+    ...(documents ?? []).map((row) => row.path as string),
+    ...(receipts ?? []).map((row) => row.receipt_path as string),
+  ]
 
   const { data, error } = await supabase
     .from("trucks")
@@ -174,10 +187,8 @@ export async function deleteTruck(
     return { error: "That truck doesn't exist anymore." }
   }
   // Best effort: the records went with the truck; leftover files are harmless.
-  if (files?.length) {
-    await supabase.storage
-      .from("truck-documents")
-      .remove(files.map((file) => file.path))
+  if (files.length) {
+    await supabase.storage.from("truck-documents").remove(files)
   }
   return { ok: true }
 }
@@ -432,6 +443,18 @@ export async function addTruckMaintenance(
         .eq("organization_id", organizationId)
         .eq("id", truckId)
     }
+  }
+  // An inspection logged later than the truck's last annual inspection
+  // moves that date up, so the next one is due a year from it.
+  if (entry.kind === "inspection") {
+    await supabase
+      .from("trucks")
+      .update({ annual_inspection_on: entry.done_on })
+      .eq("organization_id", organizationId)
+      .eq("id", truckId)
+      .or(
+        `annual_inspection_on.is.null,annual_inspection_on.lt.${entry.done_on}`
+      )
   }
   refresh()
   return { ok: true }

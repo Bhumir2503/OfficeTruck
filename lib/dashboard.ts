@@ -14,8 +14,16 @@ import { getInvoices, getLoadsToInvoice } from "@/lib/invoices"
 import { cityState } from "@/lib/report-format"
 import type { AppointmentType, LoadStatus } from "@/lib/schemas/load"
 import { createClient } from "@/lib/supabase/server"
-import { truckComplianceItems, truckServiceItem } from "@/lib/truck-format"
-import { getLastServiceByTruck, getTrucks } from "@/lib/trucks"
+import {
+  truckComplianceItems,
+  truckServiceItem,
+  withEstimatedOdometer,
+} from "@/lib/truck-format"
+import {
+  getLastServiceByTruck,
+  getMilesSinceReading,
+  getTrucks,
+} from "@/lib/trucks"
 
 /**
  * Everything the owner should act on, most pressing first. Cached for the
@@ -47,6 +55,9 @@ export const getAttention = cache(async (organizationId: string) => {
   }
 
   const activeTrucks = trucks.filter((truck) => truck.status === "active")
+  // Service by mileage counts from the odometer estimated from loads run
+  // since the last reading.
+  const milesSince = await getMilesSinceReading(organizationId, activeTrucks)
   const documents: AttentionInput["documents"] = [
     ...drivers
       .filter((driver) => driver.status === "active")
@@ -60,7 +71,11 @@ export const getAttention = cache(async (organizationId: string) => {
     ...activeTrucks.flatMap((truck) =>
       [
         ...truckComplianceItems(truck, today),
-        truckServiceItem(truck, lastService[truck.id], today),
+        truckServiceItem(
+          withEstimatedOdometer(truck, milesSince[truck.id]),
+          lastService[truck.id],
+          today
+        ),
       ]
         .filter((item) => item !== null)
         .map((item) => ({
@@ -70,6 +85,24 @@ export const getAttention = cache(async (organizationId: string) => {
         }))
     ),
   ]
+  // A truck parked past the day it was due back from out of service.
+  for (const truck of trucks) {
+    const until = truck.out_of_service_until
+    if (truck.status !== "out_of_service" || !until || until >= today) {
+      continue
+    }
+    documents.push({
+      owner: `Truck ${truck.unit_number}`,
+      item: {
+        key: "back_in_service",
+        label: "Return to service",
+        kind: "due",
+        due: until,
+        expiry: expiry(until, today),
+      },
+      path: `equipment/${truck.id}`,
+    })
+  }
   // The company's own papers that run out.
   for (const paper of papers) {
     if (!paper.expires_on) continue

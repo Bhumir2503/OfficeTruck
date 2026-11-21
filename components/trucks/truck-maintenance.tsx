@@ -8,6 +8,7 @@ import {
   ImageIcon,
   Paperclip,
   Plus,
+  Printer,
   Trash2,
   Upload,
   Wrench,
@@ -19,6 +20,10 @@ import {
   addTruckMaintenance,
   removeTruckMaintenance,
 } from "@/app/org/[slug]/equipment/actions"
+import {
+  addTrailerMaintenance,
+  removeTrailerMaintenance,
+} from "@/app/org/[slug]/trailers/actions"
 import {
   SettingsCard,
   SettingsCardFooter,
@@ -95,14 +100,25 @@ function pmLine(pm: PmStatus) {
   }
 }
 
+/** Which vehicle the log is for, which decides where entries are saved. */
+type Vehicle = "truck" | "trailer"
+
+const ACTIONS = {
+  truck: { add: addTruckMaintenance, remove: removeTruckMaintenance },
+  trailer: { add: addTrailerMaintenance, remove: removeTrailerMaintenance },
+}
+
 function AddEntryDialog({
   organizationId,
+  vehicle,
   truckId,
   today,
   open,
   onOpenChange,
 }: {
   organizationId: string
+  vehicle: Vehicle
+  /** The truck's or trailer's id. */
   truckId: string
   /** "YYYY-MM-DD" */
   today: string
@@ -132,7 +148,8 @@ function AddEntryDialog({
         <DialogHeader>
           <DialogTitle>Log maintenance</DialogTitle>
           <DialogDescription>
-            A service, repair or inspection on this truck.
+            A service, repair or inspection on this {vehicle}. An inspection
+            also counts as its last annual inspection.
           </DialogDescription>
         </DialogHeader>
         <form
@@ -162,7 +179,7 @@ function AddEntryDialog({
                 }
                 uploaded = result
               }
-              const result = await addTruckMaintenance(
+              const result = await ACTIONS[vehicle].add(
                 organizationId,
                 truckId,
                 parsed.data,
@@ -332,21 +349,31 @@ function AddEntryDialog({
 }
 
 /**
- * A truck's maintenance log, kept for every vehicle as FMCSA asks, with when
- * the next preventive service is due.
+ * A truck's or trailer's maintenance log, kept for every vehicle as FMCSA
+ * asks, with when a truck's next preventive service is due.
  */
 export function TruckMaintenance({
   organizationId,
+  vehicle = "truck",
   truckId,
   entries,
   pm,
+  odometerNote,
+  printHref,
   canManage,
   today,
 }: {
   organizationId: string
+  vehicle?: Vehicle
+  /** The truck's or trailer's id. */
   truckId: string
   entries: Entry[]
-  pm: PmStatus
+  /** A truck's service schedule; trailers have none here. */
+  pm?: PmStatus | null
+  /** How the odometer behind the reminder was estimated, if it was. */
+  odometerNote?: string | null
+  /** The printable record of the whole log, for audits. */
+  printHref?: string
   canManage: boolean
   /** "YYYY-MM-DD" */
   today: string
@@ -367,7 +394,7 @@ export function TruckMaintenance({
     if (!deleting) return
     const entry = deleting
     start(async () => {
-      const result = await removeTruckMaintenance(
+      const result = await ACTIONS[vehicle].remove(
         organizationId,
         truckId,
         entry.id
@@ -389,28 +416,45 @@ export function TruckMaintenance({
       description={
         <span
           className={cn(
-            pm.state === "due" && "text-destructive",
-            pm.state === "soon" && "text-amber-700 dark:text-amber-300"
+            pm?.state === "due" && "text-destructive",
+            pm?.state === "soon" && "text-amber-700 dark:text-amber-300"
           )}
         >
-          {pmLine(pm)}
+          {pm
+            ? pmLine(pm)
+            : "Every service, repair and inspection on this trailer."}
+          {odometerNote && (
+            <span className="block text-muted-foreground">{odometerNote}</span>
+          )}
         </span>
       }
       action={
-        canManage && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="shrink-0"
-            onClick={() => {
-              setDialogKey((key) => key + 1)
-              setAdding(true)
-            }}
-          >
-            <Plus />
-            Log maintenance
-          </Button>
-        )
+        <div className="flex shrink-0 gap-2">
+          {printHref && entries.length > 0 && (
+            <a
+              href={printHref}
+              target="_blank"
+              rel="noreferrer"
+              className={buttonVariants({ variant: "ghost", size: "sm" })}
+            >
+              <Printer />
+              Print log
+            </a>
+          )}
+          {canManage && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setDialogKey((key) => key + 1)
+                setAdding(true)
+              }}
+            >
+              <Plus />
+              Log maintenance
+            </Button>
+          )}
+        </div>
       }
       contentClassName={entries.length ? "px-0 pb-0" : undefined}
       // The page footer shows whenever there's an entry; with one page its
@@ -534,6 +578,7 @@ export function TruckMaintenance({
         <AddEntryDialog
           key={dialogKey}
           organizationId={organizationId}
+          vehicle={vehicle}
           truckId={truckId}
           today={today}
           open={adding}

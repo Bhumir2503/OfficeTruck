@@ -311,3 +311,54 @@ export async function getLastServiceByTruck(
   }
   return byTruck
 }
+
+/** Load miles a truck has run since its last odometer reading. */
+export type MilesSinceReading = { miles: number; loads: number }
+
+// A load counts as run once it's delivered, from here on in the flow.
+const RUN = ["delivered", "invoiced", "paid", "factored"]
+
+/**
+ * For each truck with an odometer reading, the loaded and empty miles of the
+ * loads it delivered after the day of that reading, to estimate where its
+ * odometer is now. Loads delivered the same day are left out: the driver's
+ * reading at the last stop already counts that trip.
+ */
+export async function getMilesSinceReading(
+  organizationId: string,
+  trucks: Pick<Truck, "id" | "odometer" | "odometer_on">[]
+): Promise<Record<string, MilesSinceReading>> {
+  const read = trucks.filter(
+    (truck) => truck.odometer !== null && truck.odometer_on !== null
+  )
+  if (!read.length) return {}
+  const since = read.map((truck) => truck.odometer_on!).sort()[0]
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("loads")
+    .select("truck_id, miles, empty_miles, delivery_start")
+    .eq("organization_id", organizationId)
+    .in(
+      "truck_id",
+      read.map((truck) => truck.id)
+    )
+    .in("status", RUN)
+    .gt("delivery_start", `${since}T23:59:59`)
+  if (error) {
+    throw error
+  }
+  const readOn = new Map(read.map((truck) => [truck.id, truck.odometer_on!]))
+  const byTruck: Record<string, MilesSinceReading> = {}
+  for (const row of data as {
+    truck_id: string
+    miles: number | null
+    empty_miles: number | null
+    delivery_start: string
+  }[]) {
+    if (row.delivery_start.slice(0, 10) <= readOn.get(row.truck_id)!) continue
+    const entry = (byTruck[row.truck_id] ??= { miles: 0, loads: 0 })
+    entry.miles += (row.miles ?? 0) + (row.empty_miles ?? 0)
+    entry.loads += 1
+  }
+  return byTruck
+}

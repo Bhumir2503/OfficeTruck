@@ -167,6 +167,19 @@ export function truckServiceItem(
   return pmItem(pmStatus(truck, last ?? null, today), today)
 }
 
+/**
+ * The truck with its odometer estimated from the loads it has run since the
+ * last reading, for service reminders. Unchanged when there's no reading or
+ * nothing has run since.
+ */
+export function withEstimatedOdometer<T extends Pick<Truck, "odometer">>(
+  truck: T,
+  since: { miles: number; loads: number } | undefined
+): T {
+  if (truck.odometer === null || !since?.miles) return truck
+  return { ...truck, odometer: truck.odometer + since.miles }
+}
+
 // ---------------------------------------------------- Cost per mile -------
 
 /** Payment or lease, insurance and other fixed costs, per month. */

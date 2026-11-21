@@ -1,7 +1,12 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 
-import { pmItem, pmStatus, truckServiceItem } from "../lib/truck-format.ts"
+import {
+  pmItem,
+  pmStatus,
+  truckServiceItem,
+  withEstimatedOdometer,
+} from "../lib/truck-format.ts"
 
 const TODAY = "2026-11-21"
 
@@ -166,5 +171,53 @@ describe("truckServiceItem", () => {
 
   it("is nothing when the truck has no service logged", () => {
     assert.equal(truckServiceItem(truck(), undefined, TODAY), null)
+  })
+})
+
+describe("withEstimatedOdometer", () => {
+  it("adds the miles of loads run since the last reading", () => {
+    const estimated = withEstimatedOdometer(truck({ odometer: 102322 }), {
+      miles: 6618,
+      loads: 3,
+    })
+    assert.equal(estimated.odometer, 108940)
+  })
+
+  it("leaves the reading alone when nothing has run since", () => {
+    const original = truck({ odometer: 102322 })
+    assert.equal(withEstimatedOdometer(original, undefined), original)
+    assert.equal(
+      withEstimatedOdometer(original, { miles: 0, loads: 0 }),
+      original
+    )
+  })
+
+  it("can't estimate without a first reading", () => {
+    const estimated = withEstimatedOdometer(truck({ odometer: null }), {
+      miles: 500,
+      loads: 1,
+    })
+    assert.equal(estimated.odometer, null)
+  })
+
+  it("counts service due from the estimate", () => {
+    // Read 400,000 after a service at 386,000: 1,000 mi to go. 1,200 mi of
+    // loads since the reading takes it 200 mi past the 15,000 mi interval.
+    const last = { done_on: "2026-11-01", odometer: 386000 }
+    assert.equal(
+      truckServiceItem(truck({ odometer: 400000 }), last, TODAY)?.whenText,
+      "in 1,000 mi"
+    )
+    assert.equal(
+      truckServiceItem(
+        withEstimatedOdometer(truck({ odometer: 400000 }), {
+          miles: 1200,
+          loads: 2,
+        }),
+        last,
+        TODAY
+      )?.whenText,
+      "200 mi over"
+    )
   })
 })

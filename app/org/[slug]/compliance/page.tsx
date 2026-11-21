@@ -27,9 +27,17 @@ import {
 import { getDqDatesByDriver } from "@/lib/dq/fleet"
 import { getDrivers } from "@/lib/drivers"
 import { getOrganization } from "@/lib/organizations"
-import { truckComplianceItems, truckServiceItem } from "@/lib/truck-format"
+import {
+  truckComplianceItems,
+  truckServiceItem,
+  withEstimatedOdometer,
+} from "@/lib/truck-format"
 import { getTrailers } from "@/lib/trailers"
-import { getLastServiceByTruck, getTrucks } from "@/lib/trucks"
+import {
+  getLastServiceByTruck,
+  getMilesSinceReading,
+  getTrucks,
+} from "@/lib/trucks"
 
 export const metadata: Metadata = { title: "Compliance" }
 
@@ -66,6 +74,9 @@ export default async function CompliancePage({
   ])
 
   const activeTrucks = trucks.filter((truck) => truck.status === "active")
+  // Service by mileage counts from the odometer estimated from loads run
+  // since the last reading.
+  const milesSince = await getMilesSinceReading(organization.id, activeTrucks)
 
   // Everything late or due in the next 60 days, for active drivers, trucks
   // and trailers.
@@ -82,7 +93,11 @@ export default async function CompliancePage({
     ...activeTrucks.flatMap((truck) =>
       [
         ...truckComplianceItems(truck, today),
-        truckServiceItem(truck, lastService[truck.id], today),
+        truckServiceItem(
+          withEstimatedOdometer(truck, milesSince[truck.id]),
+          lastService[truck.id],
+          today
+        ),
       ]
         .filter((item) => item !== null)
         .map((item) => ({

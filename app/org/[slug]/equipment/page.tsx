@@ -4,7 +4,12 @@ import { notFound } from "next/navigation"
 import { TrucksTable } from "@/components/trucks/trucks-table"
 import { today } from "@/lib/driver-format"
 import { canManage, getOrganization } from "@/lib/organizations"
-import { getLastServiceByTruck, getTrucks, getTrucksNow } from "@/lib/trucks"
+import {
+  getLastServiceByTruck,
+  getMilesSinceReading,
+  getTrucks,
+  getTrucksNow,
+} from "@/lib/trucks"
 
 export const metadata: Metadata = { title: "Trucks" }
 
@@ -21,6 +26,7 @@ export default async function TrucksPage({
     getTrucksNow(organization.id, today()),
     getLastServiceByTruck(organization.id),
   ])
+  const milesSince = await getMilesSinceReading(organization.id, trucks)
 
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
@@ -31,6 +37,7 @@ export default async function TrucksPage({
         canManage={canManage(organization)}
         now={now}
         lastService={lastService}
+        milesSince={milesSince}
         loadsBase={`/org/${organization.slug}/loads`}
         driversBase={`/org/${organization.slug}/drivers`}
       />

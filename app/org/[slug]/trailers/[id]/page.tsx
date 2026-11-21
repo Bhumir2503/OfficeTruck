@@ -4,15 +4,21 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 
 import { ExpiryDate } from "@/components/drivers/driver-badges"
+import { TrailerDocuments } from "@/components/trailers/trailer-documents"
 import { TrailerForm } from "@/components/trailers/trailer-form"
 import { TrailerStatusMenu } from "@/components/trailers/trailer-status-menu"
 import { TruckStatusBadge } from "@/components/trucks/truck-badges"
+import { TruckMaintenance } from "@/components/trucks/truck-maintenance"
 import { buttonVariants } from "@/components/ui/button"
 import { formatDate, today as getToday } from "@/lib/driver-format"
 import { canManage, getOrganization } from "@/lib/organizations"
 import { OWNERSHIP_LABELS } from "@/lib/schemas/truck"
 import { trailerDescription } from "@/lib/trailer-format"
-import { getTrailer } from "@/lib/trailers"
+import {
+  getTrailer,
+  getTrailerDocuments,
+  getTrailerMaintenance,
+} from "@/lib/trailers"
 import { truckComplianceItems } from "@/lib/truck-format"
 import { getTruckOptions } from "@/lib/trucks"
 
@@ -62,7 +68,11 @@ export default async function TrailerPage({
   const today = getToday()
   const warn = trailer.status === "active"
   const none = <span className="text-muted-foreground">Not set</span>
-  const trucks = manager ? await getTruckOptions(organization.id) : []
+  const [trucks, maintenance, documents] = await Promise.all([
+    manager ? getTruckOptions(organization.id) : Promise.resolve([]),
+    getTrailerMaintenance(organization.id, trailer.id),
+    getTrailerDocuments(organization.id, trailer.id),
+  ])
   // Same three dates as a truck: inspection, registration, plate.
   const items = truckComplianceItems(trailer, today)
   const subtitle = [
@@ -148,6 +158,29 @@ export default async function TrailerPage({
                 </dl>
               </section>
             )}
+            <TruckMaintenance
+              organizationId={organization.id}
+              vehicle="trailer"
+              truckId={trailer.id}
+              entries={maintenance}
+              printHref={`/print/${organization.slug}/trailers/${trailer.id}/maintenance`}
+              canManage={manager}
+              today={today}
+            />
+            <TrailerDocuments
+              organizationId={organization.id}
+              trailerId={trailer.id}
+              documents={documents}
+              dueByKind={{
+                registration: trailer.registration_expires_on,
+                annual_inspection:
+                  items.find((item) => item.key === "annual_inspection")?.due ??
+                  null,
+              }}
+              canManage={manager}
+              warn={warn}
+              today={today}
+            />
           </div>
           {/* What's due and who's pulling it stay in view; on a phone
               they come first. */}

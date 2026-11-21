@@ -80,6 +80,8 @@ type Kinds<K extends string> = {
   datedElsewhere: Partial<Record<K, string>>
   /** A different label for the date asked on upload, by kind. */
   dateLabels?: Partial<Record<K, string>>
+  /** Kinds whose date is when the next one is due, not when this expires. */
+  dueKinds?: readonly K[]
 }
 
 /** Documents shown at a time. */
@@ -305,24 +307,33 @@ function Expires({
   label,
   warn,
   today,
+  nextDue = false,
 }: {
   due: string | null
   label: string
   warn: boolean
   today: string
+  /** The date is when the next one is due (an inspection), not an expiry. */
+  nextDue?: boolean
 }) {
   if (!due) return null
   const state = expiry(due, today)
   if (warn && needsAction(state.state)) {
     return (
       <ExpiryBadge
-        item={{ key: label, label, kind: "expires", due, expiry: state }}
+        item={{
+          key: label,
+          label,
+          kind: nextDue ? "due" : "expires",
+          due,
+          expiry: state,
+        }}
       />
     )
   }
   return (
     <span className="text-xs whitespace-nowrap text-muted-foreground tabular-nums">
-      Expires {formatDate(due)}
+      {nextDue ? "Due" : "Expires"} {formatDate(due)}
     </span>
   )
 }
@@ -457,7 +468,9 @@ export function DocumentsCard<K extends string>({
               <TableHead className="hidden w-px whitespace-nowrap @lg:table-cell">
                 Type
               </TableHead>
-              <TableHead className="w-px">Expires</TableHead>
+              <TableHead className="w-px whitespace-nowrap">
+                {kinds.dueKinds?.length ? "Expires or due" : "Expires"}
+              </TableHead>
               <TableHead className="hidden w-px @xl:table-cell">
                 Added
               </TableHead>
@@ -514,6 +527,7 @@ export function DocumentsCard<K extends string>({
                         label={label}
                         warn={warn}
                         today={today}
+                        nextDue={kinds.dueKinds?.includes(doc.kind)}
                       />
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
