@@ -134,7 +134,10 @@ export function TruckNextAction({
     ]
       .filter(Boolean)
       .join(" or ")
-    detail = detail ? `${detail}.` : ""
+    // "At 395,000 mi." when only a mileage interval is set.
+    detail = detail
+      ? `${detail.charAt(0).toUpperCase()}${detail.slice(1)}.`
+      : ""
     if (pm.milesLeft !== null) {
       detail += ` ${pm.milesLeft <= 0 ? `${miles.format(-pm.milesLeft)} mi over` : `${miles.format(pm.milesLeft)} mi to go`} on the last reading.`
     }

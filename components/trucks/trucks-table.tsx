@@ -38,10 +38,11 @@ import {
 import {
   owes2290,
   taxItem,
+  truckServiceItem,
   truckComplianceItems,
   truckDescription,
 } from "@/lib/truck-format"
-import type { TaxFiling, Truck, TruckNow } from "@/lib/trucks"
+import type { LastService, TaxFiling, Truck, TruckNow } from "@/lib/trucks"
 
 type Filter = TruckStatus | "all"
 
@@ -69,6 +70,7 @@ export function TrucksTable({
   today,
   canManage,
   now,
+  lastService,
   loadsBase,
   driversBase,
 }: {
@@ -81,6 +83,8 @@ export function TrucksTable({
   canManage: boolean
   /** The load each truck is on now, its next booked one and its last delivery. */
   now: Record<string, TruckNow>
+  /** Each truck's last preventive service, for service reminders. */
+  lastService: Record<string, LastService>
   /** /org/<slug>/loads */
   loadsBase: string
   /** /org/<slug>/drivers */
@@ -97,6 +101,9 @@ export function TrucksTable({
           // Trucks under 55,000 lbs don't owe the 2290.
           ...(owes2290(truck) ? [taxItem(truck.id, filings, today)] : []),
         ]
+        // Service only shows once it's due soon or overdue.
+        const service = truckServiceItem(truck, lastService[truck.id], today)
+        if (service) items.push(service)
         return {
           truck,
           items,
@@ -104,7 +111,7 @@ export function TrucksTable({
           warnings: truck.status === "active" ? flagged(items) : [],
         }
       }),
-    [trucks, filings, today]
+    [trucks, filings, today, lastService]
   )
 
   const counts = useMemo(() => {

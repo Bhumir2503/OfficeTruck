@@ -125,6 +125,8 @@ export function truckComplianceItems(
 
 // ------------------------------------------------ Preventive maintenance ---
 
+const miles = new Intl.NumberFormat("en-US")
+
 /** How close counts as "due soon": two weeks, or 1,000 miles. */
 const PM_SOON_DAYS = 14
 const PM_SOON_MILES = 1000
@@ -194,6 +196,46 @@ export function pmStatus(
     milesLeft,
     state: overdue ? "due" : soon ? "soon" : "ok",
   }
+}
+
+/**
+ * Preventive maintenance as a compliance item, only while it needs action:
+ * due soon or overdue, by date or by miles, whichever is more pressing.
+ * Null when it's fine, unscheduled or has nothing logged yet.
+ */
+export function pmItem(pm: PmStatus, today: string): ComplianceItem | null {
+  if (pm.state !== "due" && pm.state !== "soon") return null
+  const base = { key: "pm", label: "Service", kind: "due" as const }
+  const byDate = pm.dueOn ? expiry(pm.dueOn, today) : null
+  const dateDriven =
+    byDate !== null &&
+    byDate.state !== "missing" &&
+    (pm.state === "due"
+      ? byDate.state === "expired"
+      : byDate.days <= PM_SOON_DAYS)
+  if (dateDriven) {
+    return { ...base, due: pm.dueOn, expiry: byDate }
+  }
+  // Due by mileage: there's no date to count down to.
+  const left = pm.milesLeft ?? 0
+  return {
+    ...base,
+    due: null,
+    expiry: { state: pm.state === "due" ? "expired" : "urgent", days: 0 },
+    whenText:
+      left <= 0
+        ? `${miles.format(-left)} mi over`
+        : `in ${miles.format(left)} mi`,
+  }
+}
+
+/** A truck's service as a compliance item, from its last preventive service. */
+export function truckServiceItem(
+  truck: Pick<Truck, "pm_interval_miles" | "pm_interval_days" | "odometer">,
+  last: { done_on: string; odometer: number | null } | null | undefined,
+  today: string
+) {
+  return pmItem(pmStatus(truck, last ?? null, today), today)
 }
 
 // ---------------------------------------------------- Cost per mile -------

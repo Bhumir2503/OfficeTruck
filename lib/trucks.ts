@@ -286,3 +286,31 @@ export async function getTruckMaintenance(
     cost: row.cost === null ? null : Number(row.cost),
   }))
 }
+
+export type LastService = { done_on: string; odometer: number | null }
+
+/**
+ * Each truck's most recent preventive service, by truck id, for maintenance
+ * reminders on the trucks list, dashboard and Compliance page.
+ */
+export async function getLastServiceByTruck(
+  organizationId: string
+): Promise<Record<string, LastService>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("truck_maintenance")
+    .select("truck_id, done_on, odometer")
+    .eq("organization_id", organizationId)
+    .eq("kind", "preventive")
+    .order("done_on", { ascending: false })
+    .order("created_at", { ascending: false })
+  if (error) {
+    throw error
+  }
+  const byTruck: Record<string, LastService> = {}
+  for (const row of data as (LastService & { truck_id: string })[]) {
+    // Newest first, so the first one seen for a truck is its last service.
+    byTruck[row.truck_id] ??= { done_on: row.done_on, odometer: row.odometer }
+  }
+  return byTruck
+}

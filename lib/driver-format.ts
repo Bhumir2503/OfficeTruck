@@ -160,6 +160,12 @@ export type ComplianceItem = {
   /** For the yearly checks: when it was last done. */
   last?: string | null
   expiry: Expiry
+  /**
+   * When it's due counted in something other than days, e.g. "in 800 mi"
+   * for service due by mileage. Shown in place of the date; `due` is then
+   * null.
+   */
+  whenText?: string
 }
 
 /**

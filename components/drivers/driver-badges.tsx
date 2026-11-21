@@ -53,7 +53,11 @@ export function ExpiryBadge({
   showLabel?: boolean
 }) {
   const { expiry, kind, label } = item
-  if (expiry.state === "missing" || !needsAction(expiry.state) || !item.due) {
+  if (
+    expiry.state === "missing" ||
+    !needsAction(expiry.state) ||
+    (!item.due && !item.whenText)
+  ) {
     return null
   }
   const late = expiry.state === "expired"
@@ -64,7 +68,7 @@ export function ExpiryBadge({
     : kind === "expires"
       ? "expires"
       : "due"
-  const text = late ? verb : `${verb} ${inDays(expiry.days)}`
+  const text = late ? verb : `${verb} ${item.whenText ?? inDays(expiry.days)}`
   const full = `${label} ${text}`
   return (
     <span
@@ -77,7 +81,7 @@ export function ExpiryBadge({
           : late
             ? "was due"
             : "due"
-      } ${formatDate(item.due)}`}
+      } ${item.due ? formatDate(item.due) : item.whenText}`}
     >
       {late ? <AlertTriangle aria-hidden /> : <Clock aria-hidden />}
       {showLabel ? full : text.charAt(0).toUpperCase() + text.slice(1)}

@@ -35,9 +35,10 @@ import {
   taxYearOf,
   owes2290,
   truckComplianceItems,
+  truckServiceItem,
 } from "@/lib/truck-format"
 import { getTrailers } from "@/lib/trailers"
-import { getTaxFilings, getTrucks } from "@/lib/trucks"
+import { getLastServiceByTruck, getTaxFilings, getTrucks } from "@/lib/trucks"
 
 export const metadata: Metadata = { title: "Compliance" }
 
@@ -65,13 +66,15 @@ export default async function CompliancePage({
 
   const slug = organization.slug
   const today = getToday()
-  const [drivers, trucks, trailers, filings, dqDates] = await Promise.all([
-    getDrivers(organization.id),
-    getTrucks(organization.id),
-    getTrailers(organization.id),
-    getTaxFilings(organization.id),
-    getDqDatesByDriver(organization.id),
-  ])
+  const [drivers, trucks, trailers, filings, dqDates, lastService] =
+    await Promise.all([
+      getDrivers(organization.id),
+      getTrucks(organization.id),
+      getTrailers(organization.id),
+      getTaxFilings(organization.id),
+      getDqDatesByDriver(organization.id),
+      getLastServiceByTruck(organization.id),
+    ])
 
   const currentTaxYear = taxYearOf(today)
   const currentFiling = filings.find((f) => f.tax_year === currentTaxYear)
@@ -95,11 +98,16 @@ export default async function CompliancePage({
         }))
       ),
     ...activeTrucks.flatMap((truck) =>
-      truckComplianceItems(truck, today).map((item) => ({
-        item,
-        owner: truck.unit_number,
-        href: `/org/${slug}/equipment/${truck.id}`,
-      }))
+      [
+        ...truckComplianceItems(truck, today),
+        truckServiceItem(truck, lastService[truck.id], today),
+      ]
+        .filter((item) => item !== null)
+        .map((item) => ({
+          item,
+          owner: truck.unit_number,
+          href: `/org/${slug}/equipment/${truck.id}`,
+        }))
     ),
     // Trailers have the same three dates as trucks.
     ...trailers
@@ -179,7 +187,7 @@ export default async function CompliancePage({
                       )}
                     </TableCell>
                     <TableCell className="hidden text-muted-foreground sm:table-cell">
-                      {item.due && formatDate(item.due)}
+                      {item.due ? formatDate(item.due) : item.whenText}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end">

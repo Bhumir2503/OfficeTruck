@@ -203,9 +203,12 @@ export function buildAttention(input: AttentionInput): AttentionItem[] {
         : late
           ? "is overdue"
           : "is due"
-    const when = late
-      ? `${dateOf(item.due!)}, ${plural(expiry.days, "day")} ago`
-      : `${relativeDay(expiry.days)}, ${dateOf(item.due!)}`
+    // Due by mileage: no date, just how far over or how far to go.
+    const when = item.whenText
+      ? item.whenText
+      : late
+        ? `${dateOf(item.due!)}, ${plural(expiry.days, "day")} ago`
+        : `${relativeDay(expiry.days)}, ${dateOf(item.due!)}`
     items.push({
       key: `document:${path ?? owner}:${item.key}`,
       kind: "document",
@@ -214,7 +217,13 @@ export function buildAttention(input: AttentionInput): AttentionItem[] {
         owner === "Company"
           ? `The ${lowerFirst(item.label)} ${verb}`
           : `${possessive(owner)} ${lowerFirst(item.label)} ${verb}`,
-      detail: late ? `Was due ${when}` : `Due ${when}`,
+      detail: item.whenText
+        ? late
+          ? `${item.whenText} on the last odometer reading`
+          : `Due ${item.whenText}`
+        : late
+          ? `Was due ${when}`
+          : `Due ${when}`,
       path,
       urgency: late ? -expiry.days : expiry.days,
     })

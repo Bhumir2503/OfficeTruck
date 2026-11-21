@@ -20,8 +20,9 @@ import {
   taxYearDueDate,
   taxYearOf,
   truckComplianceItems,
+  truckServiceItem,
 } from "@/lib/truck-format"
-import { getTaxFilings, getTrucks } from "@/lib/trucks"
+import { getLastServiceByTruck, getTaxFilings, getTrucks } from "@/lib/trucks"
 
 /**
  * Everything the owner should act on, most pressing first. Cached for the
@@ -30,24 +31,34 @@ import { getTaxFilings, getTrucks } from "@/lib/trucks"
 export const getAttention = cache(async (organizationId: string) => {
   const today = getToday()
   const supabase = await createClient()
-  const [invoices, ready, booked, drivers, trucks, filings, papers, dq] =
-    await Promise.all([
-      getInvoices(organizationId),
-      getLoadsToInvoice(organizationId),
-      supabase
-        .from("loads")
-        .select(
-          "id, reference, pickup_location, pickup_start, driver_id, truck_id"
-        )
-        .eq("organization_id", organizationId)
-        .eq("status", "booked")
-        .order("pickup_start"),
-      getDrivers(organizationId),
-      getTrucks(organizationId),
-      getTaxFilings(organizationId),
-      getCompanyDocuments(organizationId),
-      getDqDatesByDriver(organizationId),
-    ])
+  const [
+    invoices,
+    ready,
+    booked,
+    drivers,
+    trucks,
+    filings,
+    papers,
+    dq,
+    lastService,
+  ] = await Promise.all([
+    getInvoices(organizationId),
+    getLoadsToInvoice(organizationId),
+    supabase
+      .from("loads")
+      .select(
+        "id, reference, pickup_location, pickup_start, driver_id, truck_id"
+      )
+      .eq("organization_id", organizationId)
+      .eq("status", "booked")
+      .order("pickup_start"),
+    getDrivers(organizationId),
+    getTrucks(organizationId),
+    getTaxFilings(organizationId),
+    getCompanyDocuments(organizationId),
+    getDqDatesByDriver(organizationId),
+    getLastServiceByTruck(organizationId),
+  ])
   if (booked.error) {
     throw booked.error
   }
@@ -64,11 +75,16 @@ export const getAttention = cache(async (organizationId: string) => {
         }))
       ),
     ...activeTrucks.flatMap((truck) =>
-      truckComplianceItems(truck, today).map((item) => ({
-        owner: `Truck ${truck.unit_number}`,
-        item,
-        path: `equipment/${truck.id}`,
-      }))
+      [
+        ...truckComplianceItems(truck, today),
+        truckServiceItem(truck, lastService[truck.id], today),
+      ]
+        .filter((item) => item !== null)
+        .map((item) => ({
+          owner: `Truck ${truck.unit_number}`,
+          item,
+          path: `equipment/${truck.id}`,
+        }))
     ),
   ]
   // The company's own papers that run out.
