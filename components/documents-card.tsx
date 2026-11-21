@@ -8,6 +8,8 @@ import {
   ImageIcon,
   Loader2,
   Plus,
+  ChevronLeft,
+  ChevronRight,
   Trash2,
   Upload,
 } from "lucide-react"
@@ -17,6 +19,7 @@ import { toast } from "sonner"
 import { ExpiryBadge } from "@/components/drivers/driver-badges"
 import {
   SettingsCard,
+  SettingsCardFooter,
   SettingsEmptyState,
 } from "@/components/settings/settings-card"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -78,6 +81,9 @@ type Kinds<K extends string> = {
   /** A different label for the date asked on upload, by kind. */
   dateLabels?: Partial<Record<K, string>>
 }
+
+/** Documents shown at a time. */
+const PAGE_SIZE = 5
 
 const sizeFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 })
 const fileSize = (bytes: number) =>
@@ -363,6 +369,11 @@ export function DocumentsCard<K extends string>({
   const [dialogKey, setDialogKey] = useState(0)
   // The document waiting on the delete confirmation, if any.
   const [deleting, setDeleting] = useState<DocumentRow<K> | null>(null)
+  // Five documents a page. Deleting the last one on a page steps back.
+  const [page, setPage] = useState(0)
+  const pages = Math.max(1, Math.ceil(documents.length / PAGE_SIZE))
+  const current = Math.min(page, pages - 1)
+  const shown = documents.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE)
 
   function remove() {
     if (!deleting) return
@@ -391,11 +402,7 @@ export function DocumentsCard<K extends string>({
       // Columns appear as the card gets wider, not the window.
       className="@container scroll-mt-6"
       title="Documents"
-      description={
-        documents.length
-          ? `${documents.length} on file. Kept private to your organization.`
-          : "Kept private to your organization."
-      }
+      description={"Kept private to your organization."}
       action={
         canManage && (
           <Button
@@ -410,6 +417,32 @@ export function DocumentsCard<K extends string>({
         )
       }
       contentClassName={documents.length ? "px-0 pb-0" : undefined}
+      footer={
+        pages > 1 && (
+          <SettingsCardFooter
+            hint={`${current * PAGE_SIZE + 1}–${current * PAGE_SIZE + shown.length} of ${documents.length}`}
+          >
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={current === 0}
+              onClick={() => setPage(current - 1)}
+            >
+              <ChevronLeft />
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={current === pages - 1}
+              onClick={() => setPage(current + 1)}
+            >
+              Next
+              <ChevronRight />
+            </Button>
+          </SettingsCardFooter>
+        )
+      }
     >
       {documents.length === 0 ? (
         <SettingsEmptyState icon={FolderOpen} title="No documents yet">
@@ -419,17 +452,22 @@ export function DocumentsCard<K extends string>({
         <Table className="[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6">
           <TableHeader className="bg-muted/40">
             <TableRow>
-              <TableHead>Document</TableHead>
-              <TableHead className="hidden @lg:table-cell">Type</TableHead>
-              <TableHead>Expires</TableHead>
-              <TableHead className="hidden @xl:table-cell">Added</TableHead>
-              <TableHead className="w-20">
+              {/* Document takes the spare width; the rest fit their contents. */}
+              <TableHead className="w-full">Document</TableHead>
+              <TableHead className="hidden w-px whitespace-nowrap @lg:table-cell">
+                Type
+              </TableHead>
+              <TableHead className="w-px">Expires</TableHead>
+              <TableHead className="hidden w-px @xl:table-cell">
+                Added
+              </TableHead>
+              <TableHead className="w-px">
                 <span className="sr-only">Actions</span>
               </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {documents.map((doc) => {
+            {shown.map((doc) => {
               const label = kinds.labels[doc.kind]
               const due = dueFor(doc)
               const pdf = doc.content_type === "application/pdf"
@@ -466,7 +504,7 @@ export function DocumentsCard<K extends string>({
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell className="hidden text-sm text-muted-foreground @lg:table-cell">
+                  <TableCell className="hidden text-sm whitespace-nowrap text-muted-foreground @lg:table-cell">
                     {label}
                   </TableCell>
                   <TableCell>

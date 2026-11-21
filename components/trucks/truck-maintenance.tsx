@@ -2,6 +2,8 @@
 
 import { cn } from "cn"
 import {
+  ChevronLeft,
+  ChevronRight,
   FileText,
   ImageIcon,
   Paperclip,
@@ -62,6 +64,13 @@ import type { PmStatus } from "@/lib/truck-format"
 import type { TruckMaintenance as Entry } from "@/lib/trucks"
 
 const miles = new Intl.NumberFormat("en-US")
+
+/** Entries shown at a time in the log. */
+const PAGE_SIZE = 5
+
+/** "1–5 of 12", or "6 of 6" when a page has one entry. */
+const range = (first: number, last: number, total: number) =>
+  `${first === last ? first : `${first}–${last}`} of ${total}`
 
 /** One line on when the next preventive service is due. */
 function pmLine(pm: PmStatus) {
@@ -347,7 +356,12 @@ export function TruckMaintenance({
   const [dialogKey, setDialogKey] = useState(0)
   const [deleting, setDeleting] = useState<Entry | null>(null)
   const [pending, start] = useTransition()
-  const spent = entries.reduce((sum, entry) => sum + (entry.cost ?? 0), 0)
+  // Five entries a page, newest first. Deleting the last entry on a page
+  // steps back to the page before.
+  const [page, setPage] = useState(0)
+  const pages = Math.max(1, Math.ceil(entries.length / PAGE_SIZE))
+  const current = Math.min(page, pages - 1)
+  const shown = entries.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE)
 
   function remove() {
     if (!deleting) return
@@ -400,10 +414,33 @@ export function TruckMaintenance({
       }
       contentClassName={entries.length ? "px-0 pb-0" : undefined}
       footer={
-        entries.length > 0 && (
+        pages > 1 && (
           <SettingsCardFooter
-            hint={`${entries.length} ${entries.length === 1 ? "entry" : "entries"}${spent > 0 ? ` · ${formatRate(spent)} spent` : ""}`}
-          />
+            hint={range(
+              current * PAGE_SIZE + 1,
+              current * PAGE_SIZE + shown.length,
+              entries.length
+            )}
+          >
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={current === 0}
+              onClick={() => setPage(current - 1)}
+            >
+              <ChevronLeft />
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={current === pages - 1}
+              onClick={() => setPage(current + 1)}
+            >
+              Next
+              <ChevronRight />
+            </Button>
+          </SettingsCardFooter>
         )
       }
     >
@@ -417,26 +454,22 @@ export function TruckMaintenance({
         <Table className="[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6">
           <TableHeader className="bg-muted/40">
             <TableRow>
-              <TableHead className="w-28">Date</TableHead>
-              <TableHead>Work</TableHead>
-              <TableHead className="hidden text-right @lg:table-cell">
+              {/* Work takes the spare width; the rest fit their contents. */}
+              <TableHead className="w-px">Date</TableHead>
+              <TableHead className="w-full">Work</TableHead>
+              <TableHead className="hidden w-px text-right @lg:table-cell">
                 Odometer
               </TableHead>
-              <TableHead className="hidden text-right @md:table-cell">
+              <TableHead className="hidden w-px text-right @md:table-cell">
                 Cost
               </TableHead>
-              <TableHead className="w-12">
-                <span className="sr-only">Receipt</span>
+              <TableHead className="w-px">
+                <span className="sr-only">Receipt and actions</span>
               </TableHead>
-              {canManage && (
-                <TableHead className="w-12">
-                  <span className="sr-only">Actions</span>
-                </TableHead>
-              )}
             </TableRow>
           </TableHeader>
           <TableBody>
-            {entries.map((entry) => (
+            {shown.map((entry) => (
               <TableRow key={entry.id}>
                 <TableCell className="text-sm whitespace-nowrap tabular-nums">
                   {formatDate(entry.done_on)}
@@ -451,45 +484,45 @@ export function TruckMaintenance({
                       .join(" · ")}
                   </div>
                 </TableCell>
-                <TableCell className="hidden text-right text-sm text-muted-foreground tabular-nums @lg:table-cell">
+                <TableCell className="hidden text-right text-sm whitespace-nowrap text-muted-foreground tabular-nums @lg:table-cell">
                   {entry.odometer === null
                     ? "—"
                     : `${miles.format(entry.odometer)} mi`}
                 </TableCell>
-                <TableCell className="hidden text-right text-sm tabular-nums @md:table-cell">
+                <TableCell className="hidden text-right text-sm whitespace-nowrap tabular-nums @md:table-cell">
                   {entry.cost === null ? "—" : formatRate(entry.cost)}
                 </TableCell>
                 <TableCell>
-                  {entry.receipt?.url && (
-                    <a
-                      href={entry.receipt.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      title={entry.receipt.name}
-                      aria-label={`Open the receipt, ${entry.receipt.name}`}
-                      className={buttonVariants({
-                        variant: "ghost",
-                        size: "icon-sm",
-                      })}
-                    >
-                      <Paperclip />
-                    </a>
-                  )}
+                  <div className="flex justify-end gap-1">
+                    {entry.receipt?.url && (
+                      <a
+                        href={entry.receipt.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={entry.receipt.name}
+                        aria-label={`Open the receipt, ${entry.receipt.name}`}
+                        className={buttonVariants({
+                          variant: "ghost",
+                          size: "icon-sm",
+                        })}
+                      >
+                        <Paperclip />
+                      </a>
+                    )}
+                    {canManage && (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="hover:text-destructive"
+                        aria-label={`Delete ${entry.description}`}
+                        disabled={pending}
+                        onClick={() => setDeleting(entry)}
+                      >
+                        <Trash2 />
+                      </Button>
+                    )}
+                  </div>
                 </TableCell>
-                {canManage && (
-                  <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className="hover:text-destructive"
-                      aria-label={`Delete ${entry.description}`}
-                      disabled={pending}
-                      onClick={() => setDeleting(entry)}
-                    >
-                      <Trash2 />
-                    </Button>
-                  </TableCell>
-                )}
               </TableRow>
             ))}
           </TableBody>
