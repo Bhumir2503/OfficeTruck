@@ -4,6 +4,7 @@ import {
   loadDriverPay,
   type ComplianceItem,
 } from "@/lib/driver-format"
+import { TAXABLE_WEIGHT_LBS } from "@/lib/schemas/truck"
 import type { TaxFiling, Truck, TruckLoad } from "@/lib/trucks"
 
 /** "Truck 12 · 2021 Freightliner Cascadia", or just the unit number. */
@@ -32,6 +33,17 @@ export function formatTaxYear(taxYear: number) {
 /** The return for a tax year is due by August 31 of its first year. */
 export function taxYearDueDate(taxYear: number) {
   return `${taxYear}-08-31`
+}
+
+/**
+ * Whether a truck owes the 2290: registered at 55,000 lbs or more. With no
+ * weight on file it's assumed to, so nothing quietly drops off the list.
+ */
+export function owes2290(truck: Pick<Truck, "registered_weight_lbs">) {
+  return (
+    truck.registered_weight_lbs === null ||
+    truck.registered_weight_lbs >= TAXABLE_WEIGHT_LBS
+  )
 }
 
 /** The filing for a tax year that lists this truck, if there is one. */
@@ -109,6 +121,79 @@ export function truckComplianceItems(
       expiry: expiry(truck.plate_expires_on, today),
     },
   ]
+}
+
+// ------------------------------------------------ Preventive maintenance ---
+
+/** How close counts as "due soon": two weeks, or 1,000 miles. */
+const PM_SOON_DAYS = 14
+const PM_SOON_MILES = 1000
+
+export type PmStatus = {
+  /** Whether a schedule is set at all. */
+  scheduled: boolean
+  /** The last preventive service, if any is logged. */
+  last: { done_on: string; odometer: number | null } | null
+  /** When it's next due by date, and at what mileage. */
+  dueOn: string | null
+  dueAtMiles: number | null
+  /** Miles to go from the last odometer reading; negative when past. */
+  milesLeft: number | null
+  state: "unscheduled" | "no_history" | "ok" | "soon" | "due"
+}
+
+function addDays(date: string, days: number) {
+  const next = new Date(`${date}T00:00:00Z`)
+  next.setUTCDate(next.getUTCDate() + days)
+  return next.toISOString().slice(0, 10)
+}
+
+/**
+ * When a truck's next preventive maintenance is due: so many days and/or
+ * miles after the last one logged, whichever comes first.
+ */
+export function pmStatus(
+  truck: Pick<Truck, "pm_interval_miles" | "pm_interval_days" | "odometer">,
+  last: { done_on: string; odometer: number | null } | null,
+  today: string
+): PmStatus {
+  const scheduled = !!(truck.pm_interval_miles || truck.pm_interval_days)
+  const base = {
+    scheduled,
+    last,
+    dueOn: null,
+    dueAtMiles: null,
+    milesLeft: null,
+  }
+  if (!scheduled) return { ...base, state: "unscheduled" }
+  if (!last) return { ...base, state: "no_history" }
+
+  const dueOn = truck.pm_interval_days
+    ? addDays(last.done_on, truck.pm_interval_days)
+    : null
+  const dueAtMiles =
+    truck.pm_interval_miles && last.odometer !== null
+      ? last.odometer + truck.pm_interval_miles
+      : null
+  const milesLeft =
+    dueAtMiles !== null && truck.odometer !== null
+      ? dueAtMiles - truck.odometer
+      : null
+  const daysLeft = dueOn ? expiry(dueOn, today) : null
+  const overdue =
+    daysLeft?.state === "expired" || (milesLeft !== null && milesLeft <= 0)
+  const soon =
+    (daysLeft !== null &&
+      daysLeft.state !== "missing" &&
+      daysLeft.days <= PM_SOON_DAYS) ||
+    (milesLeft !== null && milesLeft <= PM_SOON_MILES)
+  return {
+    ...base,
+    dueOn,
+    dueAtMiles,
+    milesLeft,
+    state: overdue ? "due" : soon ? "soon" : "ok",
+  }
 }
 
 // ---------------------------------------------------- Cost per mile -------

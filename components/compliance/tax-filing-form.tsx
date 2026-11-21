@@ -17,11 +17,14 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { TRUCK_STATUS_LABELS, taxFilingSchema } from "@/lib/schemas/truck"
-import { formatTaxYear, taxYearDueDate } from "@/lib/truck-format"
+import { formatTaxYear, owes2290, taxYearDueDate } from "@/lib/truck-format"
 import { formatDate } from "@/lib/driver-format"
 import type { TaxFiling, Truck } from "@/lib/trucks"
 
-type FilingTruck = Pick<Truck, "id" | "unit_number" | "vin" | "status">
+type FilingTruck = Pick<
+  Truck,
+  "id" | "unit_number" | "vin" | "status" | "registered_weight_lbs"
+>
 
 /** The fields for one tax year, reset whenever the year changes. */
 function FilingFields({
@@ -35,12 +38,14 @@ function FilingFields({
   filing: TaxFiling | null
   trucks: FilingTruck[]
 }) {
-  // A new return starts with every active truck ticked.
+  // A new return starts with every active truck that owes it ticked.
   const [selected, setSelected] = useState<Set<string>>(
     () =>
       new Set(
         filing?.truck_ids ??
-          trucks.filter((truck) => truck.status === "active").map((t) => t.id)
+          trucks
+            .filter((truck) => truck.status === "active" && owes2290(truck))
+            .map((t) => t.id)
       )
   )
   const [errors, setErrors] = useState<Record<string, string>>({})

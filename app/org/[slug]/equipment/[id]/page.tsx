@@ -7,19 +7,31 @@ import { TruckStatusBadge } from "@/components/trucks/truck-badges"
 import { TruckCostsBox } from "@/components/trucks/truck-costs-box"
 import { TruckDocuments } from "@/components/trucks/truck-documents"
 import { TruckForm } from "@/components/trucks/truck-form"
-import { TruckNextAction } from "@/components/trucks/truck-next-action"
+import { TruckMaintenance } from "@/components/trucks/truck-maintenance"
+import {
+  TRUCK_MAINTENANCE_ID,
+  TruckNextAction,
+} from "@/components/trucks/truck-next-action"
 import { TruckNotes } from "@/components/trucks/truck-notes"
 import { TruckStatusMenu } from "@/components/trucks/truck-status-menu"
+import { TruckSummary } from "@/components/trucks/truck-summary"
 import { buttonVariants } from "@/components/ui/button"
 import { today as getToday } from "@/lib/driver-format"
 import { getDriverOptions } from "@/lib/drivers"
 import { canManage, getOrganization } from "@/lib/organizations"
 import {
+  owes2290,
+  pmStatus,
   taxItem,
   truckComplianceItems,
   truckDescription,
 } from "@/lib/truck-format"
-import { getTaxFilings, getTruck, getTruckDocuments } from "@/lib/trucks"
+import {
+  getTaxFilings,
+  getTruck,
+  getTruckDocuments,
+  getTruckMaintenance,
+} from "@/lib/trucks"
 
 async function truckFor(
   params: PageProps<"/org/[slug]/equipment/[id]">["params"]
@@ -50,13 +62,21 @@ export default async function TruckPage({
   const today = getToday()
   const warn = truck.status === "active"
   // The This week and Loads cards are set aside for now.
-  const [filings, drivers, documents] = await Promise.all([
+  const [filings, drivers, documents, maintenance] = await Promise.all([
     getTaxFilings(organization.id),
     manager ? getDriverOptions(organization.id) : Promise.resolve([]),
     getTruckDocuments(organization.id, truck.id),
+    getTruckMaintenance(organization.id, truck.id),
   ])
   const items = truckComplianceItems(truck, today)
-  const tax = taxItem(truck.id, filings, today)
+  // Trucks under 55,000 lbs don't owe the 2290.
+  const tax = owes2290(truck) ? taxItem(truck.id, filings, today) : null
+  const lastPm = maintenance.find((entry) => entry.kind === "preventive")
+  const pm = pmStatus(
+    truck,
+    lastPm ? { done_on: lastPm.done_on, odometer: lastPm.odometer } : null,
+    today
+  )
   const description = truckDescription(truck)
 
   const subtitle = [
@@ -105,20 +125,42 @@ export default async function TruckPage({
             </p>
           </div>
           {manager && (
-            <TruckStatusMenu organizationId={organization.id} truck={truck} />
+            <TruckStatusMenu
+              organizationId={organization.id}
+              truck={truck}
+              listHref={base}
+            />
           )}
         </div>
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
           {/* The edit form's cards, then the truck's papers. */}
           <div className="flex min-w-0 flex-col gap-4">
-            {manager && (
+            {manager ? (
               <TruckForm
                 organizationId={organization.id}
                 base={base}
                 drivers={drivers}
                 truck={truck}
               />
+            ) : (
+              <TruckSummary
+                truck={truck}
+                items={items}
+                tax={tax}
+                warn={warn}
+                driversBase={`/org/${organization.slug}/drivers`}
+              />
             )}
+            <div id={TRUCK_MAINTENANCE_ID} className="scroll-mt-6">
+              <TruckMaintenance
+                organizationId={organization.id}
+                truckId={truck.id}
+                entries={maintenance}
+                pm={pm}
+                canManage={manager}
+                today={today}
+              />
+            </div>
             <TruckDocuments
               organizationId={organization.id}
               truckId={truck.id}
@@ -128,7 +170,7 @@ export default async function TruckPage({
                 annual_inspection:
                   items.find((item) => item.key === "annual_inspection")?.due ??
                   null,
-                form_2290: tax.due,
+                form_2290: tax?.due ?? null,
               }}
               canManage={manager}
               warn={warn}
@@ -140,8 +182,14 @@ export default async function TruckPage({
           <aside className="order-first flex flex-col gap-4 lg:sticky lg:top-6 lg:order-none lg:max-h-[calc(100svh-3rem)] lg:overflow-y-auto">
             <TruckNextAction
               status={truck.status}
+              outOfService={{
+                reason: truck.out_of_service_reason,
+                until: truck.out_of_service_until,
+              }}
               items={items}
               tax={tax}
+              pm={pm}
+              today={today}
               manager={manager}
               complianceHref={`/org/${organization.slug}/compliance`}
             />

@@ -16,6 +16,7 @@ import type { AppointmentType, LoadStatus } from "@/lib/schemas/load"
 import { createClient } from "@/lib/supabase/server"
 import {
   formatTaxYear,
+  owes2290,
   taxYearDueDate,
   taxYearOf,
   truckComplianceItems,
@@ -85,8 +86,9 @@ export const getAttention = cache(async (organizationId: string) => {
       path: "documents",
     })
   }
-  // The company's 2290, as the Compliance page shows it.
-  if (activeTrucks.length > 0) {
+  // The company's 2290, as the Compliance page shows it: only while some
+  // active truck is heavy enough to owe it.
+  if (activeTrucks.some(owes2290)) {
     const taxYear = taxYearOf(today)
     const filed = filings.some((filing) => filing.tax_year === taxYear)
     const year = filed ? taxYear + 1 : taxYear

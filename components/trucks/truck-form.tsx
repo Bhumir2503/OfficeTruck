@@ -113,7 +113,7 @@ export function TextField({
 }
 
 /** Uppercase letters and digits only, as you type: VINs and plates. */
-function upperAlnum(maxLength: number, allowSpaces = false) {
+export function upperAlnum(maxLength: number, allowSpaces = false) {
   return (event: React.ChangeEvent<HTMLInputElement>) => {
     const input = event.currentTarget
     const cleaned = input.value
@@ -132,7 +132,7 @@ function upperAlnum(maxLength: number, allowSpaces = false) {
 }
 
 /** Letters only, uppercased: "tx" → "TX". */
-function handleStateInput(event: React.ChangeEvent<HTMLInputElement>) {
+export function handleStateInput(event: React.ChangeEvent<HTMLInputElement>) {
   const input = event.currentTarget
   const cleaned = input.value
     .replace(/[^a-z]/gi, "")
@@ -144,9 +144,23 @@ function handleStateInput(event: React.ChangeEvent<HTMLInputElement>) {
 }
 
 /** Digits only, at most 4: the model year. */
-function handleYearInput(event: React.ChangeEvent<HTMLInputElement>) {
+export function handleYearInput(event: React.ChangeEvent<HTMLInputElement>) {
   const input = event.currentTarget
   const cleaned = input.value.replace(/\D/g, "").slice(0, 4)
+  if (cleaned !== input.value) {
+    input.value = cleaned
+  }
+}
+
+const thousands = new Intl.NumberFormat("en-US")
+/** 80000 → "80,000" for a number field, or nothing. */
+const number = (value: number | null | undefined) =>
+  value === null || value === undefined ? undefined : thousands.format(value)
+
+/** Digits and commas only, as you type: weights, miles, counts. */
+function handleNumberInput(event: React.ChangeEvent<HTMLInputElement>) {
+  const input = event.currentTarget
+  const cleaned = input.value.replace(/[^\d,]/g, "")
   if (cleaned !== input.value) {
     input.value = cleaned
   }
@@ -156,7 +170,7 @@ export const money = (value: number | null) =>
   value === null ? undefined : formatCurrency(Number(value).toFixed(2))
 
 /** Owned, leased or owner-operator, filling a hidden `ownership` input. */
-function OwnershipField({
+export function OwnershipField({
   defaultValue,
   errors,
   onUpdate,
@@ -219,7 +233,7 @@ function OwnershipField({
   )
 }
 
-type TruckFormCard = "details" | "plate" | "ownership"
+type TruckFormCard = "details" | "plate" | "ownership" | "maintenance"
 
 /** Every named field's value, to tell which cards have unsaved changes. */
 function snapshot(form: HTMLFormElement | null) {
@@ -509,6 +523,28 @@ export function TruckForm({
               errors={errors}
               className="sm:col-span-2"
             />
+            <TextField
+              name="registered_weight_lbs"
+              label="Registered weight"
+              inputMode="numeric"
+              placeholder="e.g. 80,000"
+              suffix="lbs"
+              defaultValue={number(truck?.registered_weight_lbs)}
+              errors={errors}
+              className="sm:col-span-3"
+              onChange={handleNumberInput}
+              hint="The 2290 applies at 55,000 lbs and up."
+            />
+            <TextField
+              name="axles"
+              label="Axles"
+              inputMode="numeric"
+              placeholder="e.g. 3"
+              defaultValue={truck?.axles ?? undefined}
+              errors={errors}
+              className="sm:col-span-3"
+              onChange={handleNumberInput}
+            />
           </SettingsCard>
 
           <SettingsCard
@@ -602,6 +638,57 @@ export function TruckForm({
               defaultValue={truck?.home_base ?? undefined}
               errors={errors}
               className="sm:col-span-6"
+            />
+          </SettingsCard>
+
+          <SettingsCard
+            title="Maintenance schedule"
+            data-card="maintenance"
+            footer={cardFooter("maintenance")}
+            contentClassName="grid gap-5 sm:grid-cols-6"
+          >
+            <TextField
+              name="odometer"
+              label="Odometer"
+              inputMode="numeric"
+              placeholder="e.g. 412,350"
+              suffix="miles"
+              defaultValue={number(truck?.odometer)}
+              errors={errors}
+              className="sm:col-span-3"
+              onChange={handleNumberInput}
+            />
+            <DateField
+              id={fieldId("odometer_on")}
+              name="odometer_on"
+              label="Read on"
+              defaultValue={truck?.odometer_on}
+              errors={errors.odometer_on}
+              onUpdate={onUpdate}
+              className="sm:col-span-3"
+            />
+            <TextField
+              name="pm_interval_miles"
+              label="Service every"
+              inputMode="numeric"
+              placeholder="e.g. 15,000"
+              suffix="miles"
+              defaultValue={number(truck?.pm_interval_miles)}
+              errors={errors}
+              className="sm:col-span-3"
+              onChange={handleNumberInput}
+            />
+            <TextField
+              name="pm_interval_days"
+              label="Or every"
+              inputMode="numeric"
+              placeholder="e.g. 90"
+              suffix="days"
+              defaultValue={truck?.pm_interval_days ?? undefined}
+              errors={errors}
+              className="sm:col-span-3"
+              onChange={handleNumberInput}
+              hint="Whichever comes first, counted from the last preventive service logged."
             />
           </SettingsCard>
         </div>

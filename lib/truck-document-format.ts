@@ -33,8 +33,17 @@ export const TRUCK_DOCUMENT_LABELS: Record<TruckDocumentKind, string> = {
  */
 export const DATED_ON_TRUCK: Partial<Record<TruckDocumentKind, string>> = {
   registration: "Set on the Plate and compliance card.",
-  annual_inspection: "Set on the Plate and compliance card.",
   form_2290: "Set by the 2290 filings on Compliance.",
+}
+
+/**
+ * Kinds whose upload asks for a different date than when it expires. The
+ * inspection report's date becomes the truck's last annual inspection.
+ */
+export const TRUCK_DOCUMENT_DATE_LABELS: Partial<
+  Record<TruckDocumentKind, string>
+> = {
+  annual_inspection: "Inspected on",
 }
 
 export function isTruckDocumentKind(value: string): value is TruckDocumentKind {

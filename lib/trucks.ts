@@ -1,6 +1,10 @@
 import type { PayType } from "@/lib/schemas/driver"
 import type { LoadStatus } from "@/lib/schemas/load"
-import type { Ownership, TruckStatus } from "@/lib/schemas/truck"
+import type {
+  MaintenanceKind,
+  Ownership,
+  TruckStatus,
+} from "@/lib/schemas/truck"
 import { type DriverNow, getLoadsNow } from "@/lib/drivers"
 import type { TruckDocumentKind } from "@/lib/truck-document-format"
 import { createClient } from "@/lib/supabase/server"
@@ -27,6 +31,18 @@ export type Truck = {
   monthly_payment: number | null
   monthly_insurance: number | null
   monthly_other_costs: number | null
+  /** Registered gross weight; the 2290 applies at 55,000 lbs and up. */
+  registered_weight_lbs: number | null
+  axles: number | null
+  /** The last odometer reading, and the day it was read. */
+  odometer: number | null
+  odometer_on: string | null
+  /** Preventive maintenance every so many miles and/or days. */
+  pm_interval_miles: number | null
+  pm_interval_days: number | null
+  /** While out of service: why, and when it's expected back. */
+  out_of_service_reason: string | null
+  out_of_service_until: string | null
   /** When the annual DOT inspection was last done; due a year later. */
   annual_inspection_on: string | null
   registration_expires_on: string | null
@@ -37,7 +53,7 @@ export type Truck = {
 }
 
 const TRUCK_COLUMNS =
-  "id, unit_number, vin, year, make, model, plate_number, plate_state, status, ownership, default_driver_id, default_driver:drivers!trucks_default_driver_fkey (id, full_name), home_base, monthly_payment, monthly_insurance, monthly_other_costs, annual_inspection_on, registration_expires_on, plate_expires_on, notes, created_at, updated_at"
+  "id, unit_number, vin, year, make, model, plate_number, plate_state, status, ownership, default_driver_id, default_driver:drivers!trucks_default_driver_fkey (id, full_name), home_base, monthly_payment, monthly_insurance, monthly_other_costs, registered_weight_lbs, axles, odometer, odometer_on, pm_interval_miles, pm_interval_days, out_of_service_reason, out_of_service_until, annual_inspection_on, registration_expires_on, plate_expires_on, notes, created_at, updated_at"
 
 /** Every truck in the organization, by unit number. */
 export async function getTrucks(organizationId: string): Promise<Truck[]> {
@@ -236,5 +252,37 @@ export async function getTruckDocuments(
     ...row,
     kind: row.kind as TruckDocumentKind,
     url: urls.get(path) ?? null,
+  }))
+}
+
+export type TruckMaintenance = {
+  id: string
+  done_on: string
+  kind: MaintenanceKind
+  description: string
+  odometer: number | null
+  cost: number | null
+  vendor: string | null
+}
+
+/** A truck's maintenance log, newest first. */
+export async function getTruckMaintenance(
+  organizationId: string,
+  truckId: string
+): Promise<TruckMaintenance[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("truck_maintenance")
+    .select("id, done_on, kind, description, odometer, cost, vendor")
+    .eq("organization_id", organizationId)
+    .eq("truck_id", truckId)
+    .order("done_on", { ascending: false })
+    .order("created_at", { ascending: false })
+  if (error) {
+    throw error
+  }
+  return (data as TruckMaintenance[]).map((row) => ({
+    ...row,
+    cost: row.cost === null ? null : Number(row.cost),
   }))
 }

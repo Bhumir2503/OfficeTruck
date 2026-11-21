@@ -33,8 +33,10 @@ import {
   formatTaxYear,
   taxYearDueDate,
   taxYearOf,
+  owes2290,
   truckComplianceItems,
 } from "@/lib/truck-format"
+import { getTrailers } from "@/lib/trailers"
 import { getTaxFilings, getTrucks } from "@/lib/trucks"
 
 export const metadata: Metadata = { title: "Compliance" }
@@ -63,9 +65,10 @@ export default async function CompliancePage({
 
   const slug = organization.slug
   const today = getToday()
-  const [drivers, trucks, filings, dqDates] = await Promise.all([
+  const [drivers, trucks, trailers, filings, dqDates] = await Promise.all([
     getDrivers(organization.id),
     getTrucks(organization.id),
+    getTrailers(organization.id),
     getTaxFilings(organization.id),
     getDqDatesByDriver(organization.id),
   ])
@@ -73,11 +76,14 @@ export default async function CompliancePage({
   const currentTaxYear = taxYearOf(today)
   const currentFiling = filings.find((f) => f.tax_year === currentTaxYear)
   const activeTrucks = trucks.filter((truck) => truck.status === "active")
-  const uncovered = activeTrucks.filter(
+  // Trucks under 55,000 lbs don't owe the 2290.
+  const taxable = activeTrucks.filter(owes2290)
+  const uncovered = taxable.filter(
     (truck) => !currentFiling?.truck_ids.includes(truck.id)
   )
 
-  // Everything late or due in the next 60 days, for active drivers and trucks.
+  // Everything late or due in the next 60 days, for active drivers, trucks
+  // and trailers.
   const upcoming: Upcoming[] = [
     ...drivers
       .filter((driver) => driver.status === "active")
@@ -95,6 +101,16 @@ export default async function CompliancePage({
         href: `/org/${slug}/equipment/${truck.id}`,
       }))
     ),
+    // Trailers have the same three dates as trucks.
+    ...trailers
+      .filter((trailer) => trailer.status === "active")
+      .flatMap((trailer) =>
+        truckComplianceItems(trailer, today).map((item) => ({
+          item,
+          owner: trailer.unit_number,
+          href: `/org/${slug}/trailers/${trailer.id}`,
+        }))
+      ),
   ]
   // The company's 2290: due this tax year until it's filed, then next year.
   if (activeTrucks.length > 0) {
@@ -122,7 +138,7 @@ export default async function CompliancePage({
       <div className="mx-auto flex max-w-5xl flex-col gap-6">
         <SettingsCard
           title="Due soon"
-          description="Anything late or due in the next 60 days, for active drivers and trucks."
+          description="Anything late or due in the next 60 days, for active drivers, trucks and trailers."
           contentClassName={due.length ? "px-0 pb-0" : undefined}
           footer={
             due.length > 0 && (
@@ -186,8 +202,10 @@ export default async function CompliancePage({
               hint={
                 activeTrucks.length === 0 ? (
                   "No active trucks yet."
+                ) : taxable.length === 0 ? (
+                  "No active truck is registered at 55,000 lbs or more, so none owes the 2290."
                 ) : uncovered.length === 0 ? (
-                  `All ${activeTrucks.length} active ${activeTrucks.length === 1 ? "truck is" : "trucks are"} on the ${formatTaxYear(currentTaxYear)} return.`
+                  `All ${taxable.length} active ${taxable.length === 1 ? "truck that owes it is" : "trucks that owe it are"} on the ${formatTaxYear(currentTaxYear)} return.`
                 ) : (
                   <span className="text-amber-700 dark:text-amber-300">
                     Not on the {formatTaxYear(currentTaxYear)} return:{" "}

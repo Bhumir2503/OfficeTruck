@@ -36,6 +36,7 @@ import {
   type TruckStatus,
 } from "@/lib/schemas/truck"
 import {
+  owes2290,
   taxItem,
   truckComplianceItems,
   truckDescription,
@@ -93,7 +94,8 @@ export function TrucksTable({
       trucks.map((truck) => {
         const items = [
           ...truckComplianceItems(truck, today),
-          taxItem(truck.id, filings, today),
+          // Trucks under 55,000 lbs don't owe the 2290.
+          ...(owes2290(truck) ? [taxItem(truck.id, filings, today)] : []),
         ]
         return {
           truck,

@@ -75,6 +75,8 @@ type Kinds<K extends string> = {
   labels: Record<K, string>
   /** Where a kind's date is set instead, when it isn't asked on upload. */
   datedElsewhere: Partial<Record<K, string>>
+  /** A different label for the date asked on upload, by kind. */
+  dateLabels?: Partial<Record<K, string>>
 }
 
 const sizeFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 })
@@ -190,7 +192,9 @@ function AddDocumentDialog<K extends string>({
             </Select>
           </Field>
           <Field>
-            <FieldLabel htmlFor="doc-expires">Expires</FieldLabel>
+            <FieldLabel htmlFor="doc-expires">
+              {kinds.dateLabels?.[kind] ?? "Expires"}
+            </FieldLabel>
             {datedElsewhere ? (
               <FieldDescription className="pt-1.5">
                 {datedElsewhere}

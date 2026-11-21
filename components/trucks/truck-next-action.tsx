@@ -7,11 +7,15 @@ import {
   formatDate,
   needsAction,
 } from "@/lib/driver-format"
-import { formatTaxYear } from "@/lib/truck-format"
+import { formatTaxYear, type PmStatus } from "@/lib/truck-format"
 import type { TruckStatus } from "@/lib/schemas/truck"
 
 /** The Plate and compliance card on the truck page, where its dates are edited. */
 export const TRUCK_DATES_ID = "dates"
+/** The Maintenance card on the truck page. */
+export const TRUCK_MAINTENANCE_ID = "maintenance"
+
+const miles = new Intl.NumberFormat("en-US")
 
 type Tax = ComplianceItem & { covered: boolean; taxYear: number }
 
@@ -57,19 +61,28 @@ function wording(item: ComplianceItem, taxYear: number) {
  */
 export function TruckNextAction({
   status,
+  outOfService,
   items,
   tax,
+  pm,
   manager,
   complianceHref,
+  today,
 }: {
   status: TruckStatus
+  /** Why it's out of service and when it's expected back. */
+  outOfService: { reason: string | null; until: string | null }
   items: ComplianceItem[]
-  tax: Tax
+  /** Null when the truck is too light to owe the 2290. */
+  tax: Tax | null
+  pm: PmStatus
   manager: boolean
   /** /org/<slug>/compliance, where 2290s are filed. */
   complianceHref: string
+  /** "YYYY-MM-DD" */
+  today: string
 }) {
-  const all = tax.covered ? items : [...items, tax]
+  const all = !tax || tax.covered ? items : [...items, tax]
   const pressing = all
     .filter(
       (item) =>
@@ -81,15 +94,56 @@ export function TruckNextAction({
   let detail: string
   let action: { href: string; label: string } | null = null
 
+  // Anything overdue on paper comes before maintenance; maintenance that's
+  // overdue comes before paperwork that's merely coming up.
+  const overduePaper = pressing.some((item) => item.expiry.state === "expired")
+  const pmFirst =
+    pm.state === "due" ? !overduePaper : pm.state === "soon" && !pressing.length
+
   if (status !== "active") {
     title = status === "out_of_service" ? "Out of service" : "Inactive"
-    detail =
-      "Its dates aren't tracked while it's off the road. Set it back to active to get warnings again."
+    if (
+      status === "out_of_service" &&
+      (outOfService.reason || outOfService.until)
+    ) {
+      const until = outOfService.until
+      detail = [
+        outOfService.reason,
+        until &&
+          (until < today
+            ? `Was due back ${formatDate(until)}.`
+            : `Back by ${formatDate(until)}.`),
+      ]
+        .filter(Boolean)
+        .map((part) => (part!.endsWith(".") ? part : `${part}.`))
+        .join(" ")
+    } else {
+      detail =
+        "Its dates aren't tracked while it's off the road. Set it back to active to get warnings again."
+    }
+  } else if (pmFirst) {
+    title =
+      pm.state === "due"
+        ? "Preventive maintenance overdue"
+        : "Service coming up"
+    detail = [
+      pm.dueOn && `By ${formatDate(pm.dueOn)}`,
+      pm.dueAtMiles !== null && `at ${miles.format(pm.dueAtMiles)} mi`,
+    ]
+      .filter(Boolean)
+      .join(" or ")
+    detail = detail ? `${detail}.` : ""
+    if (pm.milesLeft !== null) {
+      detail += ` ${pm.milesLeft <= 0 ? `${miles.format(-pm.milesLeft)} mi over` : `${miles.format(pm.milesLeft)} mi to go`} on the last reading.`
+    }
+    if (manager) {
+      action = { href: `#${TRUCK_MAINTENANCE_ID}`, label: "Log maintenance" }
+    }
   } else if (pressing.length) {
     const next = pressing[0]!
-    ;({ title, detail } = wording(next, tax.taxYear))
+    ;({ title, detail } = wording(next, tax?.taxYear ?? 0))
     if (next.key === "form_2290") {
-      detail = `Not on the ${formatTaxYear(tax.taxYear)} return. ${detail}`
+      detail = `Not on the ${formatTaxYear(tax!.taxYear)} return. ${detail}`
       action = { href: complianceHref, label: "Open Compliance" }
     } else if (manager) {
       action = { href: `#${TRUCK_DATES_ID}`, label: "Update dates" }

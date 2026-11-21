@@ -62,6 +62,30 @@ const monthly = z.preprocess(
     .nullable()
 )
 
+/**
+ * A whole number typed with or without commas ("80,000"), or blank, kept
+ * between `min` and `max`.
+ */
+function optionalInteger(min: number, max: number, message: string) {
+  return z.preprocess(
+    (value) => {
+      if (typeof value === "number") return String(value)
+      if (typeof value !== "string") return null
+      const cleaned = value.replace(/[,\s]/g, "")
+      return cleaned === "" ? null : cleaned
+    },
+    z
+      .string()
+      .regex(/^\d+$/, message)
+      .transform(Number)
+      .refine((n) => n >= min && n <= max, message)
+      .nullable()
+  )
+}
+
+/** The weight at and above which a truck owes the 2290. */
+export const TAXABLE_WEIGHT_LBS = 55000
+
 export const truckSchema = z.object({
   unit_number: z
     .string()
@@ -110,6 +134,20 @@ export const truckSchema = z.object({
     z.uuid("Choose a driver.").nullable()
   ),
   home_base: optional(max(200)),
+  registered_weight_lbs: optionalInteger(
+    1000,
+    200000,
+    "Enter the registered weight in pounds, e.g. 80,000."
+  ),
+  axles: optionalInteger(2, 9, "Enter 2 to 9 axles."),
+  odometer: optionalInteger(0, 5000000, "Enter the odometer in miles."),
+  odometer_on: optionalDate,
+  pm_interval_miles: optionalInteger(
+    1000,
+    100000,
+    "Enter 1,000 to 100,000 miles."
+  ),
+  pm_interval_days: optionalInteger(7, 730, "Enter 7 to 730 days."),
   monthly_payment: monthly,
   monthly_insurance: monthly,
   monthly_other_costs: monthly,
@@ -160,3 +198,49 @@ export const taxFilingSchema = z.object({
 })
 
 export type TaxFilingValues = z.output<typeof taxFilingSchema>
+
+/** Taking a truck out of service: why, and when it's expected back. */
+export const outOfServiceSchema = z.object({
+  reason: z.preprocess(
+    (value) =>
+      typeof value === "string" && value.trim() !== "" ? value.trim() : null,
+    max(200).nullable()
+  ),
+  until: optionalDate,
+})
+
+export const MAINTENANCE_KINDS = [
+  "preventive",
+  "repair",
+  "inspection",
+  "tires",
+  "other",
+] as const
+export type MaintenanceKind = (typeof MAINTENANCE_KINDS)[number]
+
+export const MAINTENANCE_LABELS: Record<MaintenanceKind, string> = {
+  preventive: "Preventive maintenance",
+  repair: "Repair",
+  inspection: "Inspection",
+  tires: "Tires",
+  other: "Other",
+}
+
+/** One entry in a truck's maintenance log. Keep in step with the table. */
+export const maintenanceSchema = z.object({
+  done_on: z
+    .string("Enter the date it was done.")
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Enter the date it was done."),
+  kind: z.enum(MAINTENANCE_KINDS, "Choose what kind of work it was."),
+  description: z
+    .string()
+    .trim()
+    .min(1, "Say what was done.")
+    .max(500, "Must be 500 characters or fewer."),
+  odometer: optionalInteger(0, 5000000, "Enter the odometer in miles."),
+  cost: monthly,
+  vendor: optional(max(120)),
+})
+
+export type MaintenanceInput = z.input<typeof maintenanceSchema>
+export type MaintenanceValues = z.output<typeof maintenanceSchema>

@@ -4,6 +4,7 @@ import { removeTruckDocument } from "@/app/org/[slug]/equipment/actions"
 import { DocumentsCard } from "@/components/documents-card"
 import {
   DATED_ON_TRUCK,
+  TRUCK_DOCUMENT_DATE_LABELS,
   TRUCK_DOCUMENT_KINDS,
   TRUCK_DOCUMENT_LABELS,
   type TruckDocumentKind,
@@ -15,6 +16,7 @@ const KINDS = {
   addable: TRUCK_DOCUMENT_KINDS,
   labels: TRUCK_DOCUMENT_LABELS,
   datedElsewhere: DATED_ON_TRUCK,
+  dateLabels: TRUCK_DOCUMENT_DATE_LABELS,
 }
 
 /**
@@ -47,9 +49,7 @@ export function TruckDocuments({
       kinds={KINDS}
       defaultKind="registration"
       dueFor={(doc) =>
-        doc.kind in DATED_ON_TRUCK
-          ? (dueByKind[doc.kind] ?? null)
-          : doc.expires_on
+        doc.kind in dueByKind ? (dueByKind[doc.kind] ?? null) : doc.expires_on
       }
       upload={(input) => uploadTruckDocument(organizationId, truckId, input)}
       remove={(documentId) =>

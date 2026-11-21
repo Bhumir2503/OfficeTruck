@@ -135,6 +135,12 @@ function TruckFormSkeleton({ editing = false }: { editing?: boolean }) {
         <FieldSkeleton label="Year" className="sm:col-span-2" />
         <FieldSkeleton label="Make" className="sm:col-span-2" />
         <FieldSkeleton label="Model" className="sm:col-span-2" />
+        <FieldSkeleton
+          label="Registered weight"
+          hint="The 2290 applies at 55,000 lbs and up."
+          className="sm:col-span-3"
+        />
+        <FieldSkeleton label="Axles" className="sm:col-span-3" />
       </SettingsCard>
       <SettingsCard
         title="Plate and compliance"
@@ -158,6 +164,20 @@ function TruckFormSkeleton({ editing = false }: { editing?: boolean }) {
       >
         <FieldSkeleton label="Ownership" className="sm:col-span-3" />
         <FieldSkeleton label="Default driver" className="sm:col-span-3" />
+        <FieldSkeleton label="Home base" className="sm:col-span-6" />
+      </SettingsCard>
+      <SettingsCard
+        title="Maintenance schedule"
+        contentClassName="grid gap-5 sm:grid-cols-6"
+      >
+        <FieldSkeleton label="Odometer" className="sm:col-span-3" />
+        <FieldSkeleton label="Read on" className="sm:col-span-3" />
+        <FieldSkeleton label="Service every" className="sm:col-span-3" />
+        <FieldSkeleton
+          label="Or every"
+          hint="Whichever comes first, counted from the last preventive service logged."
+          className="sm:col-span-3"
+        />
       </SettingsCard>
     </div>
   )
@@ -228,6 +248,16 @@ export function TruckDetailSkeleton() {
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
           <div className="flex min-w-0 flex-col gap-4">
             <TruckFormSkeleton editing />
+            <SettingsCard
+              title="Maintenance"
+              description={
+                // The description is a <p>, so an inline placeholder.
+                <span className="inline-block h-4 w-56 animate-pulse rounded-md bg-muted align-middle" />
+              }
+              action={<Skeleton className="h-8 w-36 rounded-md" />}
+            >
+              <Skeleton className="h-24 w-full" />
+            </SettingsCard>
             <SettingsCard
               title="Documents"
               description="Kept private to your organization."

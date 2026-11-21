@@ -8,12 +8,15 @@ import {
   isTruckDocumentKind,
 } from "@/lib/truck-document-format"
 import {
+  maintenanceSchema,
+  outOfServiceSchema,
   truckCostsSchema,
   truckDetailsSchema,
   truckSchema,
   truckStatusSchema,
   type TruckCostsValues,
   type TruckDetailsValues,
+  type MaintenanceValues,
   type TruckStatus,
   type TruckValues,
 } from "@/lib/schemas/truck"
@@ -101,10 +104,15 @@ export async function updateTruck(
   return update(organizationId, truckId, parsed.data)
 }
 
+/**
+ * Moves a truck between active, out of service and inactive. Out of service
+ * can say why and until when; any other status clears both.
+ */
 export async function setTruckStatus(
   organizationId: string,
   truckId: string,
-  status: TruckStatus
+  status: TruckStatus,
+  outOfService?: { reason: string; until: string }
 ): Promise<ActionResult> {
   if (!(await canManageTrucks(organizationId))) {
     return { error: NOT_ALLOWED }
@@ -114,14 +122,74 @@ export async function setTruckStatus(
   if (!parsed.success) {
     return { error: "Choose a valid status." }
   }
+  const details = outOfServiceSchema.safeParse(
+    outOfService ?? { reason: "", until: "" }
+  )
+  if (!details.success) {
+    return { error: details.error.issues[0]?.message ?? "Check the details." }
+  }
+  const parked = parsed.data === "out_of_service"
 
-  return update(organizationId, truckId, { status: parsed.data })
+  return update(organizationId, truckId, {
+    status: parsed.data,
+    out_of_service_reason: parked ? details.data.reason : null,
+    out_of_service_until: parked ? details.data.until : null,
+  })
+}
+
+/**
+ * Deletes a truck added by mistake, with its documents and maintenance.
+ * One that has run loads or is on a 2290 is refused by the database; those
+ * are marked inactive instead, so their history stays.
+ */
+export async function deleteTruck(
+  organizationId: string,
+  truckId: string
+): Promise<ActionResult> {
+  if (!(await canManageTrucks(organizationId))) {
+    return { error: NOT_ALLOWED }
+  }
+  const supabase = await createClient()
+  const { data: files } = await supabase
+    .from("truck_documents")
+    .select("path")
+    .eq("organization_id", organizationId)
+    .eq("truck_id", truckId)
+
+  const { data, error } = await supabase
+    .from("trucks")
+    .delete()
+    .eq("organization_id", organizationId)
+    .eq("id", truckId)
+    .select("id")
+  if (error) {
+    return {
+      error:
+        error.code === "23503"
+          ? "This truck has loads or is on a 2290, so it can't be deleted. Mark it inactive instead."
+          : error.message,
+    }
+  }
+  if (!data.length) {
+    return { error: "That truck doesn't exist anymore." }
+  }
+  // Best effort: the records went with the truck; leftover files are harmless.
+  if (files?.length) {
+    await supabase.storage
+      .from("truck-documents")
+      .remove(files.map((file) => file.path))
+  }
+  return { ok: true }
 }
 
 async function update(
   organizationId: string,
   truckId: string,
-  values: Partial<TruckValues> & { status?: TruckStatus }
+  values: Partial<TruckValues> & {
+    status?: TruckStatus
+    out_of_service_reason?: string | null
+    out_of_service_until?: string | null
+  }
 ): Promise<ActionResult> {
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -224,8 +292,13 @@ export async function addTruckDocument(
     truck_id: truckId,
     kind: input.kind,
     title: title ? title.slice(0, 200) : null,
-    // Registration, inspection and 2290 dates are kept on the truck.
-    expires_on: (!DATED_ON_TRUCK[input.kind] && input.expires_on) || null,
+    // Registration and 2290 dates are kept on the truck and its filings;
+    // the inspection report's date is when it was done, not an expiry.
+    expires_on:
+      (!DATED_ON_TRUCK[input.kind] &&
+        input.kind !== "annual_inspection" &&
+        input.expires_on) ||
+      null,
     path: input.path,
     file_name: input.file_name.trim().slice(0, 200) || "Document",
     content_type: input.content_type,
@@ -240,6 +313,18 @@ export async function addTruckDocument(
             ? "That file couldn't be added. Try uploading it again."
             : error.message,
     }
+  }
+  // An inspection report dated later than the truck's last inspection
+  // moves that date up, so the next one is due a year from it.
+  if (input.kind === "annual_inspection" && input.expires_on) {
+    await supabase
+      .from("trucks")
+      .update({ annual_inspection_on: input.expires_on })
+      .eq("organization_id", organizationId)
+      .eq("id", truckId)
+      .or(
+        `annual_inspection_on.is.null,annual_inspection_on.lt.${input.expires_on}`
+      )
   }
   refresh()
   return { ok: true }
@@ -272,6 +357,87 @@ export async function removeTruckDocument(
   await supabase.storage
     .from("truck-documents")
     .remove(data.map((row) => row.path))
+  refresh()
+  return { ok: true }
+}
+
+/**
+ * Logs a service, repair or inspection. A higher odometer reading than the
+ * truck's own moves the truck's reading up, for maintenance reminders.
+ */
+export async function addTruckMaintenance(
+  organizationId: string,
+  truckId: string,
+  input: MaintenanceValues
+): Promise<ActionResult> {
+  if (!(await canManageTrucks(organizationId))) {
+    return { error: NOT_ALLOWED }
+  }
+  const parsed = maintenanceSchema.safeParse(input)
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Check the entry." }
+  }
+  const entry = parsed.data
+
+  const supabase = await createClient()
+  const { error } = await supabase.from("truck_maintenance").insert({
+    organization_id: organizationId,
+    truck_id: truckId,
+    ...entry,
+  })
+  if (error) {
+    return {
+      error:
+        error.code === "23503"
+          ? "That truck doesn't exist anymore."
+          : error.message,
+    }
+  }
+
+  if (entry.odometer !== null) {
+    const { data: truck } = await supabase
+      .from("trucks")
+      .select("odometer")
+      .eq("organization_id", organizationId)
+      .eq("id", truckId)
+      .maybeSingle()
+    // Odometers only go up, so only a higher reading replaces it.
+    if (truck && (truck.odometer === null || entry.odometer > truck.odometer)) {
+      // Best effort: the entry is saved either way.
+      await supabase
+        .from("trucks")
+        .update({ odometer: entry.odometer, odometer_on: entry.done_on })
+        .eq("organization_id", organizationId)
+        .eq("id", truckId)
+    }
+  }
+  refresh()
+  return { ok: true }
+}
+
+/** Removes one entry from a truck's maintenance log. */
+export async function removeTruckMaintenance(
+  organizationId: string,
+  truckId: string,
+  id: string
+): Promise<ActionResult> {
+  if (!(await canManageTrucks(organizationId))) {
+    return { error: NOT_ALLOWED }
+  }
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("truck_maintenance")
+    .delete()
+    .eq("organization_id", organizationId)
+    .eq("truck_id", truckId)
+    .eq("id", id)
+    .select("id")
+  if (error) {
+    return { error: error.message }
+  }
+  if (!data.length) {
+    return { error: "That entry is already gone." }
+  }
   refresh()
   return { ok: true }
 }
