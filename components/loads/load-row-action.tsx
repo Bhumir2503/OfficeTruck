@@ -319,6 +319,10 @@ function SendForm({
   const [pending, setPending] = useState(false)
   const driver = context.drivers.find((d) => d.id === load.driver_id)
   const name = driver?.full_name ?? load.driver?.full_name ?? "the driver"
+  // Paid a percentage of the load, they're owed what it paid, so the rate
+  // goes in whatever the company setting.
+  const percentPay =
+    (load.driver_pay_type ?? load.driver?.pay_type) === "percent"
 
   async function send() {
     setPending(true)
@@ -372,7 +376,9 @@ function SendForm({
           Sends the stops, appointments, pickup numbers and rate con.{" "}
           {context.shareRate
             ? "Includes the rate."
-            : "The rate isn't included."}{" "}
+            : percentPay
+              ? "Includes the rate, since they're paid a percentage of the load."
+              : "The rate isn't included."}{" "}
           The load moves to dispatched.
         </p>
       </div>
