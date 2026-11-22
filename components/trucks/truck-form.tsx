@@ -331,7 +331,6 @@ export function TruckForm({
         name="monthly_payment"
         label="Payment or lease"
         prefix="$"
-        suffix="/ month"
         inputMode="decimal"
         placeholder="0.00"
         defaultValue={money(truck?.monthly_payment ?? null)}
@@ -345,7 +344,6 @@ export function TruckForm({
         name="monthly_insurance"
         label="Insurance"
         prefix="$"
-        suffix="/ month"
         inputMode="decimal"
         placeholder="0.00"
         defaultValue={money(truck?.monthly_insurance ?? null)}
@@ -359,7 +357,6 @@ export function TruckForm({
         name="monthly_other_costs"
         label="Other fixed costs"
         prefix="$"
-        suffix="/ month"
         inputMode="decimal"
         placeholder="0.00"
         defaultValue={money(truck?.monthly_other_costs ?? null)}
@@ -736,12 +733,13 @@ export function TruckForm({
               // On the truck page these save from their own cards.
               <>
                 <SettingsCard
-                  title="Fixed costs"
+                  title="Monthly fixed costs"
                   id={CARD_IDS.costs}
-                  className="scroll-mt-6"
-                  contentClassName="grid gap-5 sm:grid-cols-6"
+                  className="@container scroll-mt-6"
+                  // On one line once the card is wide enough for the amounts; stacked on a phone.
+                  contentClassName="grid gap-5 @md:grid-cols-3 @md:items-end"
                 >
-                  {costFields("sm:col-span-2")}
+                  {costFields("")}
                 </SettingsCard>
                 <SettingsCard
                   title="Notes"

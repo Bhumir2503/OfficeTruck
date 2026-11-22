@@ -97,8 +97,10 @@ export function TruckCostsBox({
       autoComplete="off"
     >
       <SettingsCard
-        title="Fixed costs"
-        contentClassName="grid gap-5 sm:grid-cols-6"
+        title="Monthly fixed costs"
+        className="@container"
+        // On one line once the card is wide enough for the amounts; stacked on a phone.
+        contentClassName="grid gap-5 @md:grid-cols-3 @md:items-end"
         footer={
           <SettingsCardFooter
             hint={error && <span className="text-destructive">{error}</span>}
@@ -116,12 +118,10 @@ export function TruckCostsBox({
               name={name}
               label={label}
               prefix="$"
-              suffix="/ month"
               inputMode="decimal"
               placeholder="0.00"
               defaultValue={money(truck[name])}
               errors={{}}
-              className="sm:col-span-2"
               onChange={handleCurrencyInput}
               onKeyDown={handleCurrencyKeyDown}
               onBlur={handleCurrencyBlur}
