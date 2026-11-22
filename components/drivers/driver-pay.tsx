@@ -19,6 +19,7 @@ import {
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { DatePicker } from "@/components/ui/date-picker"
 import { EXPENSE_LABELS, type ExpenseKind } from "@/lib/load-expense-format"
 import { formatRate, formatStopDate } from "@/lib/load-format"
 import { formatWeek } from "@/lib/settlement-format"
@@ -248,12 +249,12 @@ export function DriverPay({
           ) : (
             status === "to_pay" && (
               <>
-                <Input
-                  type="date"
+                <DatePicker
                   aria-label="Paid on"
-                  className="h-8 w-36"
+                  className="w-40"
+                  required
                   value={paidOn}
-                  onChange={(event) => setPaidOn(event.target.value)}
+                  onChange={setPaidOn}
                 />
                 <Button
                   size="sm"

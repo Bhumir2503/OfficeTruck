@@ -1,5 +1,6 @@
 "use client"
 
+import { cn } from "cn"
 import { CornerDownLeft } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
@@ -243,7 +244,7 @@ const CARD_IDS = {
   notes: "notes-card",
 }
 
-type TruckFormCard = "details" | "plate" | "ownership" | "maintenance"
+export type TruckFormCard = "details" | "plate" | "ownership" | "maintenance"
 
 /** Every named field's value, to tell which cards have unsaved changes. */
 function snapshot(form: HTMLFormElement | null) {
@@ -277,15 +278,22 @@ export function TruckForm({
   base,
   drivers,
   truck,
+  cards,
 }: {
   organizationId: string
   /** /org/<slug>/equipment */
   base: string
   drivers: DriverOption[]
   truck?: Truck
+  /**
+   * Editing on one of the truck page's tabs: the cards to show. The others
+   * stay in the form, hidden, so a save sends every field and blanks none.
+   */
+  cards?: TruckFormCard[]
 }) {
   const router = useRouter()
   const formRef = useRef<HTMLFormElement>(null)
+  const shown = (card: TruckFormCard) => !cards || cards.includes(card)
   // The values as loaded (or last saved), to tell which cards have changes.
   const baseline = useRef<Map<string, string> | null>(null)
   // Set by a save, so the baseline is retaken once saving has finished.
@@ -509,7 +517,7 @@ export function TruckForm({
             <SettingsCard
               title={truck ? "Truck details" : "Truck"}
               id={CARD_IDS.details}
-              className="scroll-mt-6"
+              className={cn("scroll-mt-6", shown("details") || "hidden")}
               data-card="details"
               footer={cardFooter("details")}
               contentClassName="grid gap-5 sm:grid-cols-6"
@@ -584,7 +592,7 @@ export function TruckForm({
             <SettingsCard
               title="Plate and compliance"
               id={TRUCK_DATES_ID}
-              className="scroll-mt-6"
+              className={cn("scroll-mt-6", shown("plate") || "hidden")}
               data-card="plate"
               footer={cardFooter("plate")}
               contentClassName="grid gap-5 sm:grid-cols-6"
@@ -640,7 +648,7 @@ export function TruckForm({
             <SettingsCard
               title="Ownership and driver"
               id={CARD_IDS.ownership}
-              className="scroll-mt-6"
+              className={cn("scroll-mt-6", shown("ownership") || "hidden")}
               data-card="ownership"
               footer={cardFooter("ownership")}
               contentClassName="grid gap-5 sm:grid-cols-6"
@@ -680,7 +688,7 @@ export function TruckForm({
             <SettingsCard
               title="Maintenance schedule"
               id={CARD_IDS.schedule}
-              className="scroll-mt-6"
+              className={cn("scroll-mt-6", shown("maintenance") || "hidden")}
               data-card="maintenance"
               footer={cardFooter("maintenance")}
               contentClassName="grid gap-5 sm:grid-cols-6"

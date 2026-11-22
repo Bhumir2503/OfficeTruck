@@ -28,6 +28,7 @@ import {
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { DatePicker } from "@/components/ui/date-picker"
 import type { ChecklistDocument, ChecklistEntry } from "@/lib/dq/service"
 
 /** What an item's rule asks for when it's completed. */
@@ -174,12 +175,12 @@ function ReviewDialog({
               <FieldLabel htmlFor={`issue-${document.id}`}>
                 Date on the document
               </FieldLabel>
-              <Input
+              <DatePicker
                 id={`issue-${document.id}`}
-                type="date"
                 required
                 value={issue}
-                onChange={(e) => setIssue(e.target.value)}
+                onChange={setIssue}
+                years={{ back: 10, ahead: 1 }}
               />
               <FieldDescription>
                 When it was issued, run or signed.
@@ -189,12 +190,12 @@ function ReviewDialog({
               <FieldLabel htmlFor={`expiry-${document.id}`}>
                 Expires{rules.needsExpiry ? "" : " (if it does)"}
               </FieldLabel>
-              <Input
+              <DatePicker
                 id={`expiry-${document.id}`}
-                type="date"
                 required={rules.needsExpiry}
                 value={expiry}
-                onChange={(e) => setExpiry(e.target.value)}
+                onChange={setExpiry}
+                label="Expires"
               />
               {rules.needsExpiry && (
                 <FieldDescription>
@@ -336,12 +337,11 @@ function SignDialog({
                   <FieldLabel htmlFor={`verified-${item.id}`}>
                     Checked on
                   </FieldLabel>
-                  <Input
+                  <DatePicker
                     id={`verified-${item.id}`}
-                    type="date"
                     required
                     value={verifiedOn}
-                    onChange={(e) => setVerifiedOn(e.target.value)}
+                    onChange={setVerifiedOn}
                   />
                 </Field>
               </div>

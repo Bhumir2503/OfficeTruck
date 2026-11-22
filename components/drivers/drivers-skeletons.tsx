@@ -6,6 +6,7 @@ import {
   SettingsCardFooter,
 } from "@/components/settings/settings-card"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
+import { TabBarSkeleton } from "@/components/tab-skeletons"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
@@ -130,7 +131,7 @@ function FieldSkeleton({
 }
 
 /** The driver form's cards. `editing` matches the detail page's version. */
-function DriverFormSkeleton({ editing = false }: { editing?: boolean }) {
+export function DriverFormSkeleton({ editing = false }: { editing?: boolean }) {
   return (
     <div className="flex flex-col gap-6">
       <SettingsCard
@@ -182,22 +183,6 @@ function DriverFormSkeleton({ editing = false }: { editing?: boolean }) {
           className="sm:col-span-6"
         />
       </SettingsCard>
-      <SettingsCard
-        title="Annual checks"
-        description="Each is due again a year after the last one. You'll see a warning 60, 30 and 7 days before."
-        contentClassName="grid gap-5 sm:grid-cols-6"
-      >
-        <FieldSkeleton
-          label="Last annual review"
-          hint="When you last reviewed their driving record (MVR)."
-          className="sm:col-span-3"
-        />
-        <FieldSkeleton
-          label="Last Clearinghouse query"
-          hint="When you last ran their limited query."
-          className="sm:col-span-3"
-        />
-      </SettingsCard>
     </div>
   )
 }
@@ -231,7 +216,6 @@ export function NewDriverSkeleton() {
                 { label: "Driver" },
                 { label: "CDL" },
                 { label: "Medical card" },
-                { label: "Annual checks" },
                 { label: "Pay" },
                 { label: "Notes", optional: true },
               ]}
@@ -260,17 +244,12 @@ export function DriverDetailSkeleton() {
           </div>
           <Line className="w-64" />
         </div>
+        {/* The tabs: Overview, Payment, Loads, Documents, Qualification file. */}
+        <TabBarSkeleton widths={["w-20", "w-18", "w-14", "w-24", "w-32"]} />
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
-          {/* Same order as the page: details and the CDL first. */}
+          {/* The Overview tab, the one a driver opens on. */}
           <div className="flex min-w-0 flex-col gap-4">
             <DriverFormSkeleton editing />
-            <SettingsCard
-              title="Documents"
-              description="CDL, medical card, driving record and other papers. Photos or PDFs, kept private to your organization."
-            >
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="mt-2 h-10 w-full" />
-            </SettingsCard>
           </div>
           <aside className="order-first flex flex-col gap-4 lg:order-none">
             <section className="overflow-hidden rounded-xl border bg-card px-5 pt-4 pb-5 shadow-xs">
@@ -282,9 +261,12 @@ export function DriverDetailSkeleton() {
               <Skeleton className="mt-4 h-10 w-full rounded-md" />
             </section>
             <section className="overflow-hidden rounded-xl border bg-card px-5 pt-4 pb-5 shadow-xs">
-              <h4 className="font-semibold">Pay</h4>
-              <p className="mt-3 text-sm font-medium">Paid</p>
-              <Skeleton className="mt-2 h-9 w-full rounded-md" />
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="font-semibold">Qualification file</h4>
+                <Skeleton className="h-5 w-20 rounded-full" />
+              </div>
+              <Line className="mt-3 w-32" />
+              <Skeleton className="mt-3 h-9 w-full rounded-md" />
             </section>
             <section className="overflow-hidden rounded-xl border bg-card px-5 pt-4 pb-5 shadow-xs">
               <h4 className="font-semibold">Notes</h4>

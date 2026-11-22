@@ -12,6 +12,22 @@ import { LoadHistoryCard } from "@/components/loads/load-history-card"
 import { LoadSidePanel } from "@/components/loads/load-side-panel"
 import { LoadStatusMenu } from "@/components/loads/load-status-menu"
 import { LoadStopsCard } from "@/components/loads/load-stops-card"
+import {
+  LOAD_TAB_LABELS,
+  LOAD_TABS,
+  loadTabHref,
+  parseLoadTab,
+} from "@/components/loads/load-tabs"
+import {
+  PageTabBar,
+  PageTabPanel,
+  PageTabsProvider,
+} from "@/components/page-tabs"
+import {
+  FieldsCardSkeleton,
+  TableCardSkeleton,
+  TabSkeleton,
+} from "@/components/tab-skeletons"
 import { buttonVariants } from "@/components/ui/button"
 import { appUrl } from "@/lib/app-url"
 import { getBrokerOptions } from "@/lib/brokers"
@@ -41,6 +57,7 @@ export async function generateMetadata({
 
 export default async function LoadPage({
   params,
+  searchParams,
 }: PageProps<"/org/[slug]/loads/[id]">) {
   const { organization, detail } = await loadFor(params)
   if (!organization || !detail) {
@@ -49,6 +66,8 @@ export default async function LoadPage({
   const { load, stops, charges, versions } = detail
 
   const base = `/org/${organization.slug}/loads`
+  const loadHref = `${base}/${load.id}`
+  const tab = parseLoadTab((await searchParams).tab)
   const [
     drivers,
     trucks,
@@ -86,107 +105,169 @@ export default async function LoadPage({
           <ArrowLeft />
           All loads
         </Link>
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
-          <div className="flex min-w-0 flex-col gap-6">
-            <LoadDetailsCard
-              organizationId={organization.id}
-              load={load}
-              description={
-                load.broker ? (
-                  <Link
-                    href={`/org/${organization.slug}/customers/${load.broker.id}`}
-                    className="hover:underline"
-                  >
-                    {load.broker_name}
-                  </Link>
-                ) : (
-                  load.broker_name
-                )
-              }
-              statusMenu={
-                <LoadStatusMenu organizationId={organization.id} load={load} />
-              }
-              notice={
-                load.status === "cancelled" && load.cancel_reason ? (
-                  <p className="mb-5 rounded-lg bg-muted px-4 py-3 text-sm">
-                    <span className="font-medium">Cancelled:</span>{" "}
-                    {load.cancel_reason}
-                  </p>
-                ) : null
-              }
-            />
-            <LoadBrokerForm
-              organizationId={organization.id}
-              load={load}
-              brokers={brokers}
-              brokersHref={`/org/${organization.slug}/customers`}
-              factoringName={factoring?.name ?? null}
-            />
-            <LoadStopsCard
-              organizationId={organization.id}
-              load={load}
-              stops={stops}
-              billedNotes={charges
-                .filter(
-                  (charge) =>
-                    charge.kind === "detention" && charge.description !== null
-                )
-                .map((charge) => charge.description as string)}
-            />
-            <LoadChargesCard
-              organizationId={organization.id}
-              load={load}
-              charges={charges}
-              versions={versions}
-            />
-            <LoadAssignmentForm
-              // Remount when the assignment changes elsewhere (unassigning), so
-              // the pickers don't keep the old truck and driver.
-              key={`${load.truck_id ?? ""}:${load.driver_id ?? ""}`}
-              organizationId={organization.id}
-              load={load}
-              drivers={drivers}
-              driversBase={`/org/${organization.slug}/drivers`}
-              trucks={trucks}
-              trucksBase={`/org/${organization.slug}/equipment`}
-              loadsBase={base}
-              dispatch={dispatch}
-              link={link}
-            />
-            <LoadExpensesCard
-              organizationId={organization.id}
-              loadId={load.id}
-              expenses={expenses}
-              hasLumperCharge={charges.some(
-                (charge) => charge.kind === "lumper"
-              )}
-            />
-          </div>
-          {/* Beside the cards, what's next stays in view; on a phone it
+        <PageTabsProvider>
+          <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
+            <div className="flex min-w-0 flex-col gap-6">
+              <LoadDetailsCard
+                organizationId={organization.id}
+                load={load}
+                description={
+                  load.broker ? (
+                    <Link
+                      href={`/org/${organization.slug}/customers/${load.broker.id}`}
+                      className="hover:underline"
+                    >
+                      {load.broker_name}
+                    </Link>
+                  ) : (
+                    load.broker_name
+                  )
+                }
+                statusMenu={
+                  <LoadStatusMenu
+                    organizationId={organization.id}
+                    load={load}
+                  />
+                }
+                notice={
+                  load.status === "cancelled" && load.cancel_reason ? (
+                    <p className="mb-5 rounded-lg bg-muted px-4 py-3 text-sm">
+                      <span className="font-medium">Cancelled:</span>{" "}
+                      {load.cancel_reason}
+                    </p>
+                  ) : null
+                }
+              />
+              <PageTabBar
+                label="Load sections"
+                active={tab}
+                tabs={LOAD_TABS.map((t) => ({
+                  key: t,
+                  label: LOAD_TAB_LABELS[t],
+                  href: loadTabHref(loadHref, t),
+                }))}
+              />
+              <PageTabPanel
+                active={tab}
+                className="flex min-w-0 flex-col gap-6"
+                skeletons={LOAD_TAB_SKELETONS}
+              >
+                {tab === "customer" && (
+                  <LoadBrokerForm
+                    organizationId={organization.id}
+                    load={load}
+                    brokers={brokers}
+                    brokersHref={`/org/${organization.slug}/customers`}
+                    factoringName={factoring?.name ?? null}
+                  />
+                )}
+                {tab === "stops" && (
+                  <LoadStopsCard
+                    organizationId={organization.id}
+                    load={load}
+                    stops={stops}
+                    billedNotes={charges
+                      .filter(
+                        (charge) =>
+                          charge.kind === "detention" &&
+                          charge.description !== null
+                      )
+                      .map((charge) => charge.description as string)}
+                  />
+                )}
+                {tab === "charges" && (
+                  <LoadChargesCard
+                    organizationId={organization.id}
+                    load={load}
+                    charges={charges}
+                    versions={versions}
+                  />
+                )}
+                {tab === "assignment" && (
+                  <LoadAssignmentForm
+                    // Remount when the assignment changes elsewhere (unassigning), so
+                    // the pickers don't keep the old truck and driver.
+                    key={`${load.truck_id ?? ""}:${load.driver_id ?? ""}`}
+                    organizationId={organization.id}
+                    load={load}
+                    drivers={drivers}
+                    driversBase={`/org/${organization.slug}/drivers`}
+                    trucks={trucks}
+                    trucksBase={`/org/${organization.slug}/equipment`}
+                    loadsBase={base}
+                    dispatch={dispatch}
+                    link={link}
+                  />
+                )}
+                {tab === "expenses" && (
+                  <LoadExpensesCard
+                    organizationId={organization.id}
+                    loadId={load.id}
+                    expenses={expenses}
+                    hasLumperCharge={charges.some(
+                      (charge) => charge.kind === "lumper"
+                    )}
+                  />
+                )}
+                {tab === "history" && <LoadHistoryCard events={events} />}
+              </PageTabPanel>
+            </div>
+            {/* Beside the cards, what's next stays in view; on a phone it
               comes after them. */}
-          <aside className="flex flex-col gap-6 lg:sticky lg:top-6 lg:row-span-2 lg:max-h-[calc(100svh-3rem)] lg:overflow-y-auto">
-            <LoadSidePanel
-              organizationId={organization.id}
-              load={load}
-              charges={charges}
-              documents={documents}
-              expenses={expenses}
-              dispatch={dispatch}
-              trucks={trucks}
-              drivers={drivers}
-              trucksBase={`/org/${organization.slug}/equipment`}
-              driversBase={`/org/${organization.slug}/drivers`}
-              loadsBase={base}
-              invoice={invoice}
-              invoicesBase={`/org/${organization.slug}/invoices`}
-            />
-          </aside>
-          {/* Under the cards on a wide screen; last of all on a phone. */}
-          <div className="min-w-0">
-            <LoadHistoryCard events={events} />
+            <aside className="flex flex-col gap-6 lg:sticky lg:top-6 lg:max-h-[calc(100svh-3rem)] lg:overflow-y-auto">
+              <LoadSidePanel
+                organizationId={organization.id}
+                load={load}
+                charges={charges}
+                documents={documents}
+                expenses={expenses}
+                dispatch={dispatch}
+                trucks={trucks}
+                drivers={drivers}
+                trucksBase={`/org/${organization.slug}/equipment`}
+                driversBase={`/org/${organization.slug}/drivers`}
+                loadsBase={base}
+                invoice={invoice}
+                invoicesBase={`/org/${organization.slug}/invoices`}
+              />
+            </aside>
           </div>
-        </div>
+        </PageTabsProvider>
       </div>
     </div>
   )
+}
+
+/** Each tab's cards while it loads. */
+const LOAD_TAB_SKELETONS = {
+  customer: (
+    <TabSkeleton>
+      <FieldsCardSkeleton title="Customer" fields={2} />
+    </TabSkeleton>
+  ),
+  stops: (
+    <TabSkeleton>
+      <TableCardSkeleton title="Stops" rows={2} />
+    </TabSkeleton>
+  ),
+  charges: (
+    <TabSkeleton>
+      <TableCardSkeleton title="Charges" rows={3} />
+    </TabSkeleton>
+  ),
+  assignment: (
+    <TabSkeleton>
+      <FieldsCardSkeleton title="Assignment" fields={2} />
+    </TabSkeleton>
+  ),
+  expenses: (
+    <TabSkeleton>
+      <TableCardSkeleton title="Expenses" rows={2} />
+    </TabSkeleton>
+  ),
+  history: (
+    <TabSkeleton>
+      <TableCardSkeleton title="History" rows={4} />
+    </TabSkeleton>
+  ),
 }

@@ -177,8 +177,6 @@ export function complianceItems(
   driver: {
     cdl_expires_on: string | null
     medical_card_expires_on?: string | null
-    last_annual_review_on?: string | null
-    last_clearinghouse_query_on?: string | null
   },
   dq: DqComplianceDates | undefined,
   today: string
@@ -197,15 +195,6 @@ export function complianceItems(
     last: date?.last ?? null,
     expiry: expiry(date?.due ?? null, today),
   })
-  const yearly = (
-    key: string,
-    label: string,
-    last: string | null | undefined
-  ): ComplianceItem | null => {
-    if (!last) return null
-    const due = addYear(last)
-    return { key, label, kind: "due", due, last, expiry: expiry(due, today) }
-  }
   return [
     {
       key: "cdl",
@@ -224,20 +213,9 @@ export function complianceItems(
           expiry: expiry(driver.medical_card_expires_on, today),
         }
       : fromFile("medical_card", "Medical card", dq?.medical, "expires"),
-    // The yearly checks from the driver, else the qualification file.
-    yearly("annual_review", "Annual review", driver.last_annual_review_on) ??
-      fromFile("annual_review", "Annual review", dq?.annualReview, "due"),
-    yearly(
-      "clearinghouse",
-      "Clearinghouse query",
-      driver.last_clearinghouse_query_on
-    ) ??
-      fromFile(
-        "clearinghouse",
-        "Clearinghouse query",
-        dq?.clearinghouse,
-        "due"
-      ),
+    // The yearly checks are recorded in the qualification file.
+    fromFile("annual_review", "Annual review", dq?.annualReview, "due"),
+    fromFile("clearinghouse", "Clearinghouse query", dq?.clearinghouse, "due"),
   ]
 }
 
@@ -410,14 +388,15 @@ export type DriverStep = {
 }
 
 /** The driver page cards a step can send you to. */
-export type DriverCardTarget = "details" | "cdl" | "medical" | "annual"
+export type DriverCardTarget = "details" | "cdl" | "medical" | "file"
 
 /** The driver page's card ids, for links that jump to them. */
 export const DRIVER_CARD_IDS: Record<DriverCardTarget, string> = {
   details: "driver-details",
   cdl: DRIVER_CDL_ID,
   medical: "medical-card",
-  annual: "annual-checks",
+  // The qualification file, on its own tab (?tab=file); links build that.
+  file: "qualification-file",
 }
 
 /** What the next steps know about the driver beyond their dates. */
@@ -440,8 +419,8 @@ const day = (wallClock: string) => formatDate(wallClock.slice(0, 10))
 const TARGETS: Record<string, DriverCardTarget> = {
   cdl: "cdl",
   medical_card: "medical",
-  annual_review: "annual",
-  clearinghouse: "annual",
+  annual_review: "file",
+  clearinghouse: "file",
 }
 const targetOf = (item: ComplianceItem): DriverCardTarget | null =>
   TARGETS[item.key] ?? null
@@ -454,12 +433,14 @@ const fixAction = (
   return target ? { type: "edit", label, target } : null
 }
 
-const howToFix = (item: ComplianceItem) =>
-  !targetOf(item)
+const howToFix = (item: ComplianceItem) => {
+  const target = targetOf(item)
+  return !target || target === "file"
     ? "record it in the qualification file"
     : item.kind === "due"
       ? "save the date you did it"
       : "save the new date"
+}
 
 /**
  * Everything to do about a driver, most pressing first: a lapsed document
@@ -559,8 +540,10 @@ export function driverNextSteps(
     ])
   if (!driver.cdl_class)
     missing.push(["cdl_class", "Add the CDL class", "A, B or C.", "cdl"])
+  // Dates kept on the driver's cards. The file's own dates come once it's
+  // set up from the start date, asked for above.
   for (const item of items.filter(
-    (i) => i.expiry.state === "missing" && targetOf(i)
+    (i) => i.expiry.state === "missing" && targetOf(i) && targetOf(i) !== "file"
   )) {
     missing.push([
       `date:${item.key}`,

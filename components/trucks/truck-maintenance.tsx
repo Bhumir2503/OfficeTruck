@@ -55,6 +55,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { DatePicker } from "@/components/ui/date-picker"
 import { FILE_TYPES, driverFileError } from "@/lib/driver-document-upload"
 import { formatDate } from "@/lib/driver-format"
 import { formatRate } from "@/lib/load-format"
@@ -106,6 +107,24 @@ type Vehicle = "truck" | "trailer"
 const ACTIONS = {
   truck: { add: addTruckMaintenance, remove: removeTruckMaintenance },
   trailer: { add: addTrailerMaintenance, remove: removeTrailerMaintenance },
+}
+
+/**
+ * The day the work was done, starting on today each time the dialog opens
+ * (its contents mount fresh). Read from the form as `done_on`.
+ */
+function DoneOnPicker({ today }: { today: string }) {
+  const [doneOn, setDoneOn] = useState(today)
+  return (
+    <DatePicker
+      id="maintenance-done-on"
+      name="done_on"
+      required
+      max={today}
+      value={doneOn}
+      onChange={setDoneOn}
+    />
+  )
 }
 
 function AddEntryDialog({
@@ -197,13 +216,7 @@ function AddEntryDialog({
         >
           <Field>
             <FieldLabel htmlFor="maintenance-done-on">Date</FieldLabel>
-            <Input
-              id="maintenance-done-on"
-              name="done_on"
-              type="date"
-              max={today}
-              defaultValue={today}
-            />
+            <DoneOnPicker today={today} />
           </Field>
           <Field>
             <FieldLabel htmlFor="maintenance-kind">Type</FieldLabel>

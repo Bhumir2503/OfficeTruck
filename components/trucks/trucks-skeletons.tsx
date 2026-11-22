@@ -6,6 +6,7 @@ import {
   SettingsCardFooter,
 } from "@/components/settings/settings-card"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
+import { TabBarSkeleton } from "@/components/tab-skeletons"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
@@ -153,7 +154,14 @@ function CostsCardSkeleton({ editing = false }: { editing?: boolean }) {
 }
 
 /** The truck form's cards. `editing` matches the truck page's version. */
-function TruckFormSkeleton({ editing = false }: { editing?: boolean }) {
+function TruckFormSkeleton({
+  editing = false,
+  schedule = true,
+}: {
+  editing?: boolean
+  /** The truck page shows the schedule on its Maintenance tab instead. */
+  schedule?: boolean
+}) {
   // On the truck page each card saves on its own, from a footer.
   const footer = editing ? <SaveFooter /> : undefined
   return (
@@ -197,20 +205,22 @@ function TruckFormSkeleton({ editing = false }: { editing?: boolean }) {
         <FieldSkeleton label="Default driver" className="sm:col-span-3" />
         <FieldSkeleton label="Home base" className="sm:col-span-6" />
       </SettingsCard>
-      <SettingsCard
-        title="Maintenance schedule"
-        footer={footer}
-        contentClassName="grid gap-5 sm:grid-cols-6"
-      >
-        <FieldSkeleton label="Odometer" className="sm:col-span-3" />
-        <FieldSkeleton label="Read on" className="sm:col-span-3" />
-        <FieldSkeleton label="Service every" className="sm:col-span-3" />
-        <FieldSkeleton
-          label="Or every"
-          hint="Whichever comes first, counted from the last preventive service logged."
-          className="sm:col-span-3"
-        />
-      </SettingsCard>
+      {schedule && (
+        <SettingsCard
+          title="Maintenance schedule"
+          footer={footer}
+          contentClassName="grid gap-5 sm:grid-cols-6"
+        >
+          <FieldSkeleton label="Odometer" className="sm:col-span-3" />
+          <FieldSkeleton label="Read on" className="sm:col-span-3" />
+          <FieldSkeleton label="Service every" className="sm:col-span-3" />
+          <FieldSkeleton
+            label="Or every"
+            hint="Whichever comes first, counted from the last preventive service logged."
+            className="sm:col-span-3"
+          />
+        </SettingsCard>
+      )}
     </div>
   )
 }
@@ -267,28 +277,11 @@ export function TruckDetailSkeleton() {
           </div>
           <Skeleton className="h-8 w-32 rounded-md" />
         </div>
+        {/* Overview, Maintenance, Documents. */}
+        <TabBarSkeleton widths={["w-20", "w-24", "w-24"]} />
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
           <div className="flex min-w-0 flex-col gap-4">
-            <TruckFormSkeleton editing />
-            <CostsCardSkeleton editing />
-            <SettingsCard
-              title="Maintenance"
-              description={
-                // The description is a <p>, so an inline placeholder.
-                <span className="inline-block h-4 w-56 animate-pulse rounded-md bg-muted align-middle" />
-              }
-              action={<Skeleton className="h-8 w-36 rounded-md" />}
-            >
-              {/* As tall as the card's empty state. */}
-              <Skeleton className="h-46.5 w-full" />
-            </SettingsCard>
-            <SettingsCard
-              title="Documents"
-              description="Kept private to your organization."
-              action={<Skeleton className="h-8 w-32 rounded-md" />}
-            >
-              <Skeleton className="h-46.5 w-full" />
-            </SettingsCard>
+            <TruckFormSkeleton editing schedule={false} />
           </div>
           <aside className="order-first flex flex-col gap-4 lg:order-none">
             <section className={panel}>

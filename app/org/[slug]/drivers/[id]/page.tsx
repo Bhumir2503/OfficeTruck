@@ -3,26 +3,53 @@ import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 
+import {
+  DqFileSection,
+  DqFileSummary,
+  loadDqFile,
+} from "@/components/dq/dq-file-section"
 import { DriverStatusBadge } from "@/components/drivers/driver-badges"
 import { DriverDocuments } from "@/components/drivers/driver-documents"
+import { DriverEarnings } from "@/components/drivers/driver-earnings"
 import { DriverForm } from "@/components/drivers/driver-form"
+import { DriverLoads } from "@/components/drivers/driver-loads"
 import { DriverNotes } from "@/components/drivers/driver-notes"
-import { DriverPayBox } from "@/components/drivers/driver-pay-box"
+import { DriverPay } from "@/components/drivers/driver-pay"
 import {
   DRIVER_DOCUMENTS_ID,
   DriverSidePanel,
 } from "@/components/drivers/driver-side-panel"
-import { DriverStatusButton } from "@/components/drivers/driver-status-button"
+import { DriverStatusMenu } from "@/components/drivers/driver-status-menu"
+import { DriverFormSkeleton } from "@/components/drivers/drivers-skeletons"
+import { PayHistory } from "@/components/drivers/pay-history"
+import {
+  DRIVER_TAB_LABELS,
+  DRIVER_TABS,
+  driverTabHref,
+  parseDriverTab,
+} from "@/components/drivers/driver-tabs"
+import {
+  PageTabBar,
+  PageTabPanel,
+  PageTabsProvider,
+} from "@/components/page-tabs"
+import {
+  StatsCardSkeleton,
+  TableCardSkeleton,
+  TabSkeleton,
+} from "@/components/tab-skeletons"
 import { buttonVariants } from "@/components/ui/button"
 import {
   complianceItems,
+  dqComplianceDates,
   formatPay,
   today as getToday,
 } from "@/lib/driver-format"
-import { getDqDatesByDriver } from "@/lib/dq/fleet"
 import { getDriver, getDriverLoads, getDriverDocuments } from "@/lib/drivers"
 import { canManage, getOrganization } from "@/lib/organizations"
 import { formatPhone } from "@/lib/phone"
+import { parseWeek, shiftWeek, weekOf } from "@/lib/settlement-format"
+import { getPaidWeeks, getSettlement } from "@/lib/settlements"
 
 async function driverFor(
   params: PageProps<"/org/[slug]/drivers/[id]">["params"]
@@ -42,6 +69,7 @@ export async function generateMetadata({
 
 export default async function DriverPage({
   params,
+  searchParams,
 }: PageProps<"/org/[slug]/drivers/[id]">) {
   const { organization, driver } = await driverFor(params)
   if (!organization || !driver) {
@@ -49,17 +77,33 @@ export default async function DriverPage({
   }
 
   const base = `/org/${organization.slug}/drivers`
+  const driverHref = `${base}/${driver.id}`
   const manager = canManage(organization)
+  // Payment is owners and admins only, so members don't get its tab.
+  const tabs = DRIVER_TABS.filter((t) => t !== "pay" || manager)
+  const query = await searchParams
+  const requested = parseDriverTab(query.tab)
+  const tab = tabs.includes(requested) ? requested : "overview"
   const today = getToday()
   const loadsBase = `/org/${organization.slug}/loads`
   const currentRate = formatPay(driver.pay_type, driver.pay_rate)
-  // The Loads and Pay statement cards are set aside for now; loads still
-  // feed the side panel's next step and the rate notice. The qualification
-  // file is off the page too; its dates still feed the next step.
-  const [loads, documents, dqDates] = await Promise.all([
+  // Payment: the statement shows last week by default, the week payroll
+  // usually covers.
+  const thisWeek = weekOf(today)
+  const week = parseWeek(query.week) ?? shiftWeek(thisWeek, -1)
+  const payHref = `${driverHref}?tab=pay`
+  const onPayment = tab === "pay"
+  const [loads, documents, dqFile, settlement, paidWeeks] = await Promise.all([
     getDriverLoads(organization.id, driver.id),
     getDriverDocuments(organization.id, driver.id),
-    getDqDatesByDriver(organization.id),
+    loadDqFile({
+      driverId: driver.id,
+      organizationId: organization.id,
+      manager,
+      today,
+    }),
+    onPayment ? getSettlement(organization.id, driver.id, week) : null,
+    onPayment ? getPaidWeeks(organization.id, driver.id) : [],
   ])
   // Booked loads still locked at a rate other than the driver's current one.
   const staleLoads = loads
@@ -74,7 +118,7 @@ export default async function DriverPage({
       locked:
         formatPay(load.driver_pay_type, load.driver_pay_rate) ?? "no rate",
     }))
-  const items = complianceItems(driver, dqDates[driver.id], today)
+  const items = complianceItems(driver, dqComplianceDates(dqFile.items), today)
   const contact = [
     driver.cdl_number
       ? `CDL ${driver.cdl_number}${driver.cdl_state ? ` · ${driver.cdl_state}` : ""}`
@@ -131,84 +175,176 @@ export default async function DriverPage({
               ))}
             </p>
           </div>
-          {manager && driver.status === "active" && (
-            <DriverStatusButton
+          {manager && (
+            <DriverStatusMenu
               organizationId={organization.id}
               driver={{
                 id: driver.id,
                 full_name: driver.full_name,
                 status: driver.status,
+                start_date: driver.start_date,
+                end_date: driver.end_date,
               }}
+              listHref={base}
+              today={today}
             />
           )}
         </div>
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
-          {/* One column of cards, in the order they're reached for: who the
-              driver is and their CDL. The edit
-              form's cards are placed among the others with `order`, since the
-              form can't wrap the cards that have forms of their own. */}
-          <div className="flex min-w-0 flex-col gap-4">
-            {manager && (
-              <DriverForm
-                organizationId={organization.id}
-                base={base}
-                driver={driver}
-                cdlCopy={documents.find((doc) => doc.kind === "cdl") ?? null}
-                medicalCopy={
-                  documents.find((doc) => doc.kind === "medical_card") ?? null
-                }
-                cardClassName={{
-                  details: "order-1",
-                  cdl: "order-2",
-                  medical: "order-3",
-                  annual: "order-4",
-                }}
-              />
-            )}
-            <div className="order-5">
-              <DriverDocuments
-                id={DRIVER_DOCUMENTS_ID}
-                organizationId={organization.id}
-                driverId={driver.id}
-                documents={documents}
-                dates={driver}
-                canManage={manager}
-                warn={driver.status === "active"}
-                today={today}
-              />
-            </div>
-          </div>
-          {/* Beside the cards, what's next stays in view; on a phone it
+        <PageTabsProvider>
+          <PageTabBar
+            label="Driver sections"
+            active={tab}
+            tabs={tabs.map((t) => ({
+              key: t,
+              label: DRIVER_TAB_LABELS[t],
+              href: driverTabHref(driverHref, t),
+            }))}
+          />
+          <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
+            <PageTabPanel
+              active={tab}
+              className="flex min-w-0 flex-col gap-4"
+              skeletons={DRIVER_TAB_SKELETONS}
+            >
+              {/* Overview and Pay are cards of one form. Both tabs render all
+                of it, hiding the other tab's cards, so a save always sends
+                every field and never blanks the hidden ones. */}
+              {manager && (tab === "overview" || tab === "pay") && (
+                <DriverForm
+                  organizationId={organization.id}
+                  base={base}
+                  driver={driver}
+                  cdlCopy={documents.find((doc) => doc.kind === "cdl") ?? null}
+                  staleRate={
+                    currentRate && staleLoads.length
+                      ? { currentRate, stale: staleLoads }
+                      : null
+                  }
+                  medicalCopy={
+                    documents.find((doc) => doc.kind === "medical_card") ?? null
+                  }
+                  cardClassName={
+                    tab === "pay"
+                      ? {
+                          details: "hidden",
+                          cdl: "hidden",
+                          medical: "hidden",
+                          // The rate setting, after what was earned and owed.
+                          pay: "order-4",
+                        }
+                      : { details: "", cdl: "", medical: "", pay: "hidden" }
+                  }
+                />
+              )}
+              {onPayment && (
+                <>
+                  <div className="order-1">
+                    <DriverEarnings loads={loads} today={today} />
+                  </div>
+                  {settlement && (
+                    <div id="pay" className="order-2 scroll-mt-6">
+                      <DriverPay
+                        organizationId={organization.id}
+                        settlement={settlement}
+                        today={today}
+                        loadsBase={loadsBase}
+                        prevHref={`${payHref}&week=${shiftWeek(week, -1)}#pay`}
+                        nextHref={
+                          week < thisWeek
+                            ? `${payHref}&week=${shiftWeek(week, 1)}#pay`
+                            : null
+                        }
+                      />
+                    </div>
+                  )}
+                  <div className="order-3">
+                    <PayHistory
+                      weeks={paidWeeks}
+                      payHref={payHref}
+                      today={today}
+                    />
+                  </div>
+                </>
+              )}
+              {tab === "loads" && (
+                <DriverLoads loads={loads} loadsBase={loadsBase} />
+              )}
+              {tab === "documents" && (
+                <DriverDocuments
+                  id={DRIVER_DOCUMENTS_ID}
+                  organizationId={organization.id}
+                  driverId={driver.id}
+                  documents={documents}
+                  dates={driver}
+                  canManage={manager}
+                  warn={driver.status === "active"}
+                  today={today}
+                />
+              )}
+              {tab === "file" && <DqFileSection file={dqFile} />}
+            </PageTabPanel>
+            {/* Beside the cards, what's next stays in view; on a phone it
               comes first. */}
-          <aside className="order-first flex flex-col gap-4 lg:sticky lg:top-6 lg:order-none lg:max-h-[calc(100svh-3rem)] lg:overflow-y-auto">
-            <DriverSidePanel
-              organizationId={organization.id}
-              driver={driver}
-              items={items}
-              loads={loads}
-              manager={manager}
-              loadsBase={loadsBase}
-              documentKinds={documents.map((doc) => doc.kind)}
-            />
-            {manager && (
-              <DriverPayBox
+            <aside className="order-first flex flex-col gap-4 lg:sticky lg:top-6 lg:order-none lg:max-h-[calc(100svh-3rem)] lg:overflow-y-auto">
+              <DriverSidePanel
+                organizationId={organization.id}
+                driver={driver}
+                items={items}
+                loads={loads}
+                manager={manager}
+                loadsBase={loadsBase}
+                documentKinds={documents.map((doc) => doc.kind)}
+                driverHref={driverHref}
+              />
+              <DqFileSummary
+                file={dqFile}
+                href={
+                  tab === "file" ? undefined : driverTabHref(driverHref, "file")
+                }
+              />
+              <DriverNotes
                 organizationId={organization.id}
                 driverId={driver.id}
-                payType={driver.pay_type}
-                payRate={driver.pay_rate}
-                currentRate={currentRate}
-                stale={staleLoads}
+                notes={driver.notes}
+                canManage={manager}
               />
-            )}
-            <DriverNotes
-              organizationId={organization.id}
-              driverId={driver.id}
-              notes={driver.notes}
-              canManage={manager}
-            />
-          </aside>
-        </div>
+            </aside>
+          </div>
+        </PageTabsProvider>
       </div>
     </div>
   )
+}
+
+/** Each tab's cards while it loads. */
+const DRIVER_TAB_SKELETONS = {
+  overview: (
+    <TabSkeleton>
+      <DriverFormSkeleton editing />
+    </TabSkeleton>
+  ),
+  pay: (
+    <TabSkeleton>
+      <StatsCardSkeleton title="Earnings" />
+      <TableCardSkeleton title="Pay statement" rows={2} />
+      <TableCardSkeleton title="Pay history" rows={2} />
+    </TabSkeleton>
+  ),
+  loads: (
+    <TabSkeleton>
+      <TableCardSkeleton title="Loads" rows={5} />
+    </TabSkeleton>
+  ),
+  documents: (
+    <TabSkeleton>
+      <TableCardSkeleton title="Documents" />
+    </TabSkeleton>
+  ),
+  file: (
+    <TabSkeleton>
+      <TableCardSkeleton title="Driver qualification file" rows={6} />
+      <TableCardSkeleton title="Investigation history file" rows={2} />
+      <TableCardSkeleton title="Drug and alcohol file" rows={4} />
+    </TabSkeleton>
+  ),
 }

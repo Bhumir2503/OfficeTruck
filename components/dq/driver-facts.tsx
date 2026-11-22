@@ -16,7 +16,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Field, FieldLabel } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
+import { DatePicker } from "@/components/ui/date-picker"
+import { formatDate } from "@/lib/driver-format"
 import type { LICENSE_CLASSES } from "@/lib/schemas/dq"
 
 export type DriverFacts = {
@@ -53,8 +54,12 @@ export function EndDateButton({ driver }: { driver: DriverFacts }) {
       toast.error(result.error)
       return
     }
+    const keptUntil = `${Number(date.slice(0, 4)) + 3}${date.slice(4)}`
+    // Saving the last day marks them inactive once it has come.
     toast.success(
-      `End date saved. The file is kept until ${Number(date.slice(0, 4)) + 3}${date.slice(4)}.`
+      date <= new Date().toLocaleDateString("en-CA")
+        ? `${driver.full_name} marked inactive. Their file is kept until ${formatDate(keptUntil)}.`
+        : `Last day saved. ${driver.full_name} stays active until then; the file is kept until ${formatDate(keptUntil)}.`
     )
     setOpen(false)
     router.refresh()
@@ -77,18 +82,18 @@ export function EndDateButton({ driver }: { driver: DriverFacts }) {
             <DialogDescription>
               Recurring work stops, items due later are closed, and the file
               becomes read-only after this date. It&apos;s kept for 3 years.
+              They&apos;re marked inactive once the day comes.
             </DialogDescription>
           </DialogHeader>
           <form id="dq-end-date" onSubmit={save}>
             <Field>
               <FieldLabel htmlFor="dq-end">Last day</FieldLabel>
-              <Input
+              <DatePicker
                 id="dq-end"
-                type="date"
                 required
                 min={driver.start_date ?? undefined}
                 value={date}
-                onChange={(e) => setDate(e.target.value)}
+                onChange={setDate}
               />
             </Field>
           </form>

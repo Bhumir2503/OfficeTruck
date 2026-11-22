@@ -221,10 +221,11 @@ describe("driverNextStep", () => {
     assert.equal(medical.expiry.state, "expired")
   })
 
-  it("dates the yearly checks from the driver, a year after the last", () => {
+  it("dates the yearly checks from the qualification file only", () => {
     const items = complianceItems(
       {
         ...current,
+        // Left on older drivers from the Annual checks card; ignored now.
         last_annual_review_on: "2025-11-20",
         last_clearinghouse_query_on: "2024-02-29",
       },
@@ -232,24 +233,27 @@ describe("driverNextStep", () => {
       TODAY
     )
     const review = items.find((item) => item.key === "annual_review")
-    assert.equal(review.due, "2026-11-20")
-    assert.equal(review.last, "2025-11-20")
+    assert.equal(review.due, "2027-06-01")
+    assert.equal(review.last, "2026-06-01")
     assert.equal(review.kind, "due")
     const query = items.find((item) => item.key === "clearinghouse")
-    assert.equal(query.due, "2025-02-28")
-    assert.equal(query.expiry.state, "expired")
+    assert.equal(query.due, "2027-06-01")
+    assert.equal(query.expiry.state, "ok")
   })
 
-  it("sends an overdue yearly check to the Annual checks card", () => {
+  it("sends an overdue yearly check to the qualification file", () => {
     const result = step({
       ...current,
-      last_annual_review_on: "2025-01-10",
+      dq: {
+        ...current.dq,
+        annualReview: { due: "2026-01-10", last: "2025-01-10", done: false },
+      },
     })
     assert.equal(result.title, "Annual review overdue")
-    assert.equal(result.action?.target, "annual")
+    assert.equal(result.action?.target, "file")
     assert.match(
       result.detail,
-      /until it's done, then save the date you did it/
+      /until it's done, then record it in the qualification file/
     )
   })
 

@@ -26,6 +26,7 @@ import {
   type DqTemplate,
   type PlannedItem,
 } from "@/lib/dq-rules"
+import { today as getToday } from "@/lib/driver-format"
 import { canReadWithAi, readDqDocument } from "@/lib/dq/extract"
 import {
   annualReviewSignSchema,
@@ -1217,9 +1218,15 @@ export async function setEndDate(
     .select("id")
   if (error) return dbError(error)
 
+  // Someone who has left isn't driving: once their last day has come,
+  // they're inactive. A later last day (notice given) waits for that day.
   const update = await supabase
     .from("drivers")
-    .update({ end_date: endDate })
+    .update(
+      endDate <= getToday()
+        ? { end_date: endDate, status: "inactive" }
+        : { end_date: endDate }
+    )
     .eq("id", driverId)
   if (update.error) return dbError(update.error)
   return ok({ closed: (data ?? []).length })
