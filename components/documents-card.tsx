@@ -48,6 +48,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { DatePicker } from "@/components/ui/date-picker"
 import { FILE_TYPES, driverFileError } from "@/lib/driver-document-upload"
 import { expiry, formatDate, needsAction } from "@/lib/driver-format"
 
@@ -86,6 +87,10 @@ type Kinds<K extends string> = {
 
 /** Documents shown at a time. */
 const PAGE_SIZE = 5
+
+/** "1–5 of 12", or "6 of 6" when a page has one document. */
+const range = (first: number, last: number, total: number) =>
+  `${first === last ? first : `${first}–${last}`} of ${total}`
 
 const sizeFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 })
 const fileSize = (bytes: number) =>
@@ -208,11 +213,11 @@ function AddDocumentDialog<K extends string>({
                 {datedElsewhere}
               </FieldDescription>
             ) : (
-              <Input
+              <DatePicker
                 id="doc-expires"
-                type="date"
                 value={expiresOn}
-                onChange={(event) => setExpiresOn(event.target.value)}
+                onChange={setExpiresOn}
+                label="Expires"
               />
             )}
           </Field>
@@ -354,6 +359,7 @@ export function DocumentsCard<K extends string>({
   warn,
   today,
   emptyText,
+  noteFor,
 }: {
   /** For links that jump here. */
   id?: string
@@ -372,6 +378,8 @@ export function DocumentsCard<K extends string>({
   today: string
   /** The empty state's text for owners and admins. */
   emptyText: string
+  /** A short line under a document's file name, e.g. where it belongs now. */
+  noteFor?: (doc: DocumentRow<K>) => string | null
 }) {
   const [pending, start] = useTransition()
   const [adding, setAdding] = useState(false)
@@ -428,10 +436,16 @@ export function DocumentsCard<K extends string>({
         )
       }
       contentClassName={documents.length ? "px-0 pb-0" : undefined}
+      // The page footer shows whenever there's a document; with one page its
+      // buttons are just disabled.
       footer={
-        pages > 1 && (
+        documents.length > 0 && (
           <SettingsCardFooter
-            hint={`${current * PAGE_SIZE + 1}–${current * PAGE_SIZE + shown.length} of ${documents.length}`}
+            hint={range(
+              current * PAGE_SIZE + 1,
+              current * PAGE_SIZE + shown.length,
+              documents.length
+            )}
           >
             <Button
               variant="outline"
@@ -514,6 +528,11 @@ export function DocumentsCard<K extends string>({
                         <p className="truncate text-xs text-muted-foreground">
                           {doc.file_name}
                         </p>
+                        {noteFor?.(doc) && (
+                          <p className="text-xs text-amber-700 dark:text-amber-400">
+                            {noteFor(doc)}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </TableCell>

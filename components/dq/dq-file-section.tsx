@@ -1,4 +1,5 @@
-import { Download, Lock } from "lucide-react"
+import { ArrowRight, Download, Lock } from "lucide-react"
+import Link from "next/link"
 
 import { DriverDqBadge } from "@/components/dq/dq-badges"
 import { DqChecklist } from "@/components/dq/dq-checklist"
@@ -123,7 +124,14 @@ export async function loadDqFile({
  * matter, and the exports. The restricted files export on their own, for
  * owners and admins only.
  */
-export function DqFileSummary({ file }: { file: DqFile }) {
+export function DqFileSummary({
+  file,
+  href,
+}: {
+  file: DqFile
+  /** The driver page's file tab, when the summary is shown elsewhere. */
+  href?: string
+}) {
   const { driver, manager, items, status, frozen } = file
   const exportBase = `/api/dq/drivers/${driver.id}/export`
   const restricted = FILES.filter(
@@ -133,9 +141,7 @@ export function DqFileSummary({ file }: { file: DqFile }) {
     <section className="shrink-0 overflow-hidden rounded-xl border bg-card text-card-foreground shadow-xs">
       <div className="flex flex-col gap-3 px-5 pt-4 pb-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h4 className="font-display font-semibold text-brand-ink">
-            Qualification file
-          </h4>
+          <h4 className="font-semibold">Qualification file</h4>
           <DriverDqBadge status={status} />
         </div>
         <div className="space-y-1 text-sm text-muted-foreground">
@@ -157,11 +163,23 @@ export function DqFileSummary({ file }: { file: DqFile }) {
           )}
         </div>
         <div className="flex flex-col gap-2">
+          {href && (
+            <Link
+              href={href}
+              scroll={false}
+              className={buttonVariants({ className: "w-full" })}
+            >
+              Open the file <ArrowRight />
+            </Link>
+          )}
           <a
             href={`${exportBase}?file=dq`}
             target="_blank"
             rel="noreferrer"
-            className={buttonVariants({ className: "w-full" })}
+            className={buttonVariants({
+              variant: href ? "outline" : "default",
+              className: "w-full",
+            })}
           >
             <Download /> Export file
           </a>

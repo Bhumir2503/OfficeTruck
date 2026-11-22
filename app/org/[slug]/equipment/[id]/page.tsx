@@ -4,7 +4,6 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 
 import { TruckStatusBadge } from "@/components/trucks/truck-badges"
-import { TruckCostsBox } from "@/components/trucks/truck-costs-box"
 import { TruckDocuments } from "@/components/trucks/truck-documents"
 import { TruckForm } from "@/components/trucks/truck-form"
 import { TruckMaintenance } from "@/components/trucks/truck-maintenance"
@@ -15,6 +14,22 @@ import {
 import { TruckNotes } from "@/components/trucks/truck-notes"
 import { TruckStatusMenu } from "@/components/trucks/truck-status-menu"
 import { TruckSummary } from "@/components/trucks/truck-summary"
+import {
+  PageTabBar,
+  PageTabPanel,
+  PageTabsProvider,
+} from "@/components/page-tabs"
+import {
+  FieldsCardSkeleton,
+  TableCardSkeleton,
+  TabSkeleton,
+} from "@/components/tab-skeletons"
+import {
+  TRUCK_TAB_LABELS,
+  TRUCK_TABS,
+  parseTruckTab,
+  truckTabHref,
+} from "@/components/trucks/truck-tabs"
 import { buttonVariants } from "@/components/ui/button"
 import { formatDate, today as getToday } from "@/lib/driver-format"
 import { getDriverOptions } from "@/lib/drivers"
@@ -50,6 +65,7 @@ export async function generateMetadata({
 
 export default async function TruckPage({
   params,
+  searchParams,
 }: PageProps<"/org/[slug]/equipment/[id]">) {
   const { organization, truck } = await truckFor(params)
   if (!organization || !truck) {
@@ -58,6 +74,8 @@ export default async function TruckPage({
 
   const base = `/org/${organization.slug}/equipment`
   const manager = canManage(organization)
+  const truckHref = `${base}/${truck.id}`
+  const tab = parseTruckTab((await searchParams).tab)
   const today = getToday()
   const warn = truck.status === "active"
   // The This week and Loads cards are set aside for now.
@@ -133,83 +151,132 @@ export default async function TruckPage({
             />
           )}
         </div>
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
-          {/* The edit form's cards, then the truck's papers. */}
-          <div className="flex min-w-0 flex-col gap-4">
-            {manager ? (
-              <TruckForm
-                organizationId={organization.id}
-                base={base}
-                drivers={drivers}
-                truck={truck}
-              />
-            ) : (
-              <TruckSummary
-                truck={truck}
+        <PageTabsProvider>
+          <PageTabBar
+            label="Truck sections"
+            active={tab}
+            tabs={TRUCK_TABS.map((t) => ({
+              key: t,
+              label: TRUCK_TAB_LABELS[t],
+              href: truckTabHref(truckHref, t),
+            }))}
+          />
+          <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
+            <PageTabPanel
+              active={tab}
+              className="flex min-w-0 flex-col gap-4"
+              skeletons={TRUCK_TAB_SKELETONS}
+            >
+              {tab === "overview" &&
+                (manager ? (
+                  <TruckForm
+                    organizationId={organization.id}
+                    base={base}
+                    drivers={drivers}
+                    truck={truck}
+                    cards={["details", "plate", "ownership"]}
+                  />
+                ) : (
+                  <TruckSummary
+                    truck={truck}
+                    items={items}
+                    warn={warn}
+                    driversBase={`/org/${organization.slug}/drivers`}
+                  />
+                ))}
+              {tab === "maintenance" && manager && (
+                <TruckForm
+                  organizationId={organization.id}
+                  base={base}
+                  drivers={drivers}
+                  truck={truck}
+                  cards={["maintenance"]}
+                />
+              )}
+              {tab === "maintenance" && (
+                <div id={TRUCK_MAINTENANCE_ID} className="scroll-mt-6">
+                  <TruckMaintenance
+                    organizationId={organization.id}
+                    truckId={truck.id}
+                    entries={maintenance}
+                    pm={pm}
+                    printHref={`/print/${organization.slug}/trucks/${truck.id}/maintenance`}
+                    odometerNote={
+                      since?.miles && truck.odometer !== null
+                        ? `Odometer ≈ ${new Intl.NumberFormat("en-US").format(
+                            estimated.odometer!
+                          )} mi, estimated from ${since.loads === 1 ? "1 load" : `${since.loads} loads`} since ${formatDate(truck.odometer_on!)}.`
+                        : null
+                    }
+                    canManage={manager}
+                    today={today}
+                  />
+                </div>
+              )}
+              {tab === "documents" && (
+                <TruckDocuments
+                  organizationId={organization.id}
+                  truckId={truck.id}
+                  documents={documents}
+                  dueByKind={{
+                    registration: truck.registration_expires_on,
+                    annual_inspection:
+                      items.find((item) => item.key === "annual_inspection")
+                        ?.due ?? null,
+                  }}
+                  canManage={manager}
+                  warn={warn}
+                  today={today}
+                />
+              )}
+            </PageTabPanel>
+            {/* Beside the cards, what's due and the truck's setup stay in
+              view; on a phone they come first. */}
+            <aside className="order-first flex flex-col gap-4 lg:sticky lg:top-6 lg:order-none lg:max-h-[calc(100svh-3rem)] lg:overflow-y-auto">
+              <TruckNextAction
+                status={truck.status}
+                outOfService={{
+                  reason: truck.out_of_service_reason,
+                  until: truck.out_of_service_until,
+                }}
                 items={items}
-                warn={warn}
-                driversBase={`/org/${organization.slug}/drivers`}
+                pm={pm}
+                today={today}
+                manager={manager}
+                truckHref={truckHref}
               />
-            )}
-            {manager && (
-              <TruckCostsBox organizationId={organization.id} truck={truck} />
-            )}
-            <div id={TRUCK_MAINTENANCE_ID} className="scroll-mt-6">
-              <TruckMaintenance
+              <TruckNotes
                 organizationId={organization.id}
                 truckId={truck.id}
-                entries={maintenance}
-                pm={pm}
-                printHref={`/print/${organization.slug}/trucks/${truck.id}/maintenance`}
-                odometerNote={
-                  since?.miles && truck.odometer !== null
-                    ? `Odometer ≈ ${new Intl.NumberFormat("en-US").format(
-                        estimated.odometer!
-                      )} mi, estimated from ${since.loads === 1 ? "1 load" : `${since.loads} loads`} since ${formatDate(truck.odometer_on!)}.`
-                    : null
-                }
+                notes={truck.notes}
                 canManage={manager}
-                today={today}
               />
-            </div>
-            <TruckDocuments
-              organizationId={organization.id}
-              truckId={truck.id}
-              documents={documents}
-              dueByKind={{
-                registration: truck.registration_expires_on,
-                annual_inspection:
-                  items.find((item) => item.key === "annual_inspection")?.due ??
-                  null,
-              }}
-              canManage={manager}
-              warn={warn}
-              today={today}
-            />
+            </aside>
           </div>
-          {/* Beside the cards, what's due and the truck's setup stay in
-              view; on a phone they come first. */}
-          <aside className="order-first flex flex-col gap-4 lg:sticky lg:top-6 lg:order-none lg:max-h-[calc(100svh-3rem)] lg:overflow-y-auto">
-            <TruckNextAction
-              status={truck.status}
-              outOfService={{
-                reason: truck.out_of_service_reason,
-                until: truck.out_of_service_until,
-              }}
-              items={items}
-              pm={pm}
-              today={today}
-              manager={manager}
-            />
-            <TruckNotes
-              organizationId={organization.id}
-              truckId={truck.id}
-              notes={truck.notes}
-              canManage={manager}
-            />
-          </aside>
-        </div>
+        </PageTabsProvider>
       </div>
     </div>
   )
+}
+
+/** Each tab's cards while it loads. */
+const TRUCK_TAB_SKELETONS = {
+  overview: (
+    <TabSkeleton>
+      <FieldsCardSkeleton title="Truck details" fields={6} />
+      <FieldsCardSkeleton title="Plate and compliance" />
+      <FieldsCardSkeleton title="Ownership and driver" fields={2} />
+    </TabSkeleton>
+  ),
+  maintenance: (
+    <TabSkeleton>
+      <FieldsCardSkeleton title="Maintenance schedule" fields={4} />
+      <TableCardSkeleton title="Maintenance" rows={5} />
+    </TabSkeleton>
+  ),
+  documents: (
+    <TabSkeleton>
+      <TableCardSkeleton title="Documents" />
+    </TabSkeleton>
+  ),
 }

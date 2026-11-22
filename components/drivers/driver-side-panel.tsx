@@ -2,6 +2,7 @@ import { ArrowRight, CalendarClock, Plus } from "lucide-react"
 import Link from "next/link"
 
 import { DriverStatusButton } from "@/components/drivers/driver-status-button"
+import { driverTabHref } from "@/components/drivers/driver-tabs"
 import { buttonVariants } from "@/components/ui/button"
 import {
   DRIVER_CARD_IDS,
@@ -25,6 +26,7 @@ export function DriverSidePanel({
   manager,
   loadsBase,
   documentKinds = [],
+  driverHref,
 }: {
   organizationId: string
   driver: Driver
@@ -33,6 +35,8 @@ export function DriverSidePanel({
   manager: boolean
   /** /org/<slug>/loads */
   loadsBase: string
+  /** /org/<slug>/drivers/<id>, for links to the page's tabs. */
+  driverHref: string
   /** Kinds of document on file, e.g. "cdl", "medical_card". */
   documentKinds?: readonly string[]
 }) {
@@ -77,15 +81,24 @@ export function DriverSidePanel({
             </Link>
           )}
           {action?.type === "edit" && manager && (
-            <a
-              href={`#${DRIVER_CARD_IDS[action.target]}`}
+            <Link
+              href={
+                action.target === "file"
+                  ? driverTabHref(driverHref, "file")
+                  : driverTabHref(
+                      driverHref,
+                      "overview",
+                      DRIVER_CARD_IDS[action.target]
+                    )
+              }
+              scroll={action.target !== "file"}
               className={buttonVariants({
                 size: "lg",
                 className: "mt-4 w-full",
               })}
             >
               <CalendarClock /> {action.label}
-            </a>
+            </Link>
           )}
           {action?.type === "activate" && manager && (
             <div className="mt-4">

@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { DatePicker } from "@/components/ui/date-picker"
 import type { ApplicationAnswers } from "@/lib/schemas/dq"
 
 /*
@@ -372,11 +373,13 @@ export function ApplicationForm({
         </Field>
         <Field>
           <FieldLabel htmlFor="app-dob">Date of birth</FieldLabel>
-          <Input
+          <DatePicker
             id="app-dob"
-            type="date"
             value={dob}
-            onChange={(e) => setDob(e.target.value)}
+            onChange={setDob}
+            label="Date of birth"
+            max={new Date().toLocaleDateString("en-CA")}
+            years={{ back: 90, ahead: 0 }}
           />
           <FieldDescription>
             {hasDob

@@ -39,6 +39,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { DatePicker } from "@/components/ui/date-picker"
 import {
   COMPANY_DOCUMENT_KINDS,
   COMPANY_DOCUMENT_LABELS,
@@ -137,11 +138,11 @@ function UploadForm({ organizationId }: { organizationId: string }) {
       </Field>
       <Field>
         <FieldLabel htmlFor="company-doc-expires">Expires</FieldLabel>
-        <Input
+        <DatePicker
           id="company-doc-expires"
-          type="date"
           value={expiresOn}
-          onChange={(event) => setExpiresOn(event.target.value)}
+          onChange={setExpiresOn}
+          label="Expires"
         />
       </Field>
       <Field>

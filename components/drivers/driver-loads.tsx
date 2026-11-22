@@ -33,8 +33,12 @@ import { isFallenThrough } from "@/lib/schemas/load"
 
 const miles = new Intl.NumberFormat("en-US")
 
-/** Rows per page. Totals and overlap warnings still use every load. */
-const PAGE_SIZE = 10
+/** Rows per page, as on the truck page. Totals and overlap warnings still use every load. */
+const PAGE_SIZE = 5
+
+/** "1–5 of 12", or "6 of 6" when a page has one load. */
+const range = (first: number, last: number, total: number) =>
+  `${first === last ? first : `${first}–${last}`} of ${total}`
 
 /** The loads a driver has run, with miles, revenue and their pay. */
 export function DriverLoads({
@@ -102,9 +106,39 @@ export function DriverLoads({
   return (
     <SettingsCard
       title="Loads"
-      description="Driver pay uses the rate locked on each load when they were assigned."
+      description={
+        <>
+          Driver pay uses the rate locked on each load when they were assigned.
+          <span className="mt-1 block text-foreground tabular-nums">
+            {summary}
+          </span>
+        </>
+      }
       contentClassName="px-0 pb-0"
-      footer={<SettingsCardFooter hint={summary} />}
+      footer={
+        <SettingsCardFooter
+          hint={range(first + 1, first + shown.length, loads.length)}
+        >
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={current === 0}
+            onClick={() => setPage(current - 1)}
+          >
+            <ChevronLeft />
+            Previous
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={current === pages - 1}
+            onClick={() => setPage(current + 1)}
+          >
+            Next
+            <ChevronRight />
+          </Button>
+        </SettingsCardFooter>
+      }
     >
       <Table className="[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6">
         <TableHeader className="bg-muted/40">
@@ -185,36 +219,6 @@ export function DriverLoads({
           })}
         </TableBody>
       </Table>
-      {pages > 1 && (
-        <div className="flex items-center justify-between gap-3 border-t px-6 py-2.5">
-          <span className="text-sm text-muted-foreground tabular-nums">
-            {first + 1}–{first + shown.length} of {loads.length}
-          </span>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="outline"
-              size="icon-sm"
-              aria-label="Newer loads"
-              disabled={current === 0}
-              onClick={() => setPage(current - 1)}
-            >
-              <ChevronLeft />
-            </Button>
-            <span className="px-2 text-sm text-muted-foreground tabular-nums">
-              Page {current + 1} of {pages}
-            </span>
-            <Button
-              variant="outline"
-              size="icon-sm"
-              aria-label="Older loads"
-              disabled={current === pages - 1}
-              onClick={() => setPage(current + 1)}
-            >
-              <ChevronRight />
-            </Button>
-          </div>
-        </div>
-      )}
     </SettingsCard>
   )
 }

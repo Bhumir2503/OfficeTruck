@@ -5,6 +5,7 @@ import {
   SettingsCardFooter,
 } from "@/components/settings/settings-card"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
+import { TabBarSkeleton } from "@/components/tab-skeletons"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
@@ -441,6 +442,10 @@ export function LoadDetailSkeleton() {
                 <DetailSkeleton label="Weight" lines={["w-20"]} />
               </div>
             </SettingsCard>
+            {/* Customer, Stops, Charges, Assignment, Expenses, History. */}
+            <TabBarSkeleton
+              widths={["w-24", "w-14", "w-18", "w-24", "w-20", "w-16"]}
+            />
             <SettingsCard
               title="Customer"
               description="Who booked it, and who sent the rate con."
@@ -454,65 +459,8 @@ export function LoadDetailSkeleton() {
               <FieldSkeleton label="Customer" className="sm:col-span-3" />
               <FieldSkeleton label="Rate con from" className="sm:col-span-3" />
             </SettingsCard>
-            <SettingsCard
-              title="Stops"
-              description={
-                // The description is a <p>, so an inline placeholder.
-                <span className="inline-block h-4 w-44 animate-pulse rounded-md bg-muted align-middle" />
-              }
-              contentClassName="flex flex-col gap-4"
-            >
-              {[0, 1].map((index) => (
-                <div key={index} className="flex items-start gap-3">
-                  <Skeleton className="size-7 shrink-0 rounded-full" />
-                  <div className="flex-1">
-                    <Line className="w-32" />
-                    <Line className="w-64" />
-                    <Line className="h-3.5 w-40" />
-                  </div>
-                </div>
-              ))}
-            </SettingsCard>
-            <SettingsCard
-              title="Charges"
-              description={
-                <span className="inline-block h-4 w-52 animate-pulse rounded-md bg-muted align-middle" />
-              }
-              contentClassName="flex flex-col gap-2"
-            >
-              <Skeleton className="h-5 w-full" />
-              <Skeleton className="h-5 w-full" />
-              <Skeleton className="h-5 w-2/3" />
-            </SettingsCard>
-            <SettingsCard
-              title="Assignment"
-              description={
-                <span className="inline-block h-4 w-48 animate-pulse rounded-md bg-muted align-middle" />
-              }
-              contentClassName="grid gap-5 sm:grid-cols-2"
-              footer={
-                <SettingsCardFooter
-                  hint={<Skeleton className="h-4 w-56 bg-foreground/10" />}
-                >
-                  <Skeleton className="h-8 w-16 rounded-md bg-foreground/10" />
-                </SettingsCardFooter>
-              }
-            >
-              <FieldSkeleton label="Truck" />
-              <FieldSkeleton label="Driver" />
-              <FieldSkeleton label="Estimated loaded miles" />
-              <FieldSkeleton label="Empty miles" />
-            </SettingsCard>
-            <SettingsCard
-              title="Expenses"
-              description="Fuel, tolls, lumper and other costs on this trip."
-              contentClassName="flex flex-col gap-2"
-            >
-              <Skeleton className="h-5 w-full" />
-              <Skeleton className="h-5 w-2/3" />
-            </SettingsCard>
           </div>
-          <div className="flex flex-col gap-6 lg:row-span-2">
+          <div className="flex flex-col gap-6">
             {[
               ["Next step", ["w-48", "w-full", "w-3/4"]],
               ["Documents", ["w-full", "w-full", "w-full", "w-full"]],
@@ -530,12 +478,6 @@ export function LoadDetailSkeleton() {
                 </div>
               </section>
             ))}
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center justify-between rounded-xl border bg-card px-5 py-4 shadow-xs">
-              <span className="font-semibold">History</span>
-              <Line className="w-20" />
-            </div>
           </div>
         </div>
       </div>

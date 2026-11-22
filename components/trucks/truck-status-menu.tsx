@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { DatePicker } from "@/components/ui/date-picker"
 import {
   TRUCK_STATUSES,
   TRUCK_STATUS_LABELS,
@@ -188,11 +189,11 @@ export function TruckStatusMenu({
             </Field>
             <Field className="sm:col-span-2">
               <FieldLabel htmlFor="truck-oos-until">Back by</FieldLabel>
-              <Input
+              <DatePicker
                 id="truck-oos-until"
-                type="date"
                 value={until}
-                onChange={(event) => setUntil(event.target.value)}
+                onChange={setUntil}
+                label="Back by"
               />
             </Field>
           </form>

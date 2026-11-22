@@ -2,6 +2,7 @@ import { cn } from "cn"
 import { ArrowRight, CircleCheck } from "lucide-react"
 import Link from "next/link"
 
+import { truckTabHref } from "@/components/trucks/truck-tabs"
 import { buttonVariants } from "@/components/ui/button"
 import {
   type ComplianceItem,
@@ -64,6 +65,7 @@ export function TruckNextAction({
   pm,
   manager,
   today,
+  truckHref,
 }: {
   status: TruckStatus
   /** Why it's out of service and when it's expected back. */
@@ -73,6 +75,8 @@ export function TruckNextAction({
   manager: boolean
   /** "YYYY-MM-DD" */
   today: string
+  /** /org/<slug>/equipment/<id>, for links to the page's tabs. */
+  truckHref: string
 }) {
   const all = items
   const pressing = all
@@ -133,13 +137,19 @@ export function TruckNextAction({
       detail += ` ${pm.milesLeft <= 0 ? `${miles.format(-pm.milesLeft)} mi over` : `${miles.format(pm.milesLeft)} mi to go`} on the last reading.`
     }
     if (manager) {
-      action = { href: `#${TRUCK_MAINTENANCE_ID}`, label: "Log maintenance" }
+      action = {
+        href: truckTabHref(truckHref, "maintenance", TRUCK_MAINTENANCE_ID),
+        label: "Log maintenance",
+      }
     }
   } else if (pressing.length) {
     const next = pressing[0]!
     ;({ title, detail } = wording(next))
     if (manager) {
-      action = { href: `#${TRUCK_DATES_ID}`, label: "Update dates" }
+      action = {
+        href: truckTabHref(truckHref, "overview", TRUCK_DATES_ID),
+        label: "Update dates",
+      }
     }
     if (pressing.length > 1) {
       detail += ` ${plural(pressing.length - 1, "more item")} after this.`

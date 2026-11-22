@@ -7,7 +7,6 @@ import {
   isDriverDocumentKind,
 } from "@/lib/driver-document-format"
 import { today } from "@/lib/driver-format"
-import { getDriver } from "@/lib/drivers"
 import { syncChecklist } from "@/lib/dq/service"
 import { canManage, getMyOrganizations } from "@/lib/organizations"
 import {
@@ -72,6 +71,11 @@ export async function createDriver(
   if (error) {
     return { error: saveError(error) }
   }
+  // Added with a start date: build their qualification file's checklist
+  // now, as saving the date later does.
+  if (parsed.data.start_date) {
+    await syncChecklist(supabase, data.id, today())
+  }
 
   refresh()
   return { ok: true, id: data.id }
@@ -114,41 +118,6 @@ function cdlCleaned<T extends DriverValues>(values: T): T {
   }
 }
 
-/**
- * Changes only how a driver is paid. The rest of the driver is read back
- * and checked with the same rules as the full form, so the pay rules (a
- * rate for every type, percent at most 100) stay in one place.
- */
-export async function updateDriverPay(
-  organizationId: string,
-  driverId: string,
-  input: { pay_type: string; pay_rate: string }
-): Promise<ActionResult> {
-  if (!(await canManageDrivers(organizationId))) {
-    return { error: NOT_ALLOWED }
-  }
-  const driver = await getDriver(organizationId, driverId)
-  if (!driver) {
-    return { error: "That driver doesn't exist anymore." }
-  }
-  const parsed = driverSchema.safeParse({
-    ...driver,
-    pay_type: input.pay_type,
-    pay_rate: input.pay_rate,
-  })
-  if (!parsed.success) {
-    const issue =
-      parsed.error.issues.find((item) =>
-        ["pay_type", "pay_rate"].includes(String(item.path[0]))
-      ) ?? parsed.error.issues[0]
-    return { error: issue?.message ?? "Check the pay rate." }
-  }
-  return update(organizationId, driverId, {
-    pay_type: parsed.data.pay_type,
-    pay_rate: parsed.data.pay_rate,
-  })
-}
-
 /** Saves only a driver's notes, from the notes box beside the driver page. */
 export async function updateDriverNotes(
   organizationId: string,
@@ -179,7 +148,83 @@ export async function setDriverStatus(
     return { error: "Choose a valid status." }
   }
 
-  return update(organizationId, driverId, { status: parsed.data })
+  // Back to active: they're driving again, so a last day from when they
+  // left no longer applies.
+  return update(
+    organizationId,
+    driverId,
+    parsed.data === "active"
+      ? { status: "active", end_date: null }
+      : { status: parsed.data }
+  )
+}
+
+/**
+ * Deletes a driver added by mistake, with their documents, settlements and
+ * checklist. One who has run loads is refused by the database, and one
+ * whose qualification file has uploads or signatures is refused here, since
+ * those records must be kept; both are marked inactive instead.
+ */
+export async function deleteDriver(
+  organizationId: string,
+  driverId: string
+): Promise<ActionResult> {
+  if (!(await canManageDrivers(organizationId))) {
+    return { error: NOT_ALLOWED }
+  }
+  const supabase = await createClient()
+  const [dqDocuments, dqSignatures, documents] = await Promise.all([
+    supabase
+      .from("dq_documents")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", organizationId)
+      .eq("driver_id", driverId),
+    supabase
+      .from("dq_attestations")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", organizationId)
+      .eq("driver_id", driverId),
+    supabase
+      .from("driver_documents")
+      .select("path")
+      .eq("organization_id", organizationId)
+      .eq("driver_id", driverId),
+  ])
+  for (const result of [dqDocuments, dqSignatures, documents]) {
+    if (result.error) {
+      return { error: result.error.message }
+    }
+  }
+  if ((dqDocuments.count ?? 0) > 0 || (dqSignatures.count ?? 0) > 0) {
+    return {
+      error:
+        "This driver's qualification file has records that must be kept, so they can't be deleted. Mark them inactive instead.",
+    }
+  }
+
+  const { data, error } = await supabase
+    .from("drivers")
+    .delete()
+    .eq("organization_id", organizationId)
+    .eq("id", driverId)
+    .select("id")
+  if (error) {
+    return {
+      error:
+        error.code === "23503"
+          ? "This driver has loads linked to them, so they can't be deleted. Mark them inactive instead."
+          : error.message,
+    }
+  }
+  if (!data.length) {
+    return { error: "That driver doesn't exist anymore." }
+  }
+  // Best effort: the records went with the driver; leftover files are harmless.
+  const files = (documents.data ?? []).map((row) => row.path as string)
+  if (files.length) {
+    await supabase.storage.from("driver-documents").remove(files)
+  }
+  return { ok: true }
 }
 
 async function update(
@@ -187,6 +232,7 @@ async function update(
   driverId: string,
   values: Partial<DriverValues> & {
     status?: DriverStatus
+    end_date?: string | null
     // Saved from the notes box, not the form.
     notes?: string | null
   }

@@ -230,3 +230,41 @@ export async function getSettlement(
   const week_ = await getPayWeek(organizationId, week)
   return week_.find((settlement) => settlement.driver.id === driverId) ?? null
 }
+
+/** A week already paid to a driver, as it was frozen when marked paid. */
+export type PaidWeek = {
+  week: string
+  paid_on: string
+  loads: number
+  gross: number
+  reimbursements: number
+  adjustments: number
+  net: number
+}
+
+/** The weeks a driver has been paid, newest first. Owners and admins only. */
+export async function getPaidWeeks(
+  organizationId: string,
+  driverId: string
+): Promise<PaidWeek[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("driver_settlements")
+    .select(
+      "week_start, paid_on, load_ids, gross_pay, reimbursements, adjustments, net_pay"
+    )
+    .eq("organization_id", organizationId)
+    .eq("driver_id", driverId)
+    .eq("status", "paid")
+    .order("week_start", { ascending: false })
+  if (error) throw error
+  return (data as SettlementRow[]).map((row) => ({
+    week: row.week_start,
+    paid_on: row.paid_on!,
+    loads: row.load_ids?.length ?? 0,
+    gross: Number(row.gross_pay ?? 0),
+    reimbursements: Number(row.reimbursements ?? 0),
+    adjustments: Number(row.adjustments ?? 0),
+    net: Number(row.net_pay ?? 0),
+  }))
+}

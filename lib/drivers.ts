@@ -17,6 +17,8 @@ export type Driver = {
   email: string | null
   /** Their first day, "YYYY-MM-DD"; the qualification file counts from it. */
   start_date: string | null
+  /** Their last day, once they have left. */
+  end_date: string | null
   /** Holds a medical variance, SPE certificate or exemption letter. */
   holds_medical_variance: boolean
   cdl_number: string | null
@@ -49,7 +51,7 @@ export type Driver = {
 }
 
 const DRIVER_COLUMNS =
-  "id, full_name, phone, email, start_date, holds_medical_variance, cdl_number, cdl_state, cdl_class, cdl_endorsements, cdl_restrictions, cdl_expires_on, medical_card_expires_on, medical_examiner_registry_number, medical_examiner_name, medical_exam_on, last_annual_review_on, last_clearinghouse_query_on, prior_license_states, pay_type, pay_rate, status, notes, created_at, updated_at"
+  "id, full_name, phone, email, start_date, end_date, holds_medical_variance, cdl_number, cdl_state, cdl_class, cdl_endorsements, cdl_restrictions, cdl_expires_on, medical_card_expires_on, medical_examiner_registry_number, medical_examiner_name, medical_exam_on, last_annual_review_on, last_clearinghouse_query_on, prior_license_states, pay_type, pay_rate, status, notes, created_at, updated_at"
 
 /** Every driver in the organization, by name. */
 export async function getDrivers(organizationId: string): Promise<Driver[]> {
