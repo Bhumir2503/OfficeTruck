@@ -1,11 +1,16 @@
 "use client"
 
+import { CornerDownLeft } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import { toast } from "sonner"
 
 import { updateTruckCosts } from "@/app/org/[slug]/equipment/actions"
 import { money, TextField } from "@/components/trucks/truck-form"
+import {
+  SettingsCard,
+  SettingsCardFooter,
+} from "@/components/settings/settings-card"
 import { Button } from "@/components/ui/button"
 import {
   handleCurrencyBlur,
@@ -38,7 +43,7 @@ const same = (a: string, b: string) =>
   a === "" || b === "" ? a === b : Number(a) === Number(b)
 
 /**
- * A truck's fixed costs, beside the truck page, saved on their own. Owners
+ * A truck's fixed costs, a card on the truck page saved on its own. Owners
  * and admins only.
  */
 export function TruckCostsBox({
@@ -55,8 +60,6 @@ export function TruckCostsBox({
   const [saving, startSave] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [changed, setChanged] = useState(false)
-  // Remounts the fields on Cancel, back to the saved values.
-  const [version, setVersion] = useState(0)
 
   const saved: Costs = {
     monthly_payment: String(truck.monthly_payment ?? ""),
@@ -86,21 +89,27 @@ export function TruckCostsBox({
   }
 
   return (
-    <section className="shrink-0 rounded-xl border bg-card text-card-foreground shadow-xs">
-      <form
-        onSubmit={save}
-        onChange={(event) => check(event.currentTarget)}
-        // Blur reformats the amount ("1850" → "1,850.00") without a change event.
-        onBlur={(event) => check(event.currentTarget)}
-        autoComplete="off"
-        className="flex flex-col gap-4 px-5 pt-4 pb-5"
+    <form
+      onSubmit={save}
+      onChange={(event) => check(event.currentTarget)}
+      // Blur reformats the amount ("1850" → "1,850.00") without a change event.
+      onBlur={(event) => check(event.currentTarget)}
+      autoComplete="off"
+    >
+      <SettingsCard
+        title="Fixed costs"
+        contentClassName="grid gap-5 sm:grid-cols-6"
+        footer={
+          <SettingsCardFooter
+            hint={error && <span className="text-destructive">{error}</span>}
+          >
+            <Button type="submit" size="sm" disabled={saving || !changed}>
+              {saving ? "Saving…" : "Save"} <CornerDownLeft />
+            </Button>
+          </SettingsCardFooter>
+        }
       >
-        <h4 className="font-semibold">Fixed costs</h4>
-        <fieldset
-          key={version}
-          disabled={saving}
-          className="flex flex-col gap-4"
-        >
+        <fieldset disabled={saving} className="contents">
           {FIELDS.map(({ name, label }) => (
             <TextField
               key={name}
@@ -112,34 +121,14 @@ export function TruckCostsBox({
               placeholder="0.00"
               defaultValue={money(truck[name])}
               errors={{}}
+              className="sm:col-span-2"
               onChange={handleCurrencyInput}
               onKeyDown={handleCurrencyKeyDown}
               onBlur={handleCurrencyBlur}
             />
           ))}
         </fieldset>
-        {error && <p className="text-sm text-destructive">{error}</p>}
-        {changed && (
-          <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              disabled={saving}
-              onClick={() => {
-                setVersion((v) => v + 1)
-                setChanged(false)
-                setError(null)
-              }}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" size="sm" disabled={saving}>
-              {saving ? "Saving…" : "Save"}
-            </Button>
-          </div>
-        )}
-      </form>
-    </section>
+      </SettingsCard>
+    </form>
   )
 }

@@ -151,6 +151,9 @@ export default async function TruckPage({
                 driversBase={`/org/${organization.slug}/drivers`}
               />
             )}
+            {manager && (
+              <TruckCostsBox organizationId={organization.id} truck={truck} />
+            )}
             <div id={TRUCK_MAINTENANCE_ID} className="scroll-mt-6">
               <TruckMaintenance
                 organizationId={organization.id}
@@ -198,9 +201,6 @@ export default async function TruckPage({
               today={today}
               manager={manager}
             />
-            {manager && (
-              <TruckCostsBox organizationId={organization.id} truck={truck} />
-            )}
             <TruckNotes
               organizationId={organization.id}
               truckId={truck.id}

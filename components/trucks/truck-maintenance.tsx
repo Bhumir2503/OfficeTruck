@@ -422,7 +422,7 @@ export function TruckMaintenance({
         >
           {pm
             ? pmLine(pm)
-            : "Every service, repair and inspection on this trailer."}
+            : `Every service, repair and inspection on this ${vehicle}.`}
           {odometerNote && (
             <span className="block text-muted-foreground">{odometerNote}</span>
           )}

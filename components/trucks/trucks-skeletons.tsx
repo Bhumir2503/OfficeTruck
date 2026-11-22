@@ -128,12 +128,38 @@ function FieldSkeleton({
   )
 }
 
+/** A card's footer with its Save button, as on the truck page. */
+function SaveFooter() {
+  return (
+    <SettingsCardFooter>
+      <Skeleton className="h-8 w-20 rounded-md" />
+    </SettingsCardFooter>
+  )
+}
+
+function CostsCardSkeleton({ editing = false }: { editing?: boolean }) {
+  return (
+    <SettingsCard
+      title="Fixed costs"
+      contentClassName="grid gap-5 sm:grid-cols-6"
+      footer={editing ? <SaveFooter /> : undefined}
+    >
+      <FieldSkeleton label="Payment or lease" className="sm:col-span-2" />
+      <FieldSkeleton label="Insurance" className="sm:col-span-2" />
+      <FieldSkeleton label="Other fixed costs" className="sm:col-span-2" />
+    </SettingsCard>
+  )
+}
+
 /** The truck form's cards. `editing` matches the truck page's version. */
 function TruckFormSkeleton({ editing = false }: { editing?: boolean }) {
+  // On the truck page each card saves on its own, from a footer.
+  const footer = editing ? <SaveFooter /> : undefined
   return (
     <div className="flex flex-col gap-6">
       <SettingsCard
         title={editing ? "Truck details" : "Truck"}
+        footer={footer}
         contentClassName="grid gap-5 sm:grid-cols-6"
       >
         <FieldSkeleton label="Unit number" className="sm:col-span-2" />
@@ -146,6 +172,7 @@ function TruckFormSkeleton({ editing = false }: { editing?: boolean }) {
       </SettingsCard>
       <SettingsCard
         title="Plate and compliance"
+        footer={footer}
         contentClassName="grid gap-5 sm:grid-cols-6"
       >
         <FieldSkeleton label="Plate number" className="sm:col-span-4" />
@@ -162,6 +189,7 @@ function TruckFormSkeleton({ editing = false }: { editing?: boolean }) {
       </SettingsCard>
       <SettingsCard
         title="Ownership and driver"
+        footer={footer}
         contentClassName="grid gap-5 sm:grid-cols-6"
       >
         <FieldSkeleton label="Ownership" className="sm:col-span-3" />
@@ -170,6 +198,7 @@ function TruckFormSkeleton({ editing = false }: { editing?: boolean }) {
       </SettingsCard>
       <SettingsCard
         title="Maintenance schedule"
+        footer={footer}
         contentClassName="grid gap-5 sm:grid-cols-6"
       >
         <FieldSkeleton label="Odometer" className="sm:col-span-3" />
@@ -194,20 +223,7 @@ export function NewTruckSkeleton() {
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
           <div className="flex min-w-0 flex-col gap-6 lg:col-start-1 lg:row-start-1">
             <TruckFormSkeleton />
-            <SettingsCard
-              title="Fixed costs"
-              contentClassName="grid gap-5 sm:grid-cols-6"
-            >
-              <FieldSkeleton
-                label="Payment or lease"
-                className="sm:col-span-2"
-              />
-              <FieldSkeleton label="Insurance" className="sm:col-span-2" />
-              <FieldSkeleton
-                label="Other fixed costs"
-                className="sm:col-span-2"
-              />
-            </SettingsCard>
+            <CostsCardSkeleton />
             <SettingsCard title="Notes">
               <Skeleton className="h-16 w-full" />
             </SettingsCard>
@@ -253,6 +269,7 @@ export function TruckDetailSkeleton() {
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
           <div className="flex min-w-0 flex-col gap-4">
             <TruckFormSkeleton editing />
+            <CostsCardSkeleton editing />
             <SettingsCard
               title="Maintenance"
               description={
@@ -261,14 +278,15 @@ export function TruckDetailSkeleton() {
               }
               action={<Skeleton className="h-8 w-36 rounded-md" />}
             >
-              <Skeleton className="h-24 w-full" />
+              {/* As tall as the card's empty state. */}
+              <Skeleton className="h-46.5 w-full" />
             </SettingsCard>
             <SettingsCard
               title="Documents"
               description="Kept private to your organization."
               action={<Skeleton className="h-8 w-32 rounded-md" />}
             >
-              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-46.5 w-full" />
             </SettingsCard>
           </div>
           <aside className="order-first flex flex-col gap-4 lg:order-none">
@@ -282,15 +300,9 @@ export function TruckDetailSkeleton() {
               <Line className="mt-1 w-56" />
               <Skeleton className="mt-4 h-10 w-full rounded-md" />
             </section>
-            <section className={cn(panel, "flex flex-col gap-4")}>
-              <h4 className="font-semibold">Fixed costs</h4>
-              <FieldSkeleton label="Payment or lease" />
-              <FieldSkeleton label="Insurance" />
-              <FieldSkeleton label="Other fixed costs" />
-            </section>
             <section className={cn(panel, "flex flex-col gap-3")}>
               <h4 className="font-semibold">Notes</h4>
-              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-16 w-full" />
             </section>
           </aside>
         </div>
