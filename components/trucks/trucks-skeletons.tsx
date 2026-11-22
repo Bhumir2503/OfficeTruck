@@ -140,13 +140,14 @@ function SaveFooter() {
 function CostsCardSkeleton({ editing = false }: { editing?: boolean }) {
   return (
     <SettingsCard
-      title="Fixed costs"
-      contentClassName="grid gap-5 sm:grid-cols-6"
+      title="Monthly fixed costs"
+      className="@container"
+      contentClassName="grid gap-5 @md:grid-cols-3 @md:items-end"
       footer={editing ? <SaveFooter /> : undefined}
     >
-      <FieldSkeleton label="Payment or lease" className="sm:col-span-2" />
-      <FieldSkeleton label="Insurance" className="sm:col-span-2" />
-      <FieldSkeleton label="Other fixed costs" className="sm:col-span-2" />
+      <FieldSkeleton label="Payment or lease" />
+      <FieldSkeleton label="Insurance" />
+      <FieldSkeleton label="Other fixed costs" />
     </SettingsCard>
   )
 }
