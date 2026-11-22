@@ -215,6 +215,9 @@ export type LoadStop = {
   /** Why the office entered the time, when it did. */
   arrived_note: string | null
   departed_note: string | null
+  /** Odometer readings, in miles: at the first pickup and the last stop. */
+  arrived_odometer: number | null
+  departed_odometer: number | null
 }
 
 export type LoadCharge = {
@@ -253,7 +256,7 @@ export async function getLoadDetail(organizationId: string, id: string) {
     supabase
       .from("load_stops")
       .select(
-        "id, position, kind, facility, location, appointment_type, appointment_start, appointment_end, stop_number, reference_numbers, contact_phone, notes, arrived_at, departed_at, arrived_source, departed_source, arrived_note, departed_note"
+        "id, position, kind, facility, location, appointment_type, appointment_start, appointment_end, stop_number, reference_numbers, contact_phone, notes, arrived_at, departed_at, arrived_source, departed_source, arrived_note, departed_note, arrived_odometer, departed_odometer"
       )
       .eq("load_id", id)
       .order("position"),

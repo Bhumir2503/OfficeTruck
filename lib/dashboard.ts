@@ -15,12 +15,15 @@ import { cityState } from "@/lib/report-format"
 import type { AppointmentType, LoadStatus } from "@/lib/schemas/load"
 import { createClient } from "@/lib/supabase/server"
 import {
-  formatTaxYear,
-  taxYearDueDate,
-  taxYearOf,
   truckComplianceItems,
+  truckServiceItem,
+  withEstimatedOdometer,
 } from "@/lib/truck-format"
-import { getTaxFilings, getTrucks } from "@/lib/trucks"
+import {
+  getLastServiceByTruck,
+  getMilesSinceReading,
+  getTrucks,
+} from "@/lib/trucks"
 
 /**
  * Everything the owner should act on, most pressing first. Cached for the
@@ -29,7 +32,7 @@ import { getTaxFilings, getTrucks } from "@/lib/trucks"
 export const getAttention = cache(async (organizationId: string) => {
   const today = getToday()
   const supabase = await createClient()
-  const [invoices, ready, booked, drivers, trucks, filings, papers, dq] =
+  const [invoices, ready, booked, drivers, trucks, papers, dq, lastService] =
     await Promise.all([
       getInvoices(organizationId),
       getLoadsToInvoice(organizationId),
@@ -43,15 +46,18 @@ export const getAttention = cache(async (organizationId: string) => {
         .order("pickup_start"),
       getDrivers(organizationId),
       getTrucks(organizationId),
-      getTaxFilings(organizationId),
       getCompanyDocuments(organizationId),
       getDqDatesByDriver(organizationId),
+      getLastServiceByTruck(organizationId),
     ])
   if (booked.error) {
     throw booked.error
   }
 
   const activeTrucks = trucks.filter((truck) => truck.status === "active")
+  // Service by mileage counts from the odometer estimated from loads run
+  // since the last reading.
+  const milesSince = await getMilesSinceReading(organizationId, activeTrucks)
   const documents: AttentionInput["documents"] = [
     ...drivers
       .filter((driver) => driver.status === "active")
@@ -63,13 +69,40 @@ export const getAttention = cache(async (organizationId: string) => {
         }))
       ),
     ...activeTrucks.flatMap((truck) =>
-      truckComplianceItems(truck, today).map((item) => ({
-        owner: `Truck ${truck.unit_number}`,
-        item,
-        path: `equipment/${truck.id}`,
-      }))
+      [
+        ...truckComplianceItems(truck, today),
+        truckServiceItem(
+          withEstimatedOdometer(truck, milesSince[truck.id]),
+          lastService[truck.id],
+          today
+        ),
+      ]
+        .filter((item) => item !== null)
+        .map((item) => ({
+          owner: `Truck ${truck.unit_number}`,
+          item,
+          path: `equipment/${truck.id}`,
+        }))
     ),
   ]
+  // A truck parked past the day it was due back from out of service.
+  for (const truck of trucks) {
+    const until = truck.out_of_service_until
+    if (truck.status !== "out_of_service" || !until || until >= today) {
+      continue
+    }
+    documents.push({
+      owner: `Truck ${truck.unit_number}`,
+      item: {
+        key: "back_in_service",
+        label: "Return to service",
+        kind: "due",
+        due: until,
+        expiry: expiry(until, today),
+      },
+      path: `equipment/${truck.id}`,
+    })
+  }
   // The company's own papers that run out.
   for (const paper of papers) {
     if (!paper.expires_on) continue
@@ -85,25 +118,6 @@ export const getAttention = cache(async (organizationId: string) => {
       path: "documents",
     })
   }
-  // The company's 2290, as the Compliance page shows it.
-  if (activeTrucks.length > 0) {
-    const taxYear = taxYearOf(today)
-    const filed = filings.some((filing) => filing.tax_year === taxYear)
-    const year = filed ? taxYear + 1 : taxYear
-    const due = taxYearDueDate(year)
-    documents.push({
-      owner: "Company",
-      item: {
-        key: "form_2290",
-        label: `2290 for ${formatTaxYear(year)}`,
-        kind: "due",
-        due,
-        expiry: expiry(due, today),
-      },
-      path: "compliance",
-    })
-  }
-
   const items = buildAttention({
     today,
     invoices,

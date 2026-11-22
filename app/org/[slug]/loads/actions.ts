@@ -1200,6 +1200,42 @@ export async function setStopTime(
   return { ok: true }
 }
 
+/**
+ * The office enters, fixes or clears (null) an odometer reading at a stop,
+ * for when the driver skipped it or got it wrong.
+ */
+export async function setStopOdometer(
+  organizationId: string,
+  stopId: string,
+  event: "arrived" | "departed",
+  reading: number | null
+): Promise<ActionResult> {
+  if (!(await isMember(organizationId))) {
+    return { error: "You aren't a member of this organization." }
+  }
+  if (event !== "arrived" && event !== "departed") {
+    return { error: "Unknown stop event." }
+  }
+  if (
+    reading !== null &&
+    (!Number.isInteger(reading) || reading < 0 || reading > 5_000_000)
+  ) {
+    return { error: "Enter the odometer in miles." }
+  }
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("set_stop_odometer", {
+    target_stop: stopId,
+    event,
+    reading,
+  })
+  if (error) {
+    return { error: rpcError(error) }
+  }
+  refresh()
+  return { ok: true }
+}
+
 export type SaveAssignmentResult =
   | { error: string }
   | {

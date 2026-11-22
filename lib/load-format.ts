@@ -115,3 +115,44 @@ export function stopDetention(
       Math.round(billableHours * Number(terms.detention_rate) * 100) / 100,
   }
 }
+
+// ------------------------------------------------------------- Odometer ----
+
+type OdometerStop = {
+  position: number
+  kind: "pickup" | "delivery"
+  arrived_odometer?: number | null
+  departed_odometer?: number | null
+}
+
+/**
+ * Where the driver is asked for the odometer: arriving at the first pickup
+ * and leaving the last stop. Two readings give the load's loaded miles; the
+ * last one keeps the truck's odometer current.
+ */
+export function odometerStops(stops: OdometerStop[]) {
+  const pickups = stops.filter((stop) => stop.kind === "pickup")
+  const first = pickups.length
+    ? Math.min(...pickups.map((stop) => stop.position))
+    : null
+  const last = stops.length
+    ? Math.max(...stops.map((stop) => stop.position))
+    : null
+  return { firstPickup: first, lastStop: last }
+}
+
+/**
+ * Loaded miles by the odometer: leaving the last stop less arriving at the
+ * first pickup. Null until both readings are in.
+ */
+export function odometerMiles(stops: OdometerStop[]) {
+  const { firstPickup, lastStop } = odometerStops(stops)
+  const start = stops.find(
+    (stop) => stop.position === firstPickup
+  )?.arrived_odometer
+  const end = stops.find(
+    (stop) => stop.position === lastStop
+  )?.departed_odometer
+  if (start == null || end == null || end < start) return null
+  return end - start
+}

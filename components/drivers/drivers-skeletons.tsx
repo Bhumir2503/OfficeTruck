@@ -1,5 +1,6 @@
 import { cn } from "cn"
 
+import { AddRecordPanelSkeleton } from "@/components/add-record-panel"
 import {
   SettingsCard,
   SettingsCardFooter,
@@ -208,43 +209,33 @@ export function NewDriverSkeleton() {
         {/* The "All drivers" link: a small ghost button. */}
         <Skeleton className="h-8 w-28 rounded-md" />
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
-          <div className="min-w-0 lg:col-start-1 lg:row-start-1">
+          <div className="flex min-w-0 flex-col gap-6 lg:col-start-1 lg:row-start-1">
             <DriverFormSkeleton />
+            <SettingsCard
+              title="Pay"
+              description="It works out the driver's cut and your profit on each load."
+              contentClassName="grid gap-5 sm:grid-cols-6"
+            >
+              <FieldSkeleton label="Paid" className="sm:col-span-3" />
+            </SettingsCard>
+            <SettingsCard title="Notes">
+              <Skeleton className="h-16 w-full" />
+            </SettingsCard>
           </div>
-          <aside className="flex flex-col gap-6 lg:col-start-2 lg:row-start-1">
-            <section className="flex flex-col gap-4 rounded-xl border bg-card px-5 pt-4 pb-5 shadow-xs">
-              <div>
-                <h4 className="font-semibold">Pay</h4>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  It works out the driver&apos;s cut and your profit on each
-                  load.
-                </p>
-              </div>
-              <Field>
-                <FieldLabel>Paid</FieldLabel>
-                <Skeleton className="h-9 w-full rounded-md" />
-              </Field>
-            </section>
-            <section className="flex flex-col gap-3 rounded-xl border bg-card px-5 pt-4 pb-5 shadow-xs">
-              <h4 className="font-semibold">Notes</h4>
-              <Skeleton className="h-24 w-full" />
-            </section>
-            <section className="rounded-xl border bg-card px-5 pt-4 pb-5 shadow-xs">
-              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                New driver
-              </p>
-              <h4 className="mt-1 text-xl font-semibold tracking-tight">
-                Add a driver
-              </h4>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Fill in what you have. Only their name is needed to save, and
-                anything else can be added from their page later.
-              </p>
-              <div className="mt-5 flex flex-col gap-2 border-t pt-5">
-                <Skeleton className="h-10 w-full rounded-md bg-foreground/10" />
-                <Skeleton className="mx-auto h-8 w-16 rounded-md" />
-              </div>
-            </section>
+          <aside className="lg:col-start-2 lg:row-start-1">
+            <AddRecordPanelSkeleton
+              eyebrow="New driver"
+              placeholderTitle="Add a driver"
+              hint="Only their name is needed to save. Anything else can be added from their page later."
+              sections={[
+                { label: "Driver" },
+                { label: "CDL" },
+                { label: "Medical card" },
+                { label: "Annual checks" },
+                { label: "Pay" },
+                { label: "Notes", optional: true },
+              ]}
+            />
           </aside>
         </div>
       </div>

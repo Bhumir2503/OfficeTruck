@@ -13,7 +13,9 @@ function requiresSignIn(pathname: string) {
     pathname === "/" ||
     pathname === "/account" ||
     pathname === "/org" ||
-    pathname.startsWith("/org/")
+    pathname.startsWith("/org/") ||
+    // Printable records, opened from inside an organization.
+    pathname.startsWith("/print/")
   )
 }
 

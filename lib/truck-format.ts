@@ -4,72 +4,13 @@ import {
   loadDriverPay,
   type ComplianceItem,
 } from "@/lib/driver-format"
-import type { TaxFiling, Truck, TruckLoad } from "@/lib/trucks"
+import type { Truck, TruckLoad } from "@/lib/trucks"
 
 /** "Truck 12 · 2021 Freightliner Cascadia", or just the unit number. */
 export function truckDescription(
   truck: Pick<Truck, "year" | "make" | "model">
 ) {
   return [truck.year, truck.make, truck.model].filter(Boolean).join(" ")
-}
-
-// ---------------------------------------------------------------- 2290 ----
-
-/**
- * The 2290 tax year `date` falls in, by the year it starts: the period runs
- * July 1 to June 30, so 2026-11-12 is in tax year 2026 (2026–27).
- */
-export function taxYearOf(date: string) {
-  const [year, month] = date.split("-").map(Number)
-  return month >= 7 ? year : year - 1
-}
-
-/** 2026 → "2026–27" */
-export function formatTaxYear(taxYear: number) {
-  return `${taxYear}–${String((taxYear + 1) % 100).padStart(2, "0")}`
-}
-
-/** The return for a tax year is due by August 31 of its first year. */
-export function taxYearDueDate(taxYear: number) {
-  return `${taxYear}-08-31`
-}
-
-/** The filing for a tax year that lists this truck, if there is one. */
-export function coveringFiling(
-  truckId: string,
-  taxYear: number,
-  filings: TaxFiling[]
-) {
-  return (
-    filings.find(
-      (filing) =>
-        filing.tax_year === taxYear && filing.truck_ids.includes(truckId)
-    ) ?? null
-  )
-}
-
-/**
- * The 2290 as a compliance item for one truck. Covered for this tax year,
- * it's next due for the following one; not covered, it's due (or overdue)
- * for this one.
- */
-export function taxItem(
-  truckId: string,
-  filings: TaxFiling[],
-  today: string
-): ComplianceItem & { covered: boolean; taxYear: number } {
-  const taxYear = taxYearOf(today)
-  const covered = !!coveringFiling(truckId, taxYear, filings)
-  const due = taxYearDueDate(covered ? taxYear + 1 : taxYear)
-  return {
-    key: "form_2290",
-    label: "2290",
-    kind: "due",
-    due,
-    expiry: expiry(due, today),
-    covered,
-    taxYear,
-  }
 }
 
 // ---------------------------------------------------------- Compliance ----
@@ -109,6 +50,134 @@ export function truckComplianceItems(
       expiry: expiry(truck.plate_expires_on, today),
     },
   ]
+}
+
+// ------------------------------------------------ Preventive maintenance ---
+
+const miles = new Intl.NumberFormat("en-US")
+
+/** How close counts as "due soon": two weeks, or 1,000 miles. */
+const PM_SOON_DAYS = 14
+const PM_SOON_MILES = 1000
+
+export type PmStatus = {
+  /** Whether a schedule is set at all. */
+  scheduled: boolean
+  /** The last preventive service, if any is logged. */
+  last: { done_on: string; odometer: number | null } | null
+  /** When it's next due by date, and at what mileage. */
+  dueOn: string | null
+  dueAtMiles: number | null
+  /** Miles to go from the last odometer reading; negative when past. */
+  milesLeft: number | null
+  state: "unscheduled" | "no_history" | "ok" | "soon" | "due"
+}
+
+function addDays(date: string, days: number) {
+  const next = new Date(`${date}T00:00:00Z`)
+  next.setUTCDate(next.getUTCDate() + days)
+  return next.toISOString().slice(0, 10)
+}
+
+/**
+ * When a truck's next preventive maintenance is due: so many days and/or
+ * miles after the last one logged, whichever comes first.
+ */
+export function pmStatus(
+  truck: Pick<Truck, "pm_interval_miles" | "pm_interval_days" | "odometer">,
+  last: { done_on: string; odometer: number | null } | null,
+  today: string
+): PmStatus {
+  const scheduled = !!(truck.pm_interval_miles || truck.pm_interval_days)
+  const base = {
+    scheduled,
+    last,
+    dueOn: null,
+    dueAtMiles: null,
+    milesLeft: null,
+  }
+  if (!scheduled) return { ...base, state: "unscheduled" }
+  if (!last) return { ...base, state: "no_history" }
+
+  const dueOn = truck.pm_interval_days
+    ? addDays(last.done_on, truck.pm_interval_days)
+    : null
+  const dueAtMiles =
+    truck.pm_interval_miles && last.odometer !== null
+      ? last.odometer + truck.pm_interval_miles
+      : null
+  const milesLeft =
+    dueAtMiles !== null && truck.odometer !== null
+      ? dueAtMiles - truck.odometer
+      : null
+  const daysLeft = dueOn ? expiry(dueOn, today) : null
+  const overdue =
+    daysLeft?.state === "expired" || (milesLeft !== null && milesLeft <= 0)
+  const soon =
+    (daysLeft !== null &&
+      daysLeft.state !== "missing" &&
+      daysLeft.days <= PM_SOON_DAYS) ||
+    (milesLeft !== null && milesLeft <= PM_SOON_MILES)
+  return {
+    ...base,
+    dueOn,
+    dueAtMiles,
+    milesLeft,
+    state: overdue ? "due" : soon ? "soon" : "ok",
+  }
+}
+
+/**
+ * Preventive maintenance as a compliance item, only while it needs action:
+ * due soon or overdue, by date or by miles, whichever is more pressing.
+ * Null when it's fine, unscheduled or has nothing logged yet.
+ */
+export function pmItem(pm: PmStatus, today: string): ComplianceItem | null {
+  if (pm.state !== "due" && pm.state !== "soon") return null
+  const base = { key: "pm", label: "Service", kind: "due" as const }
+  const byDate = pm.dueOn ? expiry(pm.dueOn, today) : null
+  const dateDriven =
+    byDate !== null &&
+    byDate.state !== "missing" &&
+    (pm.state === "due"
+      ? byDate.state === "expired"
+      : byDate.days <= PM_SOON_DAYS)
+  if (dateDriven) {
+    return { ...base, due: pm.dueOn, expiry: byDate }
+  }
+  // Due by mileage: there's no date to count down to.
+  const left = pm.milesLeft ?? 0
+  return {
+    ...base,
+    due: null,
+    expiry: { state: pm.state === "due" ? "expired" : "urgent", days: 0 },
+    whenText:
+      left <= 0
+        ? `${miles.format(-left)} mi over`
+        : `in ${miles.format(left)} mi`,
+  }
+}
+
+/** A truck's service as a compliance item, from its last preventive service. */
+export function truckServiceItem(
+  truck: Pick<Truck, "pm_interval_miles" | "pm_interval_days" | "odometer">,
+  last: { done_on: string; odometer: number | null } | null | undefined,
+  today: string
+) {
+  return pmItem(pmStatus(truck, last ?? null, today), today)
+}
+
+/**
+ * The truck with its odometer estimated from the loads it has run since the
+ * last reading, for service reminders. Unchanged when there's no reading or
+ * nothing has run since.
+ */
+export function withEstimatedOdometer<T extends Pick<Truck, "odometer">>(
+  truck: T,
+  since: { miles: number; loads: number } | undefined
+): T {
+  if (truck.odometer === null || !since?.miles) return truck
+  return { ...truck, odometer: truck.odometer + since.miles }
 }
 
 // ---------------------------------------------------- Cost per mile -------

@@ -9,6 +9,10 @@ import {
 } from "@/lib/driver-document-format"
 import { DOCUMENT_LABELS, type DocumentKind } from "@/lib/load-document-format"
 import { EXPENSE_LABELS, type ExpenseKind } from "@/lib/load-expense-format"
+import {
+  TRUCK_DOCUMENT_LABELS,
+  type TruckDocumentKind,
+} from "@/lib/truck-document-format"
 import { createClient } from "@/lib/supabase/server"
 
 export type CompanyDocument = {
@@ -62,14 +66,14 @@ export async function getCompanyDocuments(
 
 /**
  * Every file in the organization: company papers, load documents, expense
- * receipts and driver documents, newest first.
+ * receipts, driver documents and truck documents, newest first.
  */
 export async function getAllDocuments(
   organizationId: string,
   company: CompanyDocument[]
 ): Promise<DocumentEntry[]> {
   const supabase = await createClient()
-  const [loadDocs, receipts, drivers] = await Promise.all([
+  const [loadDocs, receipts, drivers, trucks] = await Promise.all([
     supabase
       .from("load_documents")
       .select(
@@ -89,8 +93,14 @@ export async function getAllDocuments(
         "id, kind, title, path, file_name, created_at, driver:drivers (id, full_name)"
       )
       .eq("organization_id", organizationId),
+    supabase
+      .from("truck_documents")
+      .select(
+        "id, kind, title, path, file_name, created_at, truck:trucks (id, unit_number)"
+      )
+      .eq("organization_id", organizationId),
   ])
-  for (const result of [loadDocs, receipts, drivers]) {
+  for (const result of [loadDocs, receipts, drivers, trucks]) {
     if (result.error) throw result.error
   }
 
@@ -120,8 +130,17 @@ export async function getAllDocuments(
     created_at: string
     driver: { id: string; full_name: string } | null
   }[]
+  const truckRows = trucks.data as unknown as {
+    id: string
+    kind: TruckDocumentKind
+    title: string | null
+    path: string
+    file_name: string
+    created_at: string
+    truck: { id: string; unit_number: string } | null
+  }[]
 
-  const [loadUrls, driverUrls] = await Promise.all([
+  const [loadUrls, driverUrls, truckUrls] = await Promise.all([
     sign(supabase, "load-documents", [
       ...docs.map((doc) => doc.path),
       ...receiptRows.map((row) => row.receipt_path),
@@ -130,6 +149,11 @@ export async function getAllDocuments(
       supabase,
       "driver-documents",
       driverRows.map((row) => row.path)
+    ),
+    sign(
+      supabase,
+      "truck-documents",
+      truckRows.map((row) => row.path)
     ),
   ])
 
@@ -173,6 +197,16 @@ export async function getAllDocuments(
       path: row.driver ? `drivers/${row.driver.id}` : null,
       date: row.created_at,
       url: driverUrls.get(row.path) ?? null,
+    })),
+    ...truckRows.map((row) => ({
+      key: `truck:${row.id}`,
+      group: "truck" as const,
+      type: row.title ?? TRUCK_DOCUMENT_LABELS[row.kind],
+      file_name: row.file_name,
+      owner: row.truck?.unit_number ?? "Truck",
+      path: row.truck ? `equipment/${row.truck.id}` : null,
+      date: row.created_at,
+      url: truckUrls.get(row.path) ?? null,
     })),
   ]
   return entries.sort((a, b) => b.date.localeCompare(a.date))

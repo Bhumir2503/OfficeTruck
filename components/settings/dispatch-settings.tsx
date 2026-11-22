@@ -66,7 +66,8 @@ export function DispatchSettings({
           Show drivers the rate and charges
           <span className="block text-sm text-muted-foreground">
             Off: drivers get the stops, appointments and pickup numbers, but not
-            what the load pays.
+            what the load pays. Drivers paid a percentage of the load always see
+            the rate: they&apos;re entitled to what the load paid.
           </span>
         </span>
       </Label>

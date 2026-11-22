@@ -1,7 +1,16 @@
 import type { PayType } from "@/lib/schemas/driver"
 import type { LoadStatus } from "@/lib/schemas/load"
-import type { Ownership, TruckStatus } from "@/lib/schemas/truck"
+import type {
+  MaintenanceKind,
+  Ownership,
+  TruckStatus,
+} from "@/lib/schemas/truck"
+import { type DriverNow, getLoadsNow } from "@/lib/drivers"
+import type { TruckDocumentKind } from "@/lib/truck-document-format"
 import { createClient } from "@/lib/supabase/server"
+
+/** The load a truck is on, its next booked one and its last delivery. */
+export type TruckNow = DriverNow
 
 export type Truck = {
   id: string
@@ -16,13 +25,24 @@ export type Truck = {
   ownership: Ownership | null
   default_driver_id: string | null
   default_driver: { id: string; full_name: string } | null
-  motive_vehicle_id: string | null
   /** Where it starts when it has no earlier load, for empty miles. */
   home_base: string | null
   /** Dollars per month. */
   monthly_payment: number | null
   monthly_insurance: number | null
   monthly_other_costs: number | null
+  /** Registered gross weight, in pounds. */
+  registered_weight_lbs: number | null
+  axles: number | null
+  /** The last odometer reading, and the day it was read. */
+  odometer: number | null
+  odometer_on: string | null
+  /** Preventive maintenance every so many miles and/or days. */
+  pm_interval_miles: number | null
+  pm_interval_days: number | null
+  /** While out of service: why, and when it's expected back. */
+  out_of_service_reason: string | null
+  out_of_service_until: string | null
   /** When the annual DOT inspection was last done; due a year later. */
   annual_inspection_on: string | null
   registration_expires_on: string | null
@@ -33,7 +53,7 @@ export type Truck = {
 }
 
 const TRUCK_COLUMNS =
-  "id, unit_number, vin, year, make, model, plate_number, plate_state, status, ownership, default_driver_id, default_driver:drivers!trucks_default_driver_fkey (id, full_name), motive_vehicle_id, home_base, monthly_payment, monthly_insurance, monthly_other_costs, annual_inspection_on, registration_expires_on, plate_expires_on, notes, created_at, updated_at"
+  "id, unit_number, vin, year, make, model, plate_number, plate_state, status, ownership, default_driver_id, default_driver:drivers!trucks_default_driver_fkey (id, full_name), home_base, monthly_payment, monthly_insurance, monthly_other_costs, registered_weight_lbs, axles, odometer, odometer_on, pm_interval_miles, pm_interval_days, out_of_service_reason, out_of_service_until, annual_inspection_on, registration_expires_on, plate_expires_on, notes, created_at, updated_at"
 
 /** Every truck in the organization, by unit number. */
 export async function getTrucks(organizationId: string): Promise<Truck[]> {
@@ -140,36 +160,205 @@ export async function getTruckLoads(
   return data as unknown as TruckLoad[]
 }
 
-export type TaxFiling = {
-  id: string
-  tax_year: number
-  filed_on: string
-  notes: string | null
-  truck_ids: string[]
+/** What each truck is doing, for the trucks list, by truck id. */
+export function getTrucksNow(
+  organizationId: string,
+  /** "YYYY-MM-DD" */
+  today: string
+): Promise<Record<string, TruckNow>> {
+  return getLoadsNow(organizationId, today, "truck_id")
 }
 
-/** Every 2290 the organization has on file, newest tax year first. */
-export async function getTaxFilings(
-  organizationId: string
-): Promise<TaxFiling[]> {
+export type TruckDocument = {
+  id: string
+  kind: TruckDocumentKind
+  title: string | null
+  expires_on: string | null
+  file_name: string
+  content_type: string
+  created_at: string
+  /** A link that works for an hour, or null. */
+  url: string | null
+}
+
+/** A truck's papers, by kind then newest first, with links to open them. */
+export async function getTruckDocuments(
+  organizationId: string,
+  truckId: string
+): Promise<TruckDocument[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
-    .from("heavy_vehicle_tax_filings")
+    .from("truck_documents")
     .select(
-      "id, tax_year, filed_on, notes, trucks:heavy_vehicle_tax_filing_trucks (truck_id)"
+      "id, kind, title, expires_on, path, file_name, content_type, created_at"
     )
     .eq("organization_id", organizationId)
-    .order("tax_year", { ascending: false })
-
+    .eq("truck_id", truckId)
+    .order("kind")
+    .order("created_at", { ascending: false })
   if (error) {
     throw error
   }
-  return (
-    data as unknown as (Omit<TaxFiling, "truck_ids"> & {
-      trucks: { truck_id: string }[]
-    })[]
-  ).map(({ trucks, ...filing }) => ({
-    ...filing,
-    truck_ids: trucks.map((truck) => truck.truck_id),
+  const urls = new Map<string, string>()
+  if (data.length) {
+    // The bucket is private, so links are signed and short-lived.
+    const { data: signed } = await supabase.storage
+      .from("truck-documents")
+      .createSignedUrls(
+        data.map((row) => row.path),
+        60 * 60
+      )
+    for (const item of signed ?? []) {
+      if (item.path && item.signedUrl) {
+        urls.set(item.path, item.signedUrl)
+      }
+    }
+  }
+  return data.map(({ path, ...row }) => ({
+    ...row,
+    kind: row.kind as TruckDocumentKind,
+    url: urls.get(path) ?? null,
   }))
+}
+
+export type TruckMaintenance = {
+  id: string
+  done_on: string
+  kind: MaintenanceKind
+  description: string
+  odometer: number | null
+  cost: number | null
+  vendor: string | null
+  /** The shop's receipt or invoice, with a link that works for an hour. */
+  receipt: { name: string; type: string; url: string | null } | null
+}
+
+/** A truck's maintenance log, newest first. */
+export async function getTruckMaintenance(
+  organizationId: string,
+  truckId: string
+): Promise<TruckMaintenance[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("truck_maintenance")
+    .select(
+      "id, done_on, kind, description, odometer, cost, vendor, receipt_path, receipt_name, receipt_type"
+    )
+    .eq("organization_id", organizationId)
+    .eq("truck_id", truckId)
+    .order("done_on", { ascending: false })
+    .order("created_at", { ascending: false })
+  if (error) {
+    throw error
+  }
+  type Row = Omit<TruckMaintenance, "receipt"> & {
+    receipt_path: string | null
+    receipt_name: string | null
+    receipt_type: string | null
+  }
+  const rows = data as Row[]
+  const urls = new Map<string, string>()
+  const paths = rows.flatMap((row) =>
+    row.receipt_path ? [row.receipt_path] : []
+  )
+  if (paths.length) {
+    // The bucket is private, so links are signed and short-lived.
+    const { data: signed } = await supabase.storage
+      .from("truck-documents")
+      .createSignedUrls(paths, 60 * 60)
+    for (const item of signed ?? []) {
+      if (item.path && item.signedUrl) urls.set(item.path, item.signedUrl)
+    }
+  }
+  return rows.map(({ receipt_path, receipt_name, receipt_type, ...row }) => ({
+    ...row,
+    cost: row.cost === null ? null : Number(row.cost),
+    receipt:
+      receipt_path && receipt_name && receipt_type
+        ? {
+            name: receipt_name,
+            type: receipt_type,
+            url: urls.get(receipt_path) ?? null,
+          }
+        : null,
+  }))
+}
+
+export type LastService = { done_on: string; odometer: number | null }
+
+/**
+ * Each truck's most recent preventive service, by truck id, for maintenance
+ * reminders on the trucks list, dashboard and Compliance page.
+ */
+export async function getLastServiceByTruck(
+  organizationId: string
+): Promise<Record<string, LastService>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("truck_maintenance")
+    .select("truck_id, done_on, odometer")
+    .eq("organization_id", organizationId)
+    .eq("kind", "preventive")
+    .order("done_on", { ascending: false })
+    .order("created_at", { ascending: false })
+  if (error) {
+    throw error
+  }
+  const byTruck: Record<string, LastService> = {}
+  for (const row of data as (LastService & { truck_id: string })[]) {
+    // Newest first, so the first one seen for a truck is its last service.
+    byTruck[row.truck_id] ??= { done_on: row.done_on, odometer: row.odometer }
+  }
+  return byTruck
+}
+
+/** Load miles a truck has run since its last odometer reading. */
+export type MilesSinceReading = { miles: number; loads: number }
+
+// A load counts as run once it's delivered, from here on in the flow.
+const RUN = ["delivered", "invoiced", "paid", "factored"]
+
+/**
+ * For each truck with an odometer reading, the loaded and empty miles of the
+ * loads it delivered after the day of that reading, to estimate where its
+ * odometer is now. Loads delivered the same day are left out: the driver's
+ * reading at the last stop already counts that trip.
+ */
+export async function getMilesSinceReading(
+  organizationId: string,
+  trucks: Pick<Truck, "id" | "odometer" | "odometer_on">[]
+): Promise<Record<string, MilesSinceReading>> {
+  const read = trucks.filter(
+    (truck) => truck.odometer !== null && truck.odometer_on !== null
+  )
+  if (!read.length) return {}
+  const since = read.map((truck) => truck.odometer_on!).sort()[0]
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("loads")
+    .select("truck_id, miles, empty_miles, delivery_start")
+    .eq("organization_id", organizationId)
+    .in(
+      "truck_id",
+      read.map((truck) => truck.id)
+    )
+    .in("status", RUN)
+    .gt("delivery_start", `${since}T23:59:59`)
+  if (error) {
+    throw error
+  }
+  const readOn = new Map(read.map((truck) => [truck.id, truck.odometer_on!]))
+  const byTruck: Record<string, MilesSinceReading> = {}
+  for (const row of data as {
+    truck_id: string
+    miles: number | null
+    empty_miles: number | null
+    delivery_start: string
+  }[]) {
+    if (row.delivery_start.slice(0, 10) <= readOn.get(row.truck_id)!) continue
+    const entry = (byTruck[row.truck_id] ??= { miles: 0, loads: 0 })
+    entry.miles += (row.miles ?? 0) + (row.empty_miles ?? 0)
+    entry.loads += 1
+  }
+  return byTruck
 }

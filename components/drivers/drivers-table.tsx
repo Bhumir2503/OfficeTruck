@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useMemo, useState } from "react"
 
 import {
+  AllCurrent,
   DriverStatusBadge,
   ExpiryBadge,
 } from "@/components/drivers/driver-badges"
@@ -13,6 +14,7 @@ import {
   SettingsCardFooter,
   SettingsEmptyState,
 } from "@/components/settings/settings-card"
+import { LastDeliveryCell, NowCell, NowLine } from "@/components/now-cells"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -37,18 +39,15 @@ import {
   type DqComplianceDates,
   needsAction,
   type ComplianceItem,
-  LAST_DELIVERY_DAYS,
 } from "@/lib/driver-format"
-import type { Driver, DriverLastDelivery, DriverNow } from "@/lib/drivers"
+import type { Driver, DriverNow } from "@/lib/drivers"
 import { initials } from "@/lib/initials"
-import { formatStopDate, STATUS_STYLES } from "@/lib/load-format"
 import { formatPhone } from "@/lib/phone"
 import {
   DRIVER_STATUSES,
   DRIVER_STATUS_LABELS,
   type DriverStatus,
 } from "@/lib/schemas/driver"
-import { LOAD_STATUS_LABELS } from "@/lib/schemas/load"
 
 type Filter = DriverStatus | "all"
 
@@ -93,159 +92,12 @@ function ComplianceSummary({
     )
   }
   const onFile = items.filter((item) => item.due).length
-  return (
+  return onFile === items.length ? (
+    <AllCurrent />
+  ) : (
     <span className="text-muted-foreground">
-      {onFile === items.length
-        ? "All current"
-        : `${onFile} of ${items.length} dates on file`}
+      {onFile} of {items.length} dates on file
     </span>
-  )
-}
-
-/**
- * What a driver is doing now: the load they're on, or Available with their
- * next booked load. Its links sit above the row's own link.
- */
-function NowCell({
-  status,
-  now,
-  loadsBase,
-}: {
-  status: Driver["status"]
-  now: DriverNow | undefined
-  loadsBase: string
-}) {
-  if (status === "inactive") {
-    return <span className="text-sm text-muted-foreground">—</span>
-  }
-  const current = now?.current
-  if (current) {
-    return (
-      <div className="min-w-0">
-        <div className="flex items-center gap-2">
-          <Link
-            href={`${loadsBase}/${current.id}`}
-            className="relative z-10 font-medium tabular-nums hover:underline"
-          >
-            {current.reference}
-          </Link>
-          <span
-            className={`rounded-md px-1.5 py-0.5 text-xs font-medium ${STATUS_STYLES[current.status]}`}
-          >
-            {LOAD_STATUS_LABELS[current.status]}
-          </span>
-        </div>
-        <div className="truncate text-sm text-muted-foreground">
-          {current.from} → {current.to}
-        </div>
-      </div>
-    )
-  }
-  const next = now?.next
-  return (
-    <div className="min-w-0">
-      <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-300">
-        <span className="size-1.5 rounded-full bg-emerald-500" />
-        Available
-      </span>
-      {next && (
-        <div className="truncate text-sm text-muted-foreground">
-          Next:{" "}
-          <Link
-            href={`${loadsBase}/${next.id}`}
-            className="relative z-10 tabular-nums hover:underline"
-          >
-            {next.reference}
-          </Link>{" "}
-          · picks up {formatStopDate(next.pickup_start)}
-        </div>
-      )}
-    </div>
-  )
-}
-
-/**
- * On a phone, where the Now column is hidden: what the driver is doing, in
- * one line under their name. Plain text; the row opens the driver.
- */
-function NowLine({
-  status,
-  now,
-}: {
-  status: Driver["status"]
-  now: DriverNow | undefined
-}) {
-  if (status === "inactive") return null
-  const current = now?.current
-  if (current) {
-    return (
-      <div className="mt-1 truncate text-xs md:hidden">
-        <span
-          className={`mr-1.5 rounded-md px-1.5 py-0.5 font-medium ${STATUS_STYLES[current.status]}`}
-        >
-          {LOAD_STATUS_LABELS[current.status]}
-        </span>
-        <span className="text-muted-foreground">
-          {current.from} → {current.to}
-        </span>
-      </div>
-    )
-  }
-  return (
-    <div className="mt-1 truncate text-xs md:hidden">
-      <span className="font-medium text-emerald-700 dark:text-emerald-300">
-        Available
-      </span>
-      {now?.next && (
-        <span className="text-muted-foreground">
-          {" "}
-          · next picks up {formatStopDate(now.next.pickup_start)}
-        </span>
-      )}
-    </div>
-  )
-}
-
-/** Whole days from one "YYYY-MM-DD" date to another. */
-function daysBetween(from: string, to: string) {
-  const day = (value: string) => Date.parse(`${value.slice(0, 10)}T00:00:00Z`)
-  return Math.round((day(to) - day(from)) / 86_400_000)
-}
-
-/** When and where a driver last delivered, and how long ago. */
-function LastDeliveryCell({
-  last,
-  today,
-  loadsBase,
-}: {
-  last: DriverLastDelivery | null
-  /** "YYYY-MM-DD" */
-  today: string
-  loadsBase: string
-}) {
-  if (!last) {
-    return (
-      <span className="text-sm text-muted-foreground">
-        None in {LAST_DELIVERY_DAYS} days
-      </span>
-    )
-  }
-  const days = Math.max(0, daysBetween(last.delivered_on, today))
-  const ago =
-    days === 0 ? "Today" : days === 1 ? "Yesterday" : `${days} days ago`
-  return (
-    <div className="min-w-0">
-      <Link
-        href={`${loadsBase}/${last.id}`}
-        title={`Load ${last.reference}`}
-        className="relative z-10 text-sm font-medium hover:underline"
-      >
-        {ago}
-      </Link>
-      <div className="truncate text-sm text-muted-foreground">
-        {formatStopDate(`${last.delivered_on}T00:00`)} · {last.to}
-      </div>
-    </div>
   )
 }
 
@@ -474,7 +326,10 @@ export function DriversTable({
                           ? formatPhone(driver.phone)
                           : (driver.email ?? "No contact info")}
                       </div>
-                      <NowLine status={driver.status} now={now[driver.id]} />
+                      <NowLine
+                        off={driver.status === "inactive"}
+                        now={now[driver.id]}
+                      />
                       {warnings.length > 0 && (
                         // The compliance column is hidden on phones; keep the warnings.
                         <div className="mt-1 flex flex-wrap gap-1 sm:hidden">
@@ -488,7 +343,7 @@ export function DriversTable({
                 </TableCell>
                 <TableCell className="hidden max-w-64 md:table-cell">
                   <NowCell
-                    status={driver.status}
+                    off={driver.status === "inactive"}
                     now={now[driver.id]}
                     loadsBase={loadsBase}
                   />

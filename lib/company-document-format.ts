@@ -26,13 +26,20 @@ export const COMPANY_DOCUMENT_LABELS: Record<CompanyDocumentKind, string> = {
 }
 
 /** Where a document in the "all documents" list belongs. */
-export const DOCUMENT_GROUPS = ["company", "load", "driver", "receipt"] as const
+export const DOCUMENT_GROUPS = [
+  "company",
+  "load",
+  "driver",
+  "truck",
+  "receipt",
+] as const
 export type DocumentGroup = (typeof DOCUMENT_GROUPS)[number]
 
 export const DOCUMENT_GROUP_LABELS: Record<DocumentGroup, string> = {
   company: "Company",
   load: "Loads",
   driver: "Drivers",
+  truck: "Trucks",
   receipt: "Receipts",
 }
 
@@ -43,7 +50,7 @@ export type DocumentEntry = {
   /** "POD", "CDL", "Insurance certificate" */
   type: string
   file_name: string
-  /** Who or what it's for: a load reference, a driver's name, "Company". */
+  /** Who or what it's for: a load reference, a driver's name, a unit number, "Company". */
   owner: string
   /** Below /org/<slug>, the page it belongs to, or null. */
   path: string | null

@@ -1,5 +1,5 @@
 import { cn } from "cn"
-import { AlertTriangle, Clock } from "lucide-react"
+import { AlertTriangle, CircleCheck, Clock } from "lucide-react"
 
 import {
   formatDate,
@@ -53,7 +53,11 @@ export function ExpiryBadge({
   showLabel?: boolean
 }) {
   const { expiry, kind, label } = item
-  if (expiry.state === "missing" || !needsAction(expiry.state) || !item.due) {
+  if (
+    expiry.state === "missing" ||
+    !needsAction(expiry.state) ||
+    (!item.due && !item.whenText)
+  ) {
     return null
   }
   const late = expiry.state === "expired"
@@ -64,7 +68,7 @@ export function ExpiryBadge({
     : kind === "expires"
       ? "expires"
       : "due"
-  const text = late ? verb : `${verb} ${inDays(expiry.days)}`
+  const text = late ? verb : `${verb} ${item.whenText ?? inDays(expiry.days)}`
   const full = `${label} ${text}`
   return (
     <span
@@ -77,7 +81,7 @@ export function ExpiryBadge({
           : late
             ? "was due"
             : "due"
-      } ${formatDate(item.due)}`}
+      } ${item.due ? formatDate(item.due) : item.whenText}`}
     >
       {late ? <AlertTriangle aria-hidden /> : <Clock aria-hidden />}
       {showLabel ? full : text.charAt(0).toUpperCase() + text.slice(1)}
@@ -101,6 +105,19 @@ export function ExpiryDate({
     <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
       <span>{formatDate(item.due)}</span>
       {warn && <ExpiryBadge item={item} />}
+    </span>
+  )
+}
+
+/**
+ * Every date on file and none due soon: green, so a clean record stands out
+ * from one with gaps or warnings.
+ */
+export function AllCurrent() {
+  return (
+    <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-300">
+      <CircleCheck className="size-4" aria-hidden />
+      All current
     </span>
   )
 }

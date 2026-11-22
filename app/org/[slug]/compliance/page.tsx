@@ -3,7 +3,6 @@ import { ShieldCheck } from "lucide-react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 
-import { TaxFilingForm } from "@/components/compliance/tax-filing-form"
 import { ExpiryBadge } from "@/components/drivers/driver-badges"
 import {
   SettingsCard,
@@ -20,7 +19,6 @@ import {
 } from "@/components/ui/table"
 import {
   complianceItems,
-  expiry,
   formatDate,
   needsAction,
   today as getToday,
@@ -28,14 +26,18 @@ import {
 } from "@/lib/driver-format"
 import { getDqDatesByDriver } from "@/lib/dq/fleet"
 import { getDrivers } from "@/lib/drivers"
-import { canManage, getOrganization } from "@/lib/organizations"
+import { getOrganization } from "@/lib/organizations"
 import {
-  formatTaxYear,
-  taxYearDueDate,
-  taxYearOf,
   truckComplianceItems,
+  truckServiceItem,
+  withEstimatedOdometer,
 } from "@/lib/truck-format"
-import { getTaxFilings, getTrucks } from "@/lib/trucks"
+import { getTrailers } from "@/lib/trailers"
+import {
+  getLastServiceByTruck,
+  getMilesSinceReading,
+  getTrucks,
+} from "@/lib/trucks"
 
 export const metadata: Metadata = { title: "Compliance" }
 
@@ -63,21 +65,21 @@ export default async function CompliancePage({
 
   const slug = organization.slug
   const today = getToday()
-  const [drivers, trucks, filings, dqDates] = await Promise.all([
+  const [drivers, trucks, trailers, dqDates, lastService] = await Promise.all([
     getDrivers(organization.id),
     getTrucks(organization.id),
-    getTaxFilings(organization.id),
+    getTrailers(organization.id),
     getDqDatesByDriver(organization.id),
+    getLastServiceByTruck(organization.id),
   ])
 
-  const currentTaxYear = taxYearOf(today)
-  const currentFiling = filings.find((f) => f.tax_year === currentTaxYear)
   const activeTrucks = trucks.filter((truck) => truck.status === "active")
-  const uncovered = activeTrucks.filter(
-    (truck) => !currentFiling?.truck_ids.includes(truck.id)
-  )
+  // Service by mileage counts from the odometer estimated from loads run
+  // since the last reading.
+  const milesSince = await getMilesSinceReading(organization.id, activeTrucks)
 
-  // Everything late or due in the next 60 days, for active drivers and trucks.
+  // Everything late or due in the next 60 days, for active drivers, trucks
+  // and trailers.
   const upcoming: Upcoming[] = [
     ...drivers
       .filter((driver) => driver.status === "active")
@@ -89,30 +91,32 @@ export default async function CompliancePage({
         }))
       ),
     ...activeTrucks.flatMap((truck) =>
-      truckComplianceItems(truck, today).map((item) => ({
-        item,
-        owner: truck.unit_number,
-        href: `/org/${slug}/equipment/${truck.id}`,
-      }))
+      [
+        ...truckComplianceItems(truck, today),
+        truckServiceItem(
+          withEstimatedOdometer(truck, milesSince[truck.id]),
+          lastService[truck.id],
+          today
+        ),
+      ]
+        .filter((item) => item !== null)
+        .map((item) => ({
+          item,
+          owner: truck.unit_number,
+          href: `/org/${slug}/equipment/${truck.id}`,
+        }))
     ),
+    // Trailers have the same three dates as trucks.
+    ...trailers
+      .filter((trailer) => trailer.status === "active")
+      .flatMap((trailer) =>
+        truckComplianceItems(trailer, today).map((item) => ({
+          item,
+          owner: trailer.unit_number,
+          href: `/org/${slug}/trailers/${trailer.id}`,
+        }))
+      ),
   ]
-  // The company's 2290: due this tax year until it's filed, then next year.
-  if (activeTrucks.length > 0) {
-    const due = taxYearDueDate(
-      currentFiling ? currentTaxYear + 1 : currentTaxYear
-    )
-    upcoming.push({
-      item: {
-        key: "form_2290",
-        label: `2290 for ${formatTaxYear(currentFiling ? currentTaxYear + 1 : currentTaxYear)}`,
-        kind: "due",
-        due,
-        expiry: expiry(due, today),
-      },
-      owner: "Company",
-      href: null,
-    })
-  }
   const due = upcoming
     .filter(({ item }) => needsAction(item.expiry.state))
     .sort((a, b) => urgency(a) - urgency(b))
@@ -122,7 +126,7 @@ export default async function CompliancePage({
       <div className="mx-auto flex max-w-5xl flex-col gap-6">
         <SettingsCard
           title="Due soon"
-          description="Anything late or due in the next 60 days, for active drivers and trucks."
+          description="Anything late or due in the next 60 days, for active drivers, trucks and trailers."
           contentClassName={due.length ? "px-0 pb-0" : undefined}
           footer={
             due.length > 0 && (
@@ -163,7 +167,7 @@ export default async function CompliancePage({
                       )}
                     </TableCell>
                     <TableCell className="hidden text-muted-foreground sm:table-cell">
-                      {item.due && formatDate(item.due)}
+                      {item.due ? formatDate(item.due) : item.whenText}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end">
@@ -176,83 +180,6 @@ export default async function CompliancePage({
             </Table>
           )}
         </SettingsCard>
-
-        <SettingsCard
-          title="2290 heavy vehicle tax"
-          description={`Tax year ${formatTaxYear(currentTaxYear)} runs July 1 to June 30. The return is due by ${formatDate(taxYearDueDate(currentTaxYear))}.`}
-          contentClassName={filings.length ? "px-0 pb-0" : undefined}
-          footer={
-            <SettingsCardFooter
-              hint={
-                activeTrucks.length === 0 ? (
-                  "No active trucks yet."
-                ) : uncovered.length === 0 ? (
-                  `All ${activeTrucks.length} active ${activeTrucks.length === 1 ? "truck is" : "trucks are"} on the ${formatTaxYear(currentTaxYear)} return.`
-                ) : (
-                  <span className="text-amber-700 dark:text-amber-300">
-                    Not on the {formatTaxYear(currentTaxYear)} return:{" "}
-                    {uncovered.map((truck) => truck.unit_number).join(", ")}
-                  </span>
-                )
-              }
-            />
-          }
-        >
-          {filings.length === 0 ? (
-            <SettingsEmptyState icon={ShieldCheck} title="No 2290 on file">
-              {canManage(organization)
-                ? "Record the return below once it's filed, and tick the trucks it covers."
-                : "Owners and admins record the 2290 here once it's filed."}
-            </SettingsEmptyState>
-          ) : (
-            <Table className="[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6">
-              <TableHeader className="bg-muted/40">
-                <TableRow>
-                  <TableHead>Tax year</TableHead>
-                  <TableHead>Filed</TableHead>
-                  <TableHead>Trucks</TableHead>
-                  <TableHead className="hidden md:table-cell">Notes</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filings.map((filing) => {
-                  const names = trucks
-                    .filter((truck) => filing.truck_ids.includes(truck.id))
-                    .map((truck) => truck.unit_number)
-                  return (
-                    <TableRow key={filing.id}>
-                      <TableCell className="py-3 font-medium">
-                        {formatTaxYear(filing.tax_year)}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {formatDate(filing.filed_on)}
-                      </TableCell>
-                      <TableCell className="max-w-72 text-sm whitespace-normal">
-                        {names.length ? (
-                          names.join(", ")
-                        ) : (
-                          <span className="text-muted-foreground">None</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="hidden max-w-64 truncate text-sm text-muted-foreground md:table-cell">
-                        {filing.notes ?? "—"}
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </SettingsCard>
-
-        {canManage(organization) && (
-          <TaxFilingForm
-            organizationId={organization.id}
-            currentTaxYear={currentTaxYear}
-            filings={filings}
-            trucks={trucks}
-          />
-        )}
       </div>
     </div>
   )

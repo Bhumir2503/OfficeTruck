@@ -3,29 +3,34 @@ import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 
-import { ExpiryDate } from "@/components/drivers/driver-badges"
-import {
-  SettingsCard,
-  SettingsCardFooter,
-} from "@/components/settings/settings-card"
-import { EldBadge, TruckStatusBadge } from "@/components/trucks/truck-badges"
+import { TruckStatusBadge } from "@/components/trucks/truck-badges"
+import { TruckCostsBox } from "@/components/trucks/truck-costs-box"
+import { TruckDocuments } from "@/components/trucks/truck-documents"
 import { TruckForm } from "@/components/trucks/truck-form"
-import { TruckLoads, TruckWeek } from "@/components/trucks/truck-history"
+import { TruckMaintenance } from "@/components/trucks/truck-maintenance"
+import {
+  TRUCK_MAINTENANCE_ID,
+  TruckNextAction,
+} from "@/components/trucks/truck-next-action"
+import { TruckNotes } from "@/components/trucks/truck-notes"
 import { TruckStatusMenu } from "@/components/trucks/truck-status-menu"
+import { TruckSummary } from "@/components/trucks/truck-summary"
 import { buttonVariants } from "@/components/ui/button"
 import { formatDate, today as getToday } from "@/lib/driver-format"
 import { getDriverOptions } from "@/lib/drivers"
-import { formatRate } from "@/lib/load-format"
 import { canManage, getOrganization } from "@/lib/organizations"
-import { OWNERSHIP_LABELS } from "@/lib/schemas/truck"
 import {
-  formatTaxYear,
-  monthlyFixedCosts,
-  taxItem,
+  pmStatus,
+  withEstimatedOdometer,
   truckComplianceItems,
   truckDescription,
 } from "@/lib/truck-format"
-import { getTaxFilings, getTruck, getTruckLoads } from "@/lib/trucks"
+import {
+  getMilesSinceReading,
+  getTruck,
+  getTruckDocuments,
+  getTruckMaintenance,
+} from "@/lib/trucks"
 
 async function truckFor(
   params: PageProps<"/org/[slug]/equipment/[id]">["params"]
@@ -43,25 +48,6 @@ export async function generateMetadata({
   return { title: truck ? truck.unit_number : "Truck not found" }
 }
 
-function Detail({
-  label,
-  className,
-  children,
-}: {
-  label: string
-  className?: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className={className}>
-      <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="mt-1 text-sm font-medium whitespace-pre-wrap">
-        {children}
-      </dd>
-    </div>
-  )
-}
-
 export default async function TruckPage({
   params,
 }: PageProps<"/org/[slug]/equipment/[id]">) {
@@ -74,20 +60,36 @@ export default async function TruckPage({
   const manager = canManage(organization)
   const today = getToday()
   const warn = truck.status === "active"
-  const none = <span className="text-muted-foreground">Not set</span>
-  const [loads, filings, drivers] = await Promise.all([
-    getTruckLoads(organization.id, truck.id),
-    getTaxFilings(organization.id),
+  // The This week and Loads cards are set aside for now.
+  const [drivers, documents, maintenance, milesSince] = await Promise.all([
     manager ? getDriverOptions(organization.id) : Promise.resolve([]),
+    getTruckDocuments(organization.id, truck.id),
+    getTruckMaintenance(organization.id, truck.id),
+    getMilesSinceReading(organization.id, [truck]),
   ])
+  // Service by mileage counts from the odometer estimated from loads run
+  // since the last reading.
+  const since = milesSince[truck.id]
+  const estimated = withEstimatedOdometer(truck, since)
   const items = truckComplianceItems(truck, today)
-  const tax = taxItem(truck.id, filings, today)
+  const lastPm = maintenance.find((entry) => entry.kind === "preventive")
+  const pm = pmStatus(
+    estimated,
+    lastPm ? { done_on: lastPm.done_on, odometer: lastPm.odometer } : null,
+    today
+  )
   const description = truckDescription(truck)
-  const monthly = monthlyFixedCosts(truck)
+
+  const subtitle = [
+    description,
+    truck.vin && `VIN ${truck.vin}`,
+    truck.plate_number &&
+      `Plate ${truck.plate_number}${truck.plate_state ? ` · ${truck.plate_state}` : ""}`,
+  ].filter(Boolean)
 
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
-      <div className="mx-auto flex max-w-5xl flex-col gap-4">
+      <div className="mx-auto flex max-w-7xl flex-col gap-6">
         <Link
           href={base}
           className={buttonVariants({
@@ -99,130 +101,114 @@ export default async function TruckPage({
           <ArrowLeft />
           All trucks
         </Link>
-        <SettingsCard
-          title={truck.unit_number}
-          description={
-            [description, truck.vin && `VIN ${truck.vin}`]
-              .filter(Boolean)
-              .join(" · ") || "No details yet"
-          }
-          action={<TruckStatusBadge status={truck.status} />}
-          footer={
-            manager && (
-              <SettingsCardFooter
-                hint={
-                  truck.status === "active"
-                    ? "Active trucks are billed. Out of service and inactive ones aren't."
-                    : truck.status === "out_of_service"
-                      ? "Out of service: not billed, and its dates aren't flagged."
-                      : "Inactive: kept on record with its loads, but off the active list."
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="text-2xl font-semibold tracking-tight">
+                {truck.unit_number}
+              </h2>
+              <TruckStatusBadge
+                status={truck.status}
+                className={
+                  truck.status === "active" ? "bg-emerald-500/15" : undefined
                 }
-              >
-                <TruckStatusMenu
-                  organizationId={organization.id}
-                  truck={truck}
-                />
-              </SettingsCardFooter>
-            )
-          }
-        >
-          <dl className="grid gap-5 sm:grid-cols-3">
-            {items.map((item) => (
-              <Detail
-                key={item.key}
-                label={
-                  item.kind === "expires"
-                    ? `${item.label} expires`
-                    : `${item.label} due`
-                }
-              >
-                <ExpiryDate item={item} warn={warn} />
-                {item.kind === "due" && (
-                  <span className="mt-0.5 block font-normal text-muted-foreground">
-                    {item.last
-                      ? `Last done ${formatDate(item.last)}`
-                      : "Not done yet"}
-                  </span>
-                )}
-              </Detail>
-            ))}
-            <Detail label="2290 heavy vehicle tax">
-              {tax.covered ? (
-                <>
-                  Covered for {formatTaxYear(tax.taxYear)}
-                  <span className="mt-0.5 block font-normal text-muted-foreground">
-                    Next one due {formatDate(tax.due!)}
-                  </span>
-                </>
-              ) : (
-                <>
-                  <ExpiryDate item={tax} warn={warn} />
-                  <span className="mt-0.5 block font-normal text-muted-foreground">
-                    Not on the {formatTaxYear(tax.taxYear)} return.{" "}
-                    <Link
-                      href={`/org/${organization.slug}/compliance`}
-                      className="underline"
-                    >
-                      Compliance
-                    </Link>
-                  </span>
-                </>
-              )}
-            </Detail>
-            <Detail label="Plate">
-              {truck.plate_number
-                ? `${truck.plate_number}${truck.plate_state ? ` · ${truck.plate_state}` : ""}`
-                : none}
-            </Detail>
-            <Detail label="ELD">
-              <EldBadge connected={!!truck.motive_vehicle_id} />
-              {truck.motive_vehicle_id && (
-                <span className="mt-0.5 block font-normal text-muted-foreground">
-                  Motive {truck.motive_vehicle_id}
-                </span>
-              )}
-            </Detail>
-            <Detail label="Ownership">
-              {truck.ownership ? OWNERSHIP_LABELS[truck.ownership] : none}
-            </Detail>
-            <Detail label="Default driver">
-              {truck.default_driver ? (
-                <Link
-                  href={`/org/${organization.slug}/drivers/${truck.default_driver.id}`}
-                  className="hover:underline"
-                >
-                  {truck.default_driver.full_name}
-                </Link>
-              ) : (
-                none
-              )}
-            </Detail>
-            <Detail label="Fixed costs">
-              {monthly > 0 ? `${formatRate(monthly)} / month` : none}
-            </Detail>
-            {!manager && truck.notes && (
-              <Detail label="Notes" className="sm:col-span-3">
-                {truck.notes}
-              </Detail>
-            )}
-          </dl>
-        </SettingsCard>
-        <TruckWeek truck={truck} loads={loads} today={today} />
-        <TruckLoads
-          truck={truck}
-          loads={loads}
-          loadsBase={`/org/${organization.slug}/loads`}
-        />
-        {manager && (
-          <div className="mt-2">
-            <TruckForm
+              />
+            </div>
+            <p className="flex flex-wrap gap-x-1.5 text-sm text-muted-foreground">
+              {subtitle.length
+                ? subtitle.map((part, index) => (
+                    <span key={index}>
+                      {index > 0 && <span aria-hidden>· </span>}
+                      {part}
+                    </span>
+                  ))
+                : "No details yet"}
+            </p>
+          </div>
+          {manager && (
+            <TruckStatusMenu
               organizationId={organization.id}
-              base={base}
-              drivers={drivers}
               truck={truck}
+              listHref={base}
+            />
+          )}
+        </div>
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
+          {/* The edit form's cards, then the truck's papers. */}
+          <div className="flex min-w-0 flex-col gap-4">
+            {manager ? (
+              <TruckForm
+                organizationId={organization.id}
+                base={base}
+                drivers={drivers}
+                truck={truck}
+              />
+            ) : (
+              <TruckSummary
+                truck={truck}
+                items={items}
+                warn={warn}
+                driversBase={`/org/${organization.slug}/drivers`}
+              />
+            )}
+            {manager && (
+              <TruckCostsBox organizationId={organization.id} truck={truck} />
+            )}
+            <div id={TRUCK_MAINTENANCE_ID} className="scroll-mt-6">
+              <TruckMaintenance
+                organizationId={organization.id}
+                truckId={truck.id}
+                entries={maintenance}
+                pm={pm}
+                printHref={`/print/${organization.slug}/trucks/${truck.id}/maintenance`}
+                odometerNote={
+                  since?.miles && truck.odometer !== null
+                    ? `Odometer ≈ ${new Intl.NumberFormat("en-US").format(
+                        estimated.odometer!
+                      )} mi, estimated from ${since.loads === 1 ? "1 load" : `${since.loads} loads`} since ${formatDate(truck.odometer_on!)}.`
+                    : null
+                }
+                canManage={manager}
+                today={today}
+              />
+            </div>
+            <TruckDocuments
+              organizationId={organization.id}
+              truckId={truck.id}
+              documents={documents}
+              dueByKind={{
+                registration: truck.registration_expires_on,
+                annual_inspection:
+                  items.find((item) => item.key === "annual_inspection")?.due ??
+                  null,
+              }}
+              canManage={manager}
+              warn={warn}
+              today={today}
             />
           </div>
-        )}
+          {/* Beside the cards, what's due and the truck's setup stay in
+              view; on a phone they come first. */}
+          <aside className="order-first flex flex-col gap-4 lg:sticky lg:top-6 lg:order-none lg:max-h-[calc(100svh-3rem)] lg:overflow-y-auto">
+            <TruckNextAction
+              status={truck.status}
+              outOfService={{
+                reason: truck.out_of_service_reason,
+                until: truck.out_of_service_until,
+              }}
+              items={items}
+              pm={pm}
+              today={today}
+              manager={manager}
+            />
+            <TruckNotes
+              organizationId={organization.id}
+              truckId={truck.id}
+              notes={truck.notes}
+              canManage={manager}
+            />
+          </aside>
+        </div>
       </div>
     </div>
   )

@@ -99,7 +99,7 @@ export const ORG_NAV: { label?: string; items: OrgSection[] }[] = [
         path: "compliance",
         icon: ShieldCheckIcon,
         description:
-          "The calendar of filings like IFTA, UCR, 2290 and MCS-150, every driver's and truck's expiration dates with red, yellow and green status, and IFTA reports.",
+          "The calendar of filings like IFTA, UCR and MCS-150, every driver's and truck's expiration dates with red, yellow and green status, and IFTA reports.",
       },
       {
         title: "Documents",
