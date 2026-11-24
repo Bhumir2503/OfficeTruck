@@ -1,11 +1,15 @@
 "use client"
 
-import { PhoneCall, Plus } from "lucide-react"
+import { CheckCircle2, PhoneCall, Plus, Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
 
 import { dqFetch } from "@/components/dq/dq-api"
+import {
+  SettingsCard,
+  SettingsEmptyState,
+} from "@/components/settings/settings-card"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -17,6 +21,14 @@ import {
 } from "@/components/ui/dialog"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import {
   EMPLOYER_CHECK_METHODS,
@@ -94,16 +106,22 @@ export function EmployerChecks({
     router.refresh()
   }
 
-  const removeLink = (check: EmployerCheck) =>
+  const removeButton = (check: EmployerCheck, label: string) =>
     !frozen && (
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="hover:text-destructive"
+        aria-label={`Remove ${label}`}
         onClick={() => setRemoving(check)}
-        className="mt-1 text-xs text-muted-foreground hover:text-destructive hover:underline"
       >
-        Remove
-      </button>
+        <Trash2 />
+      </Button>
     )
+  const contacted = (check: EmployerCheck) =>
+    new Date(check.contacted_at).toLocaleDateString("en-US", {
+      dateStyle: "medium",
+    })
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
@@ -137,16 +155,12 @@ export function EmployerChecks({
   }
 
   return (
-    <div className="border-t">
-      <div className="flex flex-wrap items-start justify-between gap-3 px-6 pt-4 pb-3">
-        <div className="min-w-0 flex-1 space-y-0.5">
-          <p className="font-medium">Previous-employer contacts</p>
-          <p className="text-sm text-muted-foreground">
-            Each employer from the past 3 years: when you reached out, how, and
-            what they said. Log failed attempts too.
-          </p>
-        </div>
-        {!frozen && (
+    <SettingsCard
+      title="Previous-employer contacts"
+      description="Each employer from the past 3 years: when you reached out, how, and what they said. Log failed attempts too."
+      contentClassName={checks.length ? "px-0 pb-0" : undefined}
+      action={
+        !frozen && (
           <Button
             size="sm"
             variant="outline"
@@ -157,63 +171,86 @@ export function EmployerChecks({
           >
             <Plus /> Log contact
           </Button>
-        )}
-      </div>
+        )
+      }
+    >
       {checks.length === 0 ? (
-        <p className="flex items-center gap-2 px-6 pb-4 text-sm text-muted-foreground">
-          <PhoneCall className="size-4 shrink-0" />
-          No contacts logged yet.
-        </p>
+        <SettingsEmptyState icon={PhoneCall} title="No contacts logged yet">
+          Log each previous employer you reach out to, or record that there
+          weren&apos;t any.
+        </SettingsEmptyState>
       ) : (
-        <ul className="divide-y border-t">
-          {checks.map((check) =>
-            check.outcome === NO_PREVIOUS_EMPLOYERS ? (
-              <li key={check.id} className="px-6 py-3 text-sm">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <p className="font-medium">
-                    No previous DOT-regulated employers in the past 3 years
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Recorded{" "}
-                    {new Date(check.contacted_at).toLocaleDateString("en-US", {
-                      dateStyle: "medium",
-                    })}
-                  </p>
-                </div>
-                {check.response_summary && (
-                  <p className="text-muted-foreground">
-                    {check.response_summary}
-                  </p>
-                )}
-                {removeLink(check)}
-              </li>
-            ) : (
-              <li key={check.id} className="px-6 py-3 text-sm">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <p className="font-medium">{check.employer_name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {new Date(check.contacted_at).toLocaleString("en-US", {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    })}
-                    {check.method && ` · ${METHOD_LABELS[check.method]}`}
-                  </p>
-                </div>
-                <p
-                  className={
-                    check.outcome === "response_received"
-                      ? "text-brand-ink"
-                      : "text-muted-foreground"
-                  }
-                >
-                  {OUTCOME_LABELS[check.outcome]}
-                  {check.response_summary && `: ${check.response_summary}`}
-                </p>
-                {removeLink(check)}
-              </li>
-            )
-          )}
-        </ul>
+        <Table className="[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6">
+          <TableHeader className="bg-muted/40">
+            <TableRow>
+              <TableHead className="w-full">Employer</TableHead>
+              <TableHead className="hidden w-px whitespace-nowrap sm:table-cell">
+                Contacted
+              </TableHead>
+              <TableHead className="w-px">
+                <span className="sr-only">Actions</span>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {checks.map((check) => {
+              const none = check.outcome === NO_PREVIOUS_EMPLOYERS
+              const name = none
+                ? "No previous DOT-regulated employers"
+                : (check.employer_name ?? "Employer")
+              return (
+                <TableRow key={check.id}>
+                  <TableCell className="py-3 whitespace-normal">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <span
+                        className={
+                          none || check.outcome === "response_received"
+                            ? "flex size-8 shrink-0 items-center justify-center rounded-md bg-brand/10 text-brand"
+                            : "flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground"
+                        }
+                      >
+                        {none ? (
+                          <CheckCircle2 className="size-4" aria-hidden />
+                        ) : (
+                          <PhoneCall className="size-4" aria-hidden />
+                        )}
+                      </span>
+                      <div className="min-w-0 space-y-0.5">
+                        <p className="text-sm font-medium">{name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {check.outcome === NO_PREVIOUS_EMPLOYERS
+                            ? "In the past 3 years"
+                            : [
+                                OUTCOME_LABELS[check.outcome],
+                                check.method && METHOD_LABELS[check.method],
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
+                          {/* The date column is hidden on a phone. */}
+                          <span className="sm:hidden">
+                            {" · "}
+                            {contacted(check)}
+                          </span>
+                        </p>
+                        {check.response_summary && (
+                          <p className="text-xs">{check.response_summary}</p>
+                        )}
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="hidden py-3 align-top text-xs whitespace-nowrap text-muted-foreground tabular-nums sm:table-cell">
+                    {contacted(check)}
+                  </TableCell>
+                  <TableCell className="py-3 align-top">
+                    <div className="flex justify-end">
+                      {removeButton(check, name)}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+          </TableBody>
+        </Table>
       )}
       <Dialog open={open} onOpenChange={(next) => !pending && setOpen(next)}>
         <DialogContent className="sm:max-w-lg">
@@ -371,6 +408,6 @@ export function EmployerChecks({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </SettingsCard>
   )
 }

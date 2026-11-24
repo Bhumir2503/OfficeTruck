@@ -1,4 +1,4 @@
-import { ArrowRight, Download, Lock } from "lucide-react"
+import { ArrowRight, ClipboardList, Download, Lock } from "lucide-react"
 import Link from "next/link"
 
 import { DriverDqBadge } from "@/components/dq/dq-badges"
@@ -9,6 +9,10 @@ import {
   type EmployerCheck,
 } from "@/components/dq/employer-checks"
 import type { ItemRules } from "@/components/dq/item-actions"
+import {
+  SettingsCard,
+  SettingsEmptyState,
+} from "@/components/settings/settings-card"
 import { buttonVariants } from "@/components/ui/button"
 import { formatDate } from "@/lib/driver-format"
 import { listChecklist, loadTemplates } from "@/lib/dq/service"
@@ -233,25 +237,29 @@ export function DqFileSection({ file }: { file: DqFile }) {
               manager={manager && !frozen}
               driverName={driver.full_name}
               signerName={signerName}
-            >
-              {f.type === "investigation" && manager && (
-                <EmployerChecks
-                  driverId={driver.id}
-                  checks={checks}
-                  frozen={frozen}
-                />
-              )}
-            </DqChecklist>
+            />
+            {f.type === "investigation" && manager && (
+              <EmployerChecks
+                driverId={driver.id}
+                checks={checks}
+                frozen={frozen}
+              />
+            )}
           </div>
         )
       })}
 
       {items.length === 0 && (
-        <p className="rounded-xl border border-dashed px-6 py-8 text-center text-sm text-muted-foreground">
-          {manager
-            ? "Set the start date in Driver details and save to build this driver's checklist."
-            : "This driver's file hasn't been set up yet."}
-        </p>
+        <SettingsCard
+          title="Driver qualification file"
+          description="The records every driver needs on file."
+        >
+          <SettingsEmptyState icon={ClipboardList} title="Not set up yet">
+            {manager
+              ? "Set the start date in Driver details and save to build this driver's checklist."
+              : "This driver's file hasn't been set up yet."}
+          </SettingsEmptyState>
+        </SettingsCard>
       )}
     </div>
   )
