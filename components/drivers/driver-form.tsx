@@ -1061,6 +1061,7 @@ export function DriverForm({
               <PayFields
                 defaultType={driver?.pay_type ?? null}
                 defaultRate={driver?.pay_rate ?? null}
+                defaultPeriod={driver?.pay_period ?? "week"}
                 errors={errors}
                 onUpdate={onUpdate}
               />

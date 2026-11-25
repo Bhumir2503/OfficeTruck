@@ -60,8 +60,80 @@ const withYear = new Intl.DateTimeFormat("en-US", {
 
 /** "Nov 16 – 22, 2026", or across months "Nov 30 – Dec 6, 2026". */
 export function formatWeek(week: string) {
-  const start = toDate(week)
-  const end = new Date(start.getTime() + 6 * DAY)
+  return formatPeriod(week, shiftDays(week, 6))
+}
+
+const shiftDays = (day: string, days: number) =>
+  toDay(new Date(toDate(day).getTime() + days * DAY))
+
+// ------------------------------------------------------------ Pay periods --
+
+/** How often a driver is paid. */
+export const PAY_PERIODS = ["week", "two_weeks", "month"] as const
+export type PayPeriod = (typeof PAY_PERIODS)[number]
+
+export const PAY_PERIOD_LABELS: Record<PayPeriod, string> = {
+  week: "Week",
+  two_weeks: "2 weeks",
+  month: "Month",
+}
+
+/**
+ * Two-week periods are counted in pairs of weeks from this Monday, so a
+ * driver's blocks stay the same whatever week they're looked at from.
+ */
+const TWO_WEEK_EPOCH = "2024-01-01"
+
+/**
+ * The first day of the pay period `day` falls in: its Monday for a week,
+ * the Monday starting its pair of weeks for 2 weeks, the 1st for a month.
+ */
+export function periodOf(day: string, period: PayPeriod) {
+  if (period === "month") return `${day.slice(0, 7)}-01`
+  const monday = weekOf(day)
+  if (period === "week") return monday
+  const weeks = Math.round(
+    (toDate(monday).getTime() - toDate(TWO_WEEK_EPOCH).getTime()) / (7 * DAY)
+  )
+  return shiftWeek(monday, -(((weeks % 2) + 2) % 2))
+}
+
+/** The period `count` periods after (or before, when negative) `start`. */
+export function shiftPeriod(start: string, period: PayPeriod, count: number) {
+  if (period === "week") return shiftWeek(start, count)
+  if (period === "two_weeks") return shiftWeek(start, count * 2)
+  const date = toDate(start)
+  date.setUTCMonth(date.getUTCMonth() + count, 1)
+  return toDay(date)
+}
+
+/** A period's last day. */
+export function periodEnd(start: string, period: PayPeriod) {
+  return shiftDays(shiftPeriod(start, period, 1), -1)
+}
+
+/** The days a period covers, as [first day, first day of the next). */
+export function periodRange(start: string, period: PayPeriod) {
+  return { from: start, to: shiftPeriod(start, period, 1) }
+}
+
+/** A "YYYY-MM-DD" that starts a `period`, or null. */
+export function parsePeriod(value: unknown, period: PayPeriod) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return null
+  }
+  const date = toDate(value)
+  if (Number.isNaN(date.getTime()) || toDay(date) !== value) return null
+  return periodOf(value, period) === value ? value : null
+}
+
+/**
+ * "Nov 16 – 22, 2026", across months "Nov 30 – Dec 6, 2026", or across
+ * years "Dec 28, 2026 – Jan 10, 2027". `last` is the period's last day.
+ */
+export function formatPeriod(first: string, last: string) {
+  const start = toDate(first)
+  const end = toDate(last)
   const sameMonth = start.getUTCMonth() === end.getUTCMonth()
   const sameYear = start.getUTCFullYear() === end.getUTCFullYear()
   const from = sameYear ? short.format(start) : withYear.format(start)

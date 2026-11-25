@@ -3,14 +3,19 @@
 import { refresh } from "next/cache"
 
 import { canManage, getMyOrganizations } from "@/lib/organizations"
-import { parseAdjustment, parseWeek } from "@/lib/settlement-format"
-import { getSettlement } from "@/lib/settlements"
+import {
+  parseAdjustment,
+  parsePeriod,
+  periodEnd,
+  type PayPeriod,
+} from "@/lib/settlement-format"
+import { getSettlement, periodRow } from "@/lib/settlements"
 import { createClient } from "@/lib/supabase/server"
 
 export type ActionResult = { error: string } | { ok: true }
 
 const NOT_ALLOWED = "Only owners and admins can manage driver pay."
-const PAID = "This week is already paid. Undo the payment to change it."
+const PAID = "This pay period is already paid. Undo the payment to change it."
 
 async function allowed(organizationId: string) {
   const organization = (await getMyOrganizations()).find(
@@ -19,29 +24,69 @@ async function allowed(organizationId: string) {
   return !!organization && canManage(organization)
 }
 
-/** The settlement row for a driver's week, made if it doesn't exist yet. */
+/** How often a driver is paid, read here rather than trusted from the page. */
+async function driverPeriod(
+  organizationId: string,
+  driverId: string
+): Promise<PayPeriod | null> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from("drivers")
+    .select("pay_period")
+    .eq("organization_id", organizationId)
+    .eq("id", driverId)
+    .maybeSingle()
+  return (data as { pay_period: PayPeriod } | null)?.pay_period ?? null
+}
+
+/**
+ * The settlement row for a driver's pay period, made if it doesn't exist
+ * yet. An open one from before a schedule change takes the new end date, so
+ * its adjustments carry over.
+ */
 async function settlementId(
   organizationId: string,
   driverId: string,
-  week: string
+  start: string,
+  end: string
 ): Promise<{ id: string; status: string } | { error: string }> {
   const supabase = await createClient()
-  const { data: found, error } = await supabase
+  const { data: rows, error } = await supabase
     .from("driver_settlements")
-    .select("id, status")
+    .select("id, status, week_start, period_end")
     .eq("organization_id", organizationId)
     .eq("driver_id", driverId)
-    .eq("week_start", week)
-    .maybeSingle()
+    .eq("week_start", start)
   if (error) return { error: error.message }
-  if (found) return found
+  const found = periodRow(
+    (rows ?? []) as {
+      id: string
+      status: string
+      week_start: string
+      period_end: string
+    }[],
+    start,
+    end
+  )
+  if (found) {
+    if (found.status === "open" && found.period_end !== end) {
+      const update = await supabase
+        .from("driver_settlements")
+        .update({ period_end: end })
+        .eq("organization_id", organizationId)
+        .eq("id", found.id)
+      if (update.error) return { error: update.error.message }
+    }
+    return { id: found.id, status: found.status }
+  }
 
   const { data, error: insertError } = await supabase
     .from("driver_settlements")
     .insert({
       organization_id: organizationId,
       driver_id: driverId,
-      week_start: week,
+      week_start: start,
+      period_end: end,
     })
     .select("id, status")
     .single()
@@ -49,7 +94,7 @@ async function settlementId(
   return data
 }
 
-/** Adds money to, or takes it off, a driver's week. */
+/** Adds money to, or takes it off, a driver's pay period. */
 export async function addAdjustment(
   organizationId: string,
   driverId: string,
@@ -57,8 +102,10 @@ export async function addAdjustment(
   input: { description: string; amount: string; direction: "add" | "deduct" }
 ): Promise<ActionResult> {
   if (!(await allowed(organizationId))) return { error: NOT_ALLOWED }
-  const week = parseWeek(weekInput)
-  if (!week) return { error: "Choose a pay week." }
+  const period = await driverPeriod(organizationId, driverId)
+  if (!period) return { error: "That driver isn't in this organization." }
+  const week = parsePeriod(weekInput, period)
+  if (!week) return { error: "Choose a pay period." }
   const description = input.description.trim()
   if (!description) return { error: "Say what it's for." }
   if (description.length > 200) {
@@ -67,7 +114,12 @@ export async function addAdjustment(
   const amount = parseAdjustment(input.amount, input.direction)
   if ("error" in amount) return amount
 
-  const settlement = await settlementId(organizationId, driverId, week)
+  const settlement = await settlementId(
+    organizationId,
+    driverId,
+    week,
+    periodEnd(week, period)
+  )
   if ("error" in settlement) return settlement
   if (settlement.status === "paid") return { error: PAID }
 
@@ -114,17 +166,19 @@ export async function markPaid(
   paidOn: string
 ): Promise<ActionResult> {
   if (!(await allowed(organizationId))) return { error: NOT_ALLOWED }
-  const week = parseWeek(weekInput)
-  if (!week) return { error: "Choose a pay week." }
+  const period = await driverPeriod(organizationId, driverId)
+  if (!period) return { error: "That driver isn't in this organization." }
+  const week = parsePeriod(weekInput, period)
+  if (!week) return { error: "Choose a pay period." }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(paidOn)) {
     return { error: "Enter the date it was paid." }
   }
 
-  const current = await getSettlement(organizationId, driverId, week)
+  const current = await getSettlement(organizationId, driverId, week, period)
   if (!current) return { error: "That driver isn't in this organization." }
   if (current.status === "paid") return { error: "Already marked paid." }
   if (current.loads.length === 0 && current.adjustments.length === 0) {
-    return { error: "Nothing to pay this week." }
+    return { error: "Nothing to pay this period." }
   }
   if (current.totals.unpriced > 0) {
     return {
@@ -133,7 +187,12 @@ export async function markPaid(
     }
   }
 
-  const settlement = await settlementId(organizationId, driverId, week)
+  const settlement = await settlementId(
+    organizationId,
+    driverId,
+    week,
+    current.end
+  )
   if ("error" in settlement) return settlement
 
   const supabase = await createClient()
@@ -143,6 +202,8 @@ export async function markPaid(
       status: "paid",
       paid_on: paidOn,
       load_ids: current.loads.map((load) => load.id),
+      // The lines as paid, so later edits to a load don't rewrite them.
+      paid_lines: { loads: current.loads, expenses: current.expenses },
       gross_pay: current.totals.gross,
       reimbursements: current.totals.reimbursements,
       adjustments: current.totals.adjustments,
@@ -171,6 +232,7 @@ export async function undoPaid(
       status: "open",
       paid_on: null,
       load_ids: null,
+      paid_lines: null,
       gross_pay: null,
       reimbursements: null,
       adjustments: null,

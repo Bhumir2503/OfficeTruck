@@ -1,6 +1,7 @@
 import { z } from "zod"
 
 import { US_STATES } from "@/lib/schemas/organization"
+import { PAY_PERIODS } from "@/lib/settlement-format"
 
 // Keep these rules in step with the checks on public.drivers.
 
@@ -152,6 +153,11 @@ export const driverSchema = z
             .transform(Number),
         ])
         .nullable()
+    ),
+    // How often they're paid: each pay statement covers one of these.
+    pay_period: z.preprocess(
+      (value) => (value === "" || value === undefined ? "week" : value),
+      z.enum(PAY_PERIODS, "Choose how often the driver is paid.")
     ),
     // Notes aren't edited on the driver page, so saves leave them as they are.
   })

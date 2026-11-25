@@ -1,4 +1,5 @@
 import type { DriverDocumentKind } from "@/lib/driver-document-format"
+import type { PayPeriod } from "@/lib/settlement-format"
 import type { LoadStatus } from "@/lib/schemas/load"
 import type {
   CdlClass,
@@ -44,6 +45,8 @@ export type Driver = {
   pay_type: PayType | null
   /** Dollars per mile, percent of the load, or dollars per load. */
   pay_rate: number | null
+  /** How often they're paid; each pay statement covers one of these. */
+  pay_period: PayPeriod
   status: DriverStatus
   notes: string | null
   created_at: string
@@ -51,7 +54,7 @@ export type Driver = {
 }
 
 const DRIVER_COLUMNS =
-  "id, full_name, phone, email, start_date, end_date, holds_medical_variance, cdl_number, cdl_state, cdl_class, cdl_endorsements, cdl_restrictions, cdl_expires_on, medical_card_expires_on, medical_examiner_registry_number, medical_examiner_name, medical_exam_on, last_annual_review_on, last_clearinghouse_query_on, prior_license_states, pay_type, pay_rate, status, notes, created_at, updated_at"
+  "id, full_name, phone, email, start_date, end_date, holds_medical_variance, cdl_number, cdl_state, cdl_class, cdl_endorsements, cdl_restrictions, cdl_expires_on, medical_card_expires_on, medical_examiner_registry_number, medical_examiner_name, medical_exam_on, last_annual_review_on, last_clearinghouse_query_on, prior_license_states, pay_type, pay_rate, pay_period, status, notes, created_at, updated_at"
 
 /** Every driver in the organization, by name. */
 export async function getDrivers(organizationId: string): Promise<Driver[]> {

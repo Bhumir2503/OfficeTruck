@@ -17,6 +17,11 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { PAY_TYPES, PAY_TYPE_LABELS, type PayType } from "@/lib/schemas/driver"
+import {
+  PAY_PERIOD_LABELS,
+  PAY_PERIODS,
+  type PayPeriod,
+} from "@/lib/settlement-format"
 
 const UNITS: Record<
   PayType,
@@ -71,23 +76,29 @@ function handleRateInput(event: React.ChangeEvent<HTMLInputElement>) {
 
 /**
  * How the driver is paid: a choice of per mile, percent of the load or flat
- * per load, and the rate. Fills `pay_type` and `pay_rate`.
+ * per load, the rate, and how often they're paid. Fills `pay_type`,
+ * `pay_rate` and `pay_period`.
  */
 export function PayFields({
   defaultType,
   defaultRate,
+  defaultPeriod,
   errors,
   onUpdate,
 }: {
   defaultType: PayType | null
   defaultRate: number | null
+  /** How often they're paid; a new driver starts weekly. */
+  defaultPeriod: PayPeriod
   errors: {
     pay_type?: { message: string }[]
     pay_rate?: { message: string }[]
+    pay_period?: { message: string }[]
   }
   onUpdate: (form: HTMLFormElement | null) => void
 }) {
   const [type, setType] = useState<PayType | "">(defaultType ?? "")
+  const [period, setPeriod] = useState<PayPeriod>(defaultPeriod)
   const hiddenRef = useRef<HTMLInputElement>(null)
   const firstRender = useRef(true)
 
@@ -97,9 +108,10 @@ export function PayFields({
       return
     }
     onUpdate(hiddenRef.current?.form ?? null)
-    // Only when the type changes; onUpdate is a new function every render.
+    // Only when the type or period changes; onUpdate is a new function
+    // every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type])
+  }, [type, period])
 
   const unit = type ? UNITS[type] : null
   const rateErrors = errors.pay_rate
@@ -178,6 +190,44 @@ export function PayFields({
           )}
         </Field>
       )}
+      <Field data-invalid={!!errors.pay_period} className="sm:col-span-3">
+        <FieldLabel id="driver-pay-period-label">Paid every</FieldLabel>
+        <input type="hidden" name="pay_period" value={period} />
+        <Select
+          value={period}
+          onValueChange={(value) => value && setPeriod(value as PayPeriod)}
+          items={PAY_PERIODS.map((value) => ({
+            value,
+            label: PAY_PERIOD_LABELS[value],
+          }))}
+        >
+          <SelectTrigger
+            id="driver-pay-period"
+            aria-labelledby="driver-pay-period-label"
+            className="w-full"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {PAY_PERIODS.map((value) => (
+              <SelectItem key={value} value={value}>
+                {PAY_PERIOD_LABELS[value]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {errors.pay_period ? (
+          <FieldError errors={errors.pay_period} />
+        ) : (
+          <FieldDescription>
+            {period === "week"
+              ? "Each pay statement covers Monday to Sunday."
+              : period === "two_weeks"
+                ? "Each pay statement covers two weeks, Monday to Sunday."
+                : "Each pay statement covers the 1st to the end of the month."}
+          </FieldDescription>
+        )}
+      </Field>
     </>
   )
 }
