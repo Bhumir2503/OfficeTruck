@@ -4,9 +4,11 @@ import {
   CheckCheck,
   FileSearch,
   FileText,
+  Loader2,
   Pencil,
   PenLine,
   Sparkles,
+  Trash2,
   Upload,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
@@ -30,6 +32,13 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { DatePicker } from "@/components/ui/date-picker"
 import type { ChecklistDocument, ChecklistEntry } from "@/lib/dq/service"
+
+/**
+ * A title to follow a verb ("Review driving record (MVR)"): only its first
+ * letter lowered, so abbreviations like MVR and CDL keep their capitals.
+ */
+export const lowerFirst = (title: string) =>
+  title.charAt(0).toLowerCase() + title.slice(1)
 
 /** What an item's rule asks for when it's completed. */
 export type ItemRules = {
@@ -109,6 +118,9 @@ function ReviewDialog({
   const [result, setResult] = useState<"" | "no_record" | "record_found">(
     (editing ? item.query_result : null) ?? ""
   )
+  // An employment application's copy: only the driver can sign it.
+  const application = item.template_code === "employment_application"
+  const [driverSigned, setDriverSigned] = useState(editing)
 
   async function confirm(event: React.FormEvent) {
     event.preventDefault()
@@ -119,6 +131,7 @@ function ReviewDialog({
             issue_date: issue,
             expiry_date: expiry || null,
             query_result: result || null,
+            driver_signed: driverSigned,
           },
         }),
       (data) =>
@@ -136,12 +149,14 @@ function ReviewDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {editing ? "Edit" : "Review"} {item.title.toLowerCase()}
+            {editing ? "Edit" : "Review"} {lowerFirst(item.title)}
           </DialogTitle>
           <DialogDescription>
             {editing
               ? "Fix anything that was entered wrong. The next due date follows the change, and the old values stay in the file's history."
-              : "Check the dates against the document. Nothing counts until you confirm it."}
+              : application
+                ? "Check the driver filled it in, signed and dated it. Nothing counts until you confirm it."
+                : "Check the dates against the document. Nothing counts until you confirm it."}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -173,7 +188,9 @@ function ReviewDialog({
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor={`issue-${document.id}`}>
-                Date on the document
+                {application
+                  ? "Date the driver signed it"
+                  : "Date on the document"}
               </FieldLabel>
               <DatePicker
                 id={`issue-${document.id}`}
@@ -183,27 +200,51 @@ function ReviewDialog({
                 years={{ back: 10, ahead: 1 }}
               />
               <FieldDescription>
-                When it was issued, run or signed.
+                {application
+                  ? "The date next to their signature."
+                  : "When it was issued, run or signed."}
               </FieldDescription>
             </Field>
-            <Field>
-              <FieldLabel htmlFor={`expiry-${document.id}`}>
-                Expires{rules.needsExpiry ? "" : " (if it does)"}
-              </FieldLabel>
-              <DatePicker
-                id={`expiry-${document.id}`}
-                required={rules.needsExpiry}
-                value={expiry}
-                onChange={setExpiry}
-                label="Expires"
-              />
-              {rules.needsExpiry && (
-                <FieldDescription>
-                  The date printed on it. Often 12 months or less.
-                </FieldDescription>
-              )}
-            </Field>
+            {/* An application doesn't expire. */}
+            {!application && (
+              <Field>
+                <FieldLabel htmlFor={`expiry-${document.id}`}>
+                  Expires{rules.needsExpiry ? "" : " (if it does)"}
+                </FieldLabel>
+                <DatePicker
+                  id={`expiry-${document.id}`}
+                  required={rules.needsExpiry}
+                  value={expiry}
+                  onChange={setExpiry}
+                  label="Expires"
+                />
+                {rules.needsExpiry && (
+                  <FieldDescription>
+                    The date printed on it. Often 12 months or less.
+                  </FieldDescription>
+                )}
+              </Field>
+            )}
           </div>
+          {application && (
+            <>
+              <label className="flex items-start gap-2 text-sm">
+                <Checkbox
+                  checked={driverSigned}
+                  onCheckedChange={(value) => setDriverSigned(value === true)}
+                  className="mt-0.5"
+                />
+                <span>
+                  The driver filled this in, and signed and dated it themselves.
+                </span>
+              </label>
+              <p className="text-xs text-muted-foreground">
+                This copy has the driver&apos;s Social Security number on it.
+                It&apos;s kept in the file, private to owners and admins, but
+                not encrypted the way the driver app&apos;s form is.
+              </p>
+            </>
+          )}
           {rules.needsQueryResult && (
             <fieldset className="grid gap-2">
               <legend className="mb-1 text-sm font-medium">
@@ -245,7 +286,7 @@ function ReviewDialog({
           <Button
             type="submit"
             form={`review-${document.id}`}
-            disabled={pending}
+            disabled={pending || (application && !driverSigned)}
           >
             {pending ? "Saving…" : editing ? "Save changes" : "Confirm"}
           </Button>
@@ -395,6 +436,71 @@ function SignDialog({
  * Voids a signed office note that has a mistake, with the reason, so it can
  * be signed again. The note stays in the file's history, marked void.
  */
+/**
+ * Takes an unconfirmed upload out of the file, after asking. It's kept in
+ * the file's history, not deleted.
+ */
+function RemoveFileButton({
+  document,
+  disabled,
+}: {
+  document: ChecklistDocument
+  disabled: boolean
+}) {
+  const { pending, run } = useAction()
+  const [open, setOpen] = useState(false)
+
+  async function remove() {
+    const done = await run(
+      () =>
+        dqFetch(`documents/${document.id}/remove`, {
+          method: "POST",
+        }),
+      "File removed."
+    )
+    if (done) setOpen(false)
+  }
+
+  return (
+    <>
+      <Button
+        size="icon-sm"
+        variant="ghost"
+        aria-label="Remove file"
+        title="Remove file"
+        disabled={disabled || pending}
+        className="rounded-l-none border-l hover:text-destructive"
+        onClick={() => setOpen(true)}
+      >
+        <Trash2 />
+      </Button>
+      <Dialog open={open} onOpenChange={(next) => !pending && setOpen(next)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Remove {document.file_name}?</DialogTitle>
+            <DialogDescription>
+              It comes off this item, which goes back to needing a file.
+              It&apos;s kept in the file&apos;s history, not deleted.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={pending}
+              onClick={() => setOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button variant="destructive" disabled={pending} onClick={remove}>
+              <Trash2 /> Remove
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
 export function VoidSignatureButton({
   signatureId,
   label,
@@ -482,8 +588,16 @@ export function VoidSignatureButton({
  * employment application, review and registry notes) are signed in the
  * app, and the employer checks are logged, so they get no upload.
  */
-export function takesUploads(item: Pick<ChecklistEntry, "evidence">) {
-  return item.evidence === "document" || item.evidence === "either"
+export function takesUploads(
+  item: Pick<ChecklistEntry, "evidence" | "template_code">
+) {
+  return (
+    item.evidence === "document" ||
+    item.evidence === "either" ||
+    // The driver fills it in in the driver app, or the office uploads a
+    // copy the driver signed on paper.
+    item.template_code === "employment_application"
+  )
 }
 
 /** The buttons for one checklist item, for owners and admins. */
@@ -492,12 +606,16 @@ export function ItemActions({ item, rules, driverName, signerName }: Props) {
   const { pending, run } = useAction()
   const [review, setReview] = useState<ChecklistDocument | null>(null)
   const [signing, setSigning] = useState(false)
-  // The file being sent, so its name shows right away.
+  // The file being sent; while set, the button shows "Uploading…".
   const [sending, setSending] = useState<string | null>(null)
 
   if (!item.current || item.not_applicable_reason) return null
   const open = !item.completed_at
-  const waiting = item.documents.filter((d) => !d.confirmed && !d.superseded)
+  // Only the newest upload waiting for review is reviewed; confirming it
+  // replaces any older one (a driver's earlier upload, say).
+  const waiting = item.documents
+    .filter((d) => !d.confirmed && !d.superseded)
+    .slice(0, 1)
   const signable =
     open &&
     (item.template_code === "annual_review" ||
@@ -526,13 +644,45 @@ export function ItemActions({ item, rules, driverName, signerName }: Props) {
     setSending(null)
   }
 
+  // A newest file still waiting for review gets Review in its own chip,
+  // instead of a separate button beside it.
+  const reviewInChip =
+    !!latest &&
+    !latest.confirmed &&
+    !sending &&
+    takesUploads(item) &&
+    (open || !!latest)
+  // Likewise a confirmed newest file gets Edit in its chip.
+  const editInChip =
+    !!latest &&
+    latest.id === confirmed?.id &&
+    !sending &&
+    takesUploads(item) &&
+    (open || !!latest)
+  const chipAction = reviewInChip
+    ? { label: "Review", icon: FileSearch }
+    : editInChip
+      ? { label: "Edit", icon: Pencil }
+      : null
+
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {waiting.map((document) => (
-        <Button key={document.id} size="sm" onClick={() => setReview(document)}>
-          <FileSearch /> Review
-        </Button>
-      ))}
+      {/* While a new file uploads it replaces what's waiting, so there's
+          nothing to review until it's in. */}
+      {waiting
+        .filter(
+          (document) =>
+            !sending && !(reviewInChip && document.id === latest?.id)
+        )
+        .map((document) => (
+          <Button
+            key={document.id}
+            size="sm"
+            onClick={() => setReview(document)}
+          >
+            <FileSearch /> Review
+          </Button>
+        ))}
       {signable && (
         <Button
           size="sm"
@@ -557,7 +707,7 @@ export function ItemActions({ item, rules, driverName, signerName }: Props) {
           {item.evidence === "contact_log" ? "Mark checks done" : "Approve"}
         </Button>
       )}
-      {confirmed && (
+      {confirmed && !editInChip && (
         <Button
           size="sm"
           variant="outline"
@@ -572,25 +722,56 @@ export function ItemActions({ item, rules, driverName, signerName }: Props) {
             <Button
               size="sm"
               variant="outline"
-              disabled={pending}
-              className="max-w-56"
+              disabled={pending || !!sending}
               onClick={() => fileInput.current?.click()}
             >
-              <Upload />
-              <span className="truncate">{sending ?? "Upload"}</span>
+              {sending ? (
+                <>
+                  <Loader2 className="animate-spin" aria-hidden />
+                  Uploading…
+                </>
+              ) : (
+                <>
+                  <Upload /> Upload
+                </>
+              )}
             </Button>
           ) : (
             <span className="inline-flex max-w-64 items-center rounded-md border">
-              <a
-                href={latest.url ?? undefined}
-                target="_blank"
-                rel="noreferrer"
-                title={`Open ${latest.file_name}`}
-                className="inline-flex h-8 min-w-0 items-center gap-1.5 px-2.5 text-sm font-medium text-brand hover:underline"
-              >
-                <FileText className="size-4 shrink-0" />
-                <span className="truncate">{latest.file_name}</span>
-              </a>
+              {chipAction ? (
+                <>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="rounded-r-none font-medium text-brand"
+                    onClick={() => setReview(latest)}
+                  >
+                    <chipAction.icon /> {chipAction.label}
+                  </Button>
+                  {/* Just the icon; the file's name is in its tooltip. */}
+                  <a
+                    href={latest.url ?? undefined}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={`Open ${latest.file_name}`}
+                    title={`Open ${latest.file_name}`}
+                    className="inline-flex size-8 shrink-0 items-center justify-center border-l text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    <FileText className="size-4" />
+                  </a>
+                </>
+              ) : (
+                <a
+                  href={latest.url ?? undefined}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={`Open ${latest.file_name}`}
+                  className="inline-flex h-8 min-w-0 items-center gap-1.5 px-2.5 text-sm font-medium text-brand hover:underline"
+                >
+                  <FileText className="size-4 shrink-0" />
+                  <span className="truncate">{latest.file_name}</span>
+                </a>
+              )}
               <Button
                 size="icon-sm"
                 variant="ghost"
@@ -602,6 +783,10 @@ export function ItemActions({ item, rules, driverName, signerName }: Props) {
               >
                 <Upload />
               </Button>
+              {/* A confirmed file is fixed with Replace or Edit. */}
+              {!latest.confirmed && (
+                <RemoveFileButton document={latest} disabled={pending} />
+              )}
             </span>
           )}
           <input

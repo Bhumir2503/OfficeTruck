@@ -443,6 +443,28 @@ describe("12-month recurrences", () => {
     assert.equal(itemStatus(second, "2027-02-10"), "due_soon")
   })
 
+  it("still counts an earlier cycle that was never done", () => {
+    // Completing year 1's annual MVR adds year 2's review, while year 1's
+    // review may not be signed yet: it mustn't drop out of the file.
+    const first = row({
+      ...find(items, "annual_review"),
+      due_date: "2027-01-01",
+    })
+    const second = row({
+      ...find(items, "annual_review"),
+      cycle_number: 2,
+      due_date: "2027-11-24",
+    })
+    assert.deepEqual(currentItems([first, second]), [first, second])
+    assert.equal(
+      driverStatus([first, second], "2027-01-10").status,
+      "not_audit_ready"
+    )
+    // Once it's marked not applicable, it's history again.
+    const waived = { ...first, not_applicable_reason: "Not needed." }
+    assert.deepEqual(currentItems([waived, second]), [second])
+  })
+
   it("keeps to the end of the month from Feb 29", () => {
     assert.equal(addMonths("2028-02-29", 12), "2029-02-28")
     assert.equal(addMonths("2026-01-31", 1), "2026-02-28")

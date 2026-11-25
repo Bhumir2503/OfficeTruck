@@ -3,6 +3,7 @@ import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 
+import { LocalDate } from "@/components/local-date"
 import { InvoiceNumberField } from "@/components/invoices/invoice-number-field"
 import { InvoicePreview } from "@/components/invoices/invoice-preview"
 import {
@@ -12,12 +13,7 @@ import {
 } from "@/components/invoices/invoice-side-panel"
 import { InvoiceStatusBadge } from "@/components/invoices/invoice-status-badge"
 import { buttonVariants } from "@/components/ui/button"
-import {
-  billTo,
-  formatInvoiceDate,
-  invoiceState,
-  localToday,
-} from "@/lib/invoice-format"
+import { billTo, invoiceState, localToday } from "@/lib/invoice-format"
 import { invoicePageData } from "@/lib/invoice-packet"
 import { getInvoiceDetail } from "@/lib/invoices"
 import {
@@ -106,12 +102,14 @@ export default async function InvoicePage({
               {load.reference}
             </Link>{" "}
             · {load.broker_name}
-            {detail.voided.length > 0 &&
-              ` · Replaces ${detail.voided
-                .map((voided) => `#${voided.number}`)
-                .join(
-                  ", "
-                )}, voided ${formatInvoiceDate(detail.voided.at(-1)!.voided_at)}`}
+            {detail.voided.length > 0 && (
+              <>
+                {` · Replaces ${detail.voided
+                  .map((voided) => `#${voided.number}`)
+                  .join(", ")}, voided `}
+                <LocalDate value={detail.voided.at(-1)!.voided_at} />
+              </>
+            )}
           </p>
         </div>
         <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]">

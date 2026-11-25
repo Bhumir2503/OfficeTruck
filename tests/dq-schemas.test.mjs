@@ -72,7 +72,23 @@ describe("confirmDocumentSchema", () => {
       issue_date: "2026-01-05",
       expiry_date: "2027-01-05",
       query_result: null,
+      driver_signed: false,
     })
+  })
+
+  it("takes the reviewer's check that the driver signed an application", () => {
+    const value = confirmDocumentSchema.parse({
+      issue_date: "2026-01-05",
+      driver_signed: true,
+    })
+    assert.equal(value.driver_signed, true)
+    assert.equal(
+      confirmDocumentSchema.safeParse({
+        issue_date: "2026-01-05",
+        driver_signed: "yes",
+      }).success,
+      false
+    )
   })
 
   it("refuses an expiry before the issue date, and dates that don't exist", () => {

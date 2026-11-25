@@ -236,6 +236,11 @@ export type ChecklistEntry = {
   cycle_number: number
   /** False for earlier cycles, which are history. */
   current: boolean
+  /**
+   * The item this one comes round with, the same year (the annual MVR, for
+   * the annual review), so it can be shown on that item's row.
+   */
+  paired_with: string | null
   due_date: string | null
   completed_at: string | null
   valid_until: string | null
@@ -296,17 +301,21 @@ export async function listChecklist(
     return fail(500, "The checklist couldn't be loaded.")
   }
   const byId = new Map(templates.map((t) => [t.id, t]))
+  const documentRows = documents.data as DocumentRow[]
   // Items of a rule that has ended (the non-CDL medical rules, say) and
   // were marked not applicable are history only: left off the checklist.
+  // So is a state's driving record once the state was taken off the driver,
+  // when nothing was ever filed on it.
   const itemRows = (items.data as ItemRow[]).filter((item) => {
     const template = byId.get(item.template_id)
-    return !(
-      item.not_applicable_reason &&
-      template &&
-      !inEffect(template, today)
-    )
+    const ended =
+      item.not_applicable_reason && template && !inEffect(template, today)
+    const stateRemoved =
+      item.not_applicable_reason === STATE_REMOVED &&
+      !item.completed_at &&
+      !documentRows.some((d) => d.dq_item_id === item.id && !d.superseded_at)
+    return !ended && !stateRemoved
   })
-  const documentRows = documents.data as DocumentRow[]
   const attestationRows = attestations.data as AttestationRow[]
   const urls = await signedUrls(supabase, [
     ...documentRows.filter((d) => !d.superseded_at).map((d) => d.storage_path),
@@ -325,8 +334,51 @@ export async function listChecklist(
       itemRows.map((item) => ({ ...item, pending_review: false }))
     ).map((item) => item.id)
   )
+  // On the checklist, last year's record stays in view while it's still
+  // good and next year's isn't done, so the file shows what's on it now
+  // (year 1, good until …) as well as what's next (year 2, due …).
+  for (const item of itemRows) {
+    if (!item.completed_at || !item.valid_until || item.valid_until < today) {
+      continue
+    }
+    const later = itemRows.filter(
+      (other) =>
+        other.template_code === item.template_code &&
+        other.license_state === item.license_state &&
+        other.cycle_number > item.cycle_number
+    )
+    if (later.length && later.every((other) => !other.completed_at)) {
+      current.add(item.id)
+    }
+  }
+
+  // An item that comes round with a paired one (the annual review with the
+  // annual MVR) isn't shown until that year's paired record has a file on
+  // it, or is done: there's nothing to review before then. It still counts
+  // toward the file's status and reminders.
+  const pairOf = (item: ItemRow) => {
+    const template = byId.get(item.template_id)
+    if (!template?.follows_paired || !template.paired_code) return null
+    return (
+      itemRows.find(
+        (other) =>
+          other.template_code === template.paired_code &&
+          other.cycle_number === item.cycle_number
+      ) ?? null
+    )
+  }
+  const waitingOnPair = (item: ItemRow) => {
+    if (item.completed_at || item.not_applicable_reason) return false
+    const pair = pairOf(item)
+    if (!pair) return false
+    return (
+      !pair.completed_at &&
+      !documentRows.some((d) => d.dq_item_id === pair.id && !d.superseded_at)
+    )
+  }
 
   const entries: ChecklistEntry[] = itemRows
+    .filter((item) => !waitingOnPair(item))
     .map((item) => {
       const template = byId.get(item.template_id)
       return {
@@ -344,6 +396,7 @@ export async function listChecklist(
         valid_until: item.valid_until,
         query_result: item.query_result,
         not_applicable_reason: item.not_applicable_reason,
+        paired_with: pairOf(item)?.id ?? null,
         status: itemStatus({ ...item, pending_review: pending(item) }, today),
         documents: documentRows
           .filter((d) => d.dq_item_id === item.id)
@@ -444,6 +497,79 @@ async function insertPlanned(
   return rows.length
 }
 
+/** Why a per-state item came off the file: its state was taken off the driver. */
+export const STATE_REMOVED = "State removed from the driver's license history."
+
+/**
+ * Keeps per-state items (the hiring driving record) in step with the
+ * driver's states. An open item for a state the driver no longer lists, or
+ * the state-less one made before any state was saved, is marked not
+ * applicable with STATE_REMOVED; it's put back if the state comes back.
+ * Completed items are records and stay as they are. Items are never deleted.
+ */
+async function retireRemovedStates(
+  supabase: SupabaseClient,
+  driverId: string,
+  planned: PlannedItem[],
+  templates: DqTemplate[]
+) {
+  const perState = new Set(
+    templates.filter((t) => t.per_state).map((t) => t.code)
+  )
+  if (!perState.size) return
+  const { data } = await supabase
+    .from("dq_items")
+    .select(
+      "id, template_code, license_state, completed_at, not_applicable_reason"
+    )
+    .eq("driver_id", driverId)
+    .in("template_code", [...perState])
+  const items = (data ?? []) as Pick<
+    ItemRow,
+    | "id"
+    | "template_code"
+    | "license_state"
+    | "completed_at"
+    | "not_applicable_reason"
+  >[]
+  const wanted = new Set(
+    planned
+      .filter((p) => perState.has(p.template_code))
+      .map((p) => `${p.template_code}:${p.license_state ?? ""}`)
+  )
+  const key = (i: (typeof items)[number]) =>
+    `${i.template_code}:${i.license_state ?? ""}`
+  const retire = items
+    .filter(
+      (i) => !i.completed_at && !i.not_applicable_reason && !wanted.has(key(i))
+    )
+    .map((i) => i.id)
+  const restore = items
+    .filter(
+      (i) => i.not_applicable_reason === STATE_REMOVED && wanted.has(key(i))
+    )
+    .map((i) => i.id)
+  if (retire.length) {
+    const { error } = await supabase
+      .from("dq_items")
+      .update({ not_applicable_reason: STATE_REMOVED })
+      .in("id", retire)
+    if (error) throw new Error(error.message)
+  }
+  if (restore.length) {
+    const { error } = await supabase
+      .from("dq_items")
+      // The reason, who and when are set or cleared together.
+      .update({
+        not_applicable_reason: null,
+        not_applicable_by: null,
+        not_applicable_at: null,
+      })
+      .in("id", restore)
+    if (error) throw new Error(error.message)
+  }
+}
+
 /**
  * Builds the driver's checklist from their facts and adds the items they
  * don't have yet. Existing items, history and not-applicable marks are left
@@ -482,6 +608,7 @@ export async function syncChecklist(
         (p) => !started.has(`${p.template_code}:${p.license_state ?? ""}`)
       )
     )
+    await retireRemovedStates(supabase, driverId, planned, templates)
     return ok({ added })
   } catch (error) {
     return fail(
@@ -548,6 +675,23 @@ export async function uploadDocument(
     .single()
   if (error) return dbError(error)
   const id = (data as { id: string }).id
+
+  // A new upload replaces any still waiting for review, so there's one file
+  // to review. Only owners and admins can mark files superseded; a driver's
+  // earlier upload is replaced once the newest one is confirmed.
+  if (await isManager(supabase, item.organization_id)) {
+    const replaced = await supabase
+      .from("dq_documents")
+      .update({
+        superseded_at: new Date().toISOString(),
+        superseded_by: id,
+      })
+      .eq("dq_item_id", item.id)
+      .neq("id", id)
+      .is("confirmed_at", null)
+      .is("superseded_at", null)
+    if (replaced.error) return dbError(replaced.error)
+  }
 
   let extraction: Record<string, unknown> | null = null
   if (canReadWithAi(item.template_code, item.file_type)) {
@@ -722,12 +866,19 @@ export async function confirmDocument(
   if (needsQueryResult(templates, template.code) && !input.query_result) {
     return fail(400, "Choose what the query showed.")
   }
+  // A copy of the employment application only counts signed by the driver;
+  // nobody else can sign it for them. It doesn't expire.
+  const application = template.code === "employment_application"
+  if (application && !input.driver_signed) {
+    return fail(400, "Check that the driver signed and dated it.")
+  }
+  const expiry = application ? null : input.expiry_date
 
   const update = await supabase
     .from("dq_documents")
     .update({
       issue_date: input.issue_date,
-      expiry_date: input.expiry_date,
+      expiry_date: expiry,
       confirmed_at: new Date().toISOString(),
     })
     .eq("id", document.id)
@@ -747,7 +898,7 @@ export async function confirmDocument(
 
   return complete(supabase, item, {
     done: input.issue_date,
-    expires: input.expiry_date,
+    expires: expiry,
     queryResult: input.query_result,
   })
 }
@@ -1364,6 +1515,48 @@ export async function voidSignature(
     .not("completed_at", "is", null)
   if (reopen.error) return dbError(reopen.error)
   return ok({ reopened: true })
+}
+
+/**
+ * Takes an upload nobody has confirmed out of the file, e.g. the wrong file
+ * picked by mistake. Documents are never deleted: it's marked superseded by
+ * itself, which keeps it in storage and the audit log, hides it from the
+ * checklist and locks it. A confirmed document is fixed with Replace or
+ * Edit instead, so a completed item never reopens here. Owners and admins.
+ */
+export async function removeDocument(
+  supabase: SupabaseClient,
+  documentId: string
+): Promise<Result<{ id: string }>> {
+  const { data } = await supabase
+    .from("dq_documents")
+    .select(DOCUMENT_COLUMNS)
+    .eq("id", documentId)
+    .maybeSingle()
+  const document = data as DocumentRow | null
+  if (!document) return fail(404, NOT_FOUND)
+  if (!(await isManager(supabase, document.organization_id))) {
+    return fail(403, MANAGERS_ONLY)
+  }
+  if (document.superseded_at) {
+    return fail(400, "That file was already removed or replaced.")
+  }
+  if (document.confirmed_at) {
+    return fail(
+      400,
+      "This file is confirmed. Upload the right one to replace it, or edit its dates."
+    )
+  }
+  const { error } = await supabase
+    .from("dq_documents")
+    .update({
+      superseded_at: new Date().toISOString(),
+      superseded_by: document.id,
+    })
+    .eq("id", document.id)
+    .is("superseded_at", null)
+  if (error) return dbError(error)
+  return ok({ id: document.id })
 }
 
 /**

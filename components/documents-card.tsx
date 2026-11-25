@@ -17,6 +17,7 @@ import { useRef, useState, useTransition } from "react"
 import { toast } from "sonner"
 
 import { ExpiryBadge } from "@/components/drivers/driver-badges"
+import { LocalDate } from "@/components/local-date"
 import {
   SettingsCard,
   SettingsCardFooter,
@@ -553,7 +554,7 @@ export function DocumentsCard<K extends string>({
                     )}
                   </TableCell>
                   <TableCell className="hidden text-xs whitespace-nowrap text-muted-foreground @xl:table-cell">
-                    {formatDate(doc.created_at.slice(0, 10))}
+                    <LocalDate value={doc.created_at} />
                   </TableCell>
                   <TableCell>
                     <div className="flex justify-end">

@@ -2,7 +2,15 @@
 
 import { cn } from "cn"
 
-import { CornerDownLeft, FileText, IdCard, Pencil, Upload } from "lucide-react"
+import {
+  CornerDownLeft,
+  FileText,
+  IdCard,
+  Pencil,
+  Plus,
+  Upload,
+  X,
+} from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
@@ -49,6 +57,7 @@ import {
   type CdlEndorsement,
   type DriverInput,
 } from "@/lib/schemas/driver"
+import { US_STATES } from "@/lib/schemas/organization"
 
 type Name = keyof DriverInput
 
@@ -188,6 +197,153 @@ function EndorsementsField({
         ))}
       </div>
       {errors?.length ? <FieldError errors={errors} /> : null}
+    </fieldset>
+  )
+}
+
+/**
+ * The other states that licensed the driver, as chips: each has an x to
+ * take it off, and the box after them adds one (Enter or Add). Saving the
+ * form updates the qualification file: a hiring driving record per state,
+ * and a removed state's record comes off unless one is already on file.
+ */
+function StatesField({
+  defaultValue,
+  issuingState,
+  errors,
+  onUpdate,
+}: {
+  defaultValue: string[]
+  /** The saved CDL state, when the form's Issuing state box is empty. */
+  issuingState: string | null
+  errors?: { message: string }[]
+  onUpdate: (form: HTMLFormElement | null) => void
+}) {
+  const [states, setStates] = useState<string[]>(defaultValue)
+  const [draft, setDraft] = useState("")
+  const [problem, setProblem] = useState<string | null>(null)
+  const hiddenRef = useRef<HTMLInputElement>(null)
+  const firstRender = useRef(true)
+  const value = states.join(",")
+
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false
+      return
+    }
+    onUpdate(hiddenRef.current?.form ?? null)
+    // Only when the value changes; onUpdate is a new function every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value])
+
+  function add() {
+    const code = draft.trim().toUpperCase()
+    if (!code) return
+    if (!(US_STATES as readonly string[]).includes(code)) {
+      setProblem(`${code} isn't a US state code.`)
+      return
+    }
+    // What's typed in Issuing state now, which may not be saved yet (a new
+    // driver, or an edit in progress), else the saved one.
+    const issuing =
+      (
+        hiddenRef.current?.form?.elements.namedItem(
+          "cdl_state"
+        ) as HTMLInputElement | null
+      )?.value
+        .trim()
+        .toUpperCase() || issuingState
+    if (code === issuing) {
+      setProblem(`${code} is the issuing state already.`)
+      return
+    }
+    if (states.includes(code)) {
+      setProblem(`${code} is on the list already.`)
+      return
+    }
+    if (states.length >= 10) {
+      setProblem("List up to 10 states.")
+      return
+    }
+    setStates((current) => [...current, code])
+    setDraft("")
+    setProblem(null)
+  }
+
+  return (
+    <fieldset className="grid gap-2 sm:col-span-6">
+      <legend className="mb-1 text-sm font-medium">
+        Other states, past 3 years
+      </legend>
+      <input
+        ref={hiddenRef}
+        type="hidden"
+        name="prior_license_states"
+        value={value}
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        {states.map((code) => (
+          <span
+            key={code}
+            className="inline-flex h-8 items-center gap-1 rounded-md border bg-muted/40 pr-1 pl-3 text-sm font-semibold"
+          >
+            {code}
+            <button
+              type="button"
+              aria-label={`Remove ${code}`}
+              title={`Remove ${code}`}
+              className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-destructive"
+              onClick={() =>
+                setStates((current) => current.filter((s) => s !== code))
+              }
+            >
+              <X className="size-3.5" />
+            </button>
+          </span>
+        ))}
+        <div className="flex items-center gap-1.5">
+          <Input
+            aria-label="Add a state"
+            placeholder="e.g. OK"
+            autoCapitalize="characters"
+            maxLength={2}
+            className="h-8 w-20"
+            value={draft}
+            onChange={(event) => {
+              setDraft(event.target.value.replace(/[^a-z]/gi, "").toUpperCase())
+              setProblem(null)
+            }}
+            onKeyDown={(event) => {
+              // Enter adds the state instead of saving the form, so it
+              // mustn't reach the form's own Enter-to-save handler.
+              if (event.key === "Enter") {
+                event.preventDefault()
+                event.stopPropagation()
+                add()
+              }
+            }}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!draft}
+            onClick={add}
+          >
+            <Plus /> Add
+          </Button>
+        </div>
+      </div>
+      <FieldDescription>
+        Every other state that licensed them in the past 3 years. A hiring
+        driving record is needed from each; removing a state takes its record
+        off the qualification file unless one is already on file.
+      </FieldDescription>
+      {problem ? (
+        <FieldError errors={[{ message: problem }]} />
+      ) : errors?.length ? (
+        <FieldError errors={errors} />
+      ) : null}
     </fieldset>
   )
 }
@@ -798,18 +954,11 @@ export function DriverForm({
                 onUpdate={onUpdate}
                 className="sm:col-span-3"
               />
-              <TextField
-                name="prior_license_states"
-                label="Other states, past 3 years"
-                placeholder="e.g. OK, NM"
-                hint="Every other state that licensed them in the past 3 years. A hiring driving record is needed from each."
-                autoCapitalize="characters"
-                defaultValue={
-                  driver?.prior_license_states.join(", ") ?? undefined
-                }
-                errors={errors}
-                className="sm:col-span-6"
-                onChange={handleUppercaseInput}
+              <StatesField
+                defaultValue={driver?.prior_license_states ?? []}
+                issuingState={driver?.cdl_state ?? null}
+                errors={errors.prior_license_states}
+                onUpdate={onUpdate}
               />
               {driver ? (
                 <CdlCopyField

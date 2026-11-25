@@ -6,6 +6,7 @@ import { useState } from "react"
 import { toast } from "sonner"
 
 import { dqFetch } from "@/components/dq/dq-api"
+import { LocalDate } from "@/components/local-date"
 import {
   SettingsCard,
   SettingsEmptyState,
@@ -118,10 +119,10 @@ export function EmployerChecks({
         <Trash2 />
       </Button>
     )
-  const contacted = (check: EmployerCheck) =>
-    new Date(check.contacted_at).toLocaleDateString("en-US", {
-      dateStyle: "medium",
-    })
+  // A moment, so shown on the viewer's day.
+  const contacted = (check: EmployerCheck) => (
+    <LocalDate value={check.contacted_at} />
+  )
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
