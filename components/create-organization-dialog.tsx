@@ -44,8 +44,8 @@ function CreateOrganizationForm() {
           ? "That URL is already taken. Try another."
           : error.message
       }
-      // ?welcome opens the company setup popup on the new dashboard.
-      router.push(`/org/${slug}?welcome=1`)
+      // ?welcome opens the company setup popup on the new loads page.
+      router.push(`/org/${slug}/loads?welcome=1`)
       router.refresh()
     }
   )

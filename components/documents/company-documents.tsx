@@ -198,7 +198,7 @@ export function CompanyDocuments({
   return (
     <SettingsCard
       title="Company documents"
-      description="Authority, insurance, W-9 and other papers brokers and shippers ask for. Expiration dates show up on the dashboard when they get close."
+      description="Authority, insurance, W-9 and other papers brokers and shippers ask for. Expiration dates show up on the Compliance page when they get close."
       contentClassName="px-0 pb-0"
     >
       {documents.length === 0 ? (

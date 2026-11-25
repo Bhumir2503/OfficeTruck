@@ -26,7 +26,7 @@ export function AccountOrganizations({
         {organizations.map((organization) => (
           <li key={organization.id}>
             <Link
-              href={`/org/${organization.slug}`}
+              href={`/org/${organization.slug}/loads`}
               className="group flex items-center gap-3 px-6 py-3 transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none"
             >
               <OrganizationAvatar

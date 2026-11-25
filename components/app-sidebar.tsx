@@ -24,13 +24,11 @@ export function AppSidebar({
   organization,
   user,
   organizations,
-  dashboardBadge,
   ...props
 }: React.ComponentProps<typeof Sidebar> & {
   organization: Organization
   user: { name: string; email: string; avatarUrl: string | null }
   organizations: Organization[]
-  dashboardBadge: number
 }) {
   const base = `/org/${organization.slug}`
 
@@ -56,7 +54,7 @@ export function AppSidebar({
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain base={base} groups={ORG_NAV} dashboardBadge={dashboardBadge} />
+        <NavMain base={base} groups={ORG_NAV} />
         <NavSecondary base={base} items={ORG_NAV_FOOTER} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
