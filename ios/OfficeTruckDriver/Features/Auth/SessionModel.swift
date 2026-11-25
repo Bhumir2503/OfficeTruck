@@ -11,6 +11,8 @@ final class SessionModel {
         case loading
         case signedOut
         case signedIn(phone: String)
+        /// Signed in, but no carrier has this number on a driver record.
+        case notLinked(phone: String)
     }
 
     private(set) var state: State = .loading
@@ -20,7 +22,7 @@ final class SessionModel {
     func start() {
         #if DEBUG
         if DemoBackend.isOn {
-            state = .signedIn(phone: "+15550101234")
+            state = DemoBackend.startsSignedOut ? .signedOut : .signedIn(phone: "+15550101234")
             return
         }
         #endif
@@ -42,21 +44,51 @@ final class SessionModel {
             state = .signedOut
             return
         }
+        let phone = session.user.phone ?? ""
         if event == .signedIn || event == .initialSession {
-            // Links this phone number to the driver records that use it,
-            // and finishes a number change that lost signal halfway.
-            try? await DriverAPI().claimDriverLogins()
-            try? await DriverAPI().updateMyPhone()
+            await link(phone: phone)
+        } else if case .notLinked = state {
+            state = .notLinked(phone: phone)
+        } else {
+            state = .signedIn(phone: phone)
         }
-        state = .signedIn(phone: session.user.phone ?? "")
+    }
+
+    /// Links this phone number to the driver records that use it (and
+    /// finishes a number change that lost signal halfway), then checks
+    /// there's at least one. With no signal, the driver goes in anyway.
+    private func link(phone: String) async {
+        let api = DriverAPI()
+        try? await api.claimDriverLogins()
+        try? await api.updateMyPhone()
+        if let profiles = try? await api.myProfile(), profiles.isEmpty {
+            state = .notLinked(phone: phone)
+        } else {
+            state = .signedIn(phone: phone)
+        }
+    }
+
+    /// Tries linking again, after dispatch adds the number.
+    func retryLink() async {
+        guard let session = try? await client.auth.session else { return }
+        await link(phone: session.user.phone ?? "")
     }
 
     /// Sends the SMS code. `phone` is ten US digits or +1…
     func sendCode(to phone: String) async throws {
+        #if DEBUG
+        if DemoBackend.isOn { return }
+        #endif
         try await client.auth.signInWithOTP(phone: phone)
     }
 
     func verify(phone: String, code: String) async throws {
+        #if DEBUG
+        if DemoBackend.isOn {
+            state = .signedIn(phone: phone)
+            return
+        }
+        #endif
         try await client.auth.verifyOTP(phone: phone, token: code, type: .sms)
     }
 
@@ -82,8 +114,17 @@ final class SessionModel {
         try await DriverAPI().updateMyPhone()
     }
 
+    /// Signs out on this phone right away, signal or not; the server
+    /// forgets the session when it can.
     func signOut() async {
+        #if DEBUG
+        if DemoBackend.isOn {
+            state = .signedOut
+            return
+        }
+        #endif
         try? await client.auth.signOut()
+        state = .signedOut
     }
 }
 

@@ -26,6 +26,18 @@ struct RootView: View {
                 SignInView()
             case .signedIn:
                 TripsView()
+            case .notLinked(let phone):
+                NavigationStack {
+                    ContentUnavailableView {
+                        Label("Not set up yet", systemImage: "person.crop.circle.badge.questionmark")
+                    } description: {
+                        Text("No carrier has \(phone.formattedPhone) on a driver record. Ask dispatch to add it, then try again.")
+                    } actions: {
+                        Button("Try again") { Task { await session.retryLink() } }
+                            .buttonStyle(.borderedProminent)
+                        Button("Sign out", role: .destructive) { Task { await session.signOut() } }
+                    }
+                }
             }
         }
         // Check-ins tapped without signal go out when the app is back in front.
