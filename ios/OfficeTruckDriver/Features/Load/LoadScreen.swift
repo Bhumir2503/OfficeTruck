@@ -88,8 +88,9 @@ struct LoadScreen: View {
                             .foregroundStyle(.orange)
                     }
                 } header: {
+                    // The next stop's header is in the tint color.
                     if isNext {
-                        Label("Next · Stop \(stop.position) · \(stop.isPickup ? "Pickup" : "Delivery")", systemImage: "location.fill")
+                        Text("Stop \(stop.position) · \(stop.isPickup ? "Pickup" : "Delivery")")
                             .foregroundStyle(.tint)
                     } else {
                         Text("Stop \(stop.position) · \(stop.isPickup ? "Pickup" : "Delivery")")
