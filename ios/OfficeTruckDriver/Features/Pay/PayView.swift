@@ -35,6 +35,7 @@ struct PayView: View {
             }
         }
         .navigationTitle("Pay")
+        .navigationBarTitleDisplayMode(.inline)
         .task { await fetch() }
     }
 

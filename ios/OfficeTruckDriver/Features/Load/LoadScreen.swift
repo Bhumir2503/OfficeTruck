@@ -137,9 +137,16 @@ struct LoadScreen: View {
         .refreshable { await fetch() }
         .navigationTitle("Load \(load.reference)")
         .navigationBarTitleDisplayMode(.inline)
-        // Paperwork is added from the toolbar, with what the next stop
-        // usually needs first: BOL at a pickup, POD at a delivery.
+        // Toolbar: call dispatch, and add paperwork with what the next stop
+        // usually needs first (BOL at a pickup, POD at a delivery).
         .toolbar {
+            if let phone = load.organization.phone, let url = URL(string: "tel:\(phone.filter(\.isNumber))") {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Link(destination: url) {
+                        Label("Call dispatch", systemImage: "phone")
+                    }
+                }
+            }
             if load.canEdit {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {

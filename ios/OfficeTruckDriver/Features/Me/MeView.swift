@@ -20,6 +20,7 @@ struct MeView: View {
             }
         }
         .navigationTitle("Profile")
+        .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog("Sign out of OfficeTruck?", isPresented: $confirmingSignOut, titleVisibility: .visible) {
             Button("Sign out", role: .destructive) { Task { await session.signOut() } }
         }
