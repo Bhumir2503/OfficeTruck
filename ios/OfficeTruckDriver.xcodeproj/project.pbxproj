@@ -11,10 +11,13 @@
 		26B377CAAA789602B802D4F7 /* Loadable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 680583ECF92D2581225039F2 /* Loadable.swift */; };
 		2AB6951E30D0DA8C0EC247E7 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FD62A3A84301E2E9A003FA80 /* Assets.xcassets */; };
 		3B8833A185ED584A608CA770 /* MeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 681C7128317562FAE0DCAF44 /* MeView.swift */; };
+		5843AE3CACAC6BDABAAA03B9 /* LoadScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09E096561EA73F55E3E4E080 /* LoadScreen.swift */; };
 		58459F41E09747B089BF84E1 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4465669BC99F25D70CB2C06A /* Models.swift */; };
 		6409E7F395EC452A25F0B74B /* SupabaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0CF3C4F008D37C87E5C9E69 /* SupabaseService.swift */; };
 		65B9CBB505B87FB4FC44BF76 /* DriverAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41D4D9559A6CF9472D0D8B50 /* DriverAPI.swift */; };
 		6CA7C11F3FDAE248043F162B /* SignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E5B25A2A3A5697B78345E34 /* SignInView.swift */; };
+		7AECB06D0BFC7052E2FB470A /* OfflineQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AF622169B6092F4E7FD1E32 /* OfflineQueue.swift */; };
+		7CDA828000B16030E1F9C6E5 /* DemoBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A4FF66F8728F85F6F28FF96 /* DemoBackend.swift */; };
 		7E90DAE590B06CE25DAB52CC /* PayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A3E872C0629148E4766F4D2 /* PayView.swift */; };
 		8DAC0EB7CBE26E8D4D7DAECA /* TripsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0A33E628EE17C3991F2E848 /* TripsView.swift */; };
 		B821E67C97468CFDE1BD71D8 /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39366105CA8CCF401D6F513D /* Formatting.swift */; };
@@ -25,15 +28,18 @@
 
 /* Begin PBXFileReference section */
 		0912BE344D8291D20D8C5796 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		09E096561EA73F55E3E4E080 /* LoadScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadScreen.swift; sourceTree = "<group>"; };
 		2F9DB45DF976678E1563E191 /* App.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = App.xcconfig; sourceTree = "<group>"; };
 		39366105CA8CCF401D6F513D /* Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatting.swift; sourceTree = "<group>"; };
 		41D4D9559A6CF9472D0D8B50 /* DriverAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverAPI.swift; sourceTree = "<group>"; };
 		4465669BC99F25D70CB2C06A /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		680583ECF92D2581225039F2 /* Loadable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Loadable.swift; sourceTree = "<group>"; };
 		681C7128317562FAE0DCAF44 /* MeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeView.swift; sourceTree = "<group>"; };
+		6A4FF66F8728F85F6F28FF96 /* DemoBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoBackend.swift; sourceTree = "<group>"; };
 		6AF0644B7B43B60685913422 /* SessionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionModel.swift; sourceTree = "<group>"; };
 		6E5B25A2A3A5697B78345E34 /* SignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInView.swift; sourceTree = "<group>"; };
 		82F6D77869384EB21AE9BC6D /* OfficeTruckDriverApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfficeTruckDriverApp.swift; sourceTree = "<group>"; };
+		8AF622169B6092F4E7FD1E32 /* OfflineQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineQueue.swift; sourceTree = "<group>"; };
 		9A3E872C0629148E4766F4D2 /* PayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PayView.swift; sourceTree = "<group>"; };
 		B64C94BD588CA035C8E2C16C /* OfficeTruckDriver.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = OfficeTruckDriver.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C0A33E628EE17C3991F2E848 /* TripsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripsView.swift; sourceTree = "<group>"; };
@@ -66,6 +72,7 @@
 			isa = PBXGroup;
 			children = (
 				E15EF71456FC3381797FDB3C /* CurrentLoadView.swift */,
+				09E096561EA73F55E3E4E080 /* LoadScreen.swift */,
 			);
 			path = Load;
 			sourceTree = "<group>";
@@ -135,10 +142,12 @@
 		AAEEFEB0BA7ABB18BC79963B /* Core */ = {
 			isa = PBXGroup;
 			children = (
+				6A4FF66F8728F85F6F28FF96 /* DemoBackend.swift */,
 				41D4D9559A6CF9472D0D8B50 /* DriverAPI.swift */,
 				39366105CA8CCF401D6F513D /* Formatting.swift */,
 				680583ECF92D2581225039F2 /* Loadable.swift */,
 				4465669BC99F25D70CB2C06A /* Models.swift */,
+				8AF622169B6092F4E7FD1E32 /* OfflineQueue.swift */,
 				F0CF3C4F008D37C87E5C9E69 /* SupabaseService.swift */,
 			);
 			path = Core;
@@ -245,12 +254,15 @@
 			buildActionMask = 2147483647;
 			files = (
 				DDA0690E58D1ACA8C6DF8D7D /* CurrentLoadView.swift in Sources */,
+				7CDA828000B16030E1F9C6E5 /* DemoBackend.swift in Sources */,
 				65B9CBB505B87FB4FC44BF76 /* DriverAPI.swift in Sources */,
 				B821E67C97468CFDE1BD71D8 /* Formatting.swift in Sources */,
+				5843AE3CACAC6BDABAAA03B9 /* LoadScreen.swift in Sources */,
 				26B377CAAA789602B802D4F7 /* Loadable.swift in Sources */,
 				3B8833A185ED584A608CA770 /* MeView.swift in Sources */,
 				58459F41E09747B089BF84E1 /* Models.swift in Sources */,
 				CC310C8D2B0E2D14135755A8 /* OfficeTruckDriverApp.swift in Sources */,
+				7AECB06D0BFC7052E2FB470A /* OfflineQueue.swift in Sources */,
 				7E90DAE590B06CE25DAB52CC /* PayView.swift in Sources */,
 				E0C27594EC903A57A7C6FD21 /* SessionModel.swift in Sources */,
 				6CA7C11F3FDAE248043F162B /* SignInView.swift in Sources */,

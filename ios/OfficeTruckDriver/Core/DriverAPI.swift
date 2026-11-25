@@ -31,15 +31,46 @@ struct DriverAPI: Sendable {
     }
 
     func myLoads() async throws -> [LoadSummary] {
-        try await decode(client.rpc("my_loads").execute().data)
+        #if DEBUG
+        if DemoBackend.isOn { return try decode(DemoBackend.loadsJSON()) }
+        #endif
+        return try await decode(client.rpc("my_loads").execute().data)
     }
 
     func myLoad(_ id: UUID) async throws -> LoadDetail {
-        try await decode(client.rpc("my_load", params: ["target_load": id]).execute().data)
+        #if DEBUG
+        if DemoBackend.isOn { return try decode(DemoBackend.loadJSON()) }
+        #endif
+        return try await decode(client.rpc("my_load", params: ["target_load": id]).execute().data)
+    }
+
+    /// Arrived or Departed at a stop. Safe to resend: the server accepts the
+    /// same stop, event and tap time again.
+    func recordStopEvent(_ checkIn: PendingCheckIn) async throws {
+        #if DEBUG
+        if DemoBackend.isOn { return DemoBackend.record(checkIn) }
+        #endif
+        struct Params: Encodable {
+            let target_stop: UUID
+            let event: String
+            let tapped_at: String
+            let odometer: Int?
+        }
+        let params = Params(
+            target_stop: checkIn.stopID,
+            event: checkIn.event.rawValue,
+            // "2026-11-25T14:03:11.123Z": milliseconds, so a resend matches.
+            tapped_at: Date.ISO8601FormatStyle(includingFractionalSeconds: true).format(checkIn.tappedAt),
+            odometer: checkIn.odometer
+        )
+        try await client.rpc("record_my_stop_event", params: params).execute()
     }
 
     func mySettlements() async throws -> [SettlementSummary] {
-        try await decode(client.rpc("my_settlements").execute().data)
+        #if DEBUG
+        if DemoBackend.isOn { return try decode(Data(DemoBackend.settlementsJSON.utf8)) }
+        #endif
+        return try await decode(client.rpc("my_settlements").execute().data)
     }
 
     private func decode<T: Decodable>(_ data: Data) throws -> T {
