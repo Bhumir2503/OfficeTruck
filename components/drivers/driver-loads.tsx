@@ -29,6 +29,7 @@ import { overlapping, SCHEDULED_STATUSES } from "@/lib/dispatch-format"
 import { loadDriverPay } from "@/lib/driver-format"
 import type { DriverLoad } from "@/lib/drivers"
 import { formatRate, formatStopDate } from "@/lib/load-format"
+import { cityState } from "@/lib/report-format"
 import { isFallenThrough } from "@/lib/schemas/load"
 
 const miles = new Intl.NumberFormat("en-US")
@@ -148,10 +149,12 @@ export function DriverLoads({
             <TableHead className="hidden text-right sm:table-cell">
               Miles
             </TableHead>
-            <TableHead className="text-right">Revenue</TableHead>
+            {/* On a phone, the driver's pay is the figure that matters
+                here, and keeping it last keeps the table's edge padding. */}
             <TableHead className="hidden text-right sm:table-cell">
-              Driver pay
+              Revenue
             </TableHead>
+            <TableHead className="text-right">Driver pay</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -182,10 +185,16 @@ export function DriverLoads({
                       </span>
                     )}
                   </div>
+                  {/* City and state, like the pay statement: a street
+                      address cut short says nothing. */}
                   <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                    <span className="truncate">{load.pickup_location}</span>
+                    <span className="truncate">
+                      {cityState(load.pickup_location)}
+                    </span>
                     <ArrowRight className="size-3 shrink-0" />
-                    <span className="truncate">{load.delivery_location}</span>
+                    <span className="truncate">
+                      {cityState(load.delivery_location)}
+                    </span>
                   </div>
                 </TableCell>
                 <TableCell className="hidden text-muted-foreground sm:table-cell">
@@ -201,13 +210,13 @@ export function DriverLoads({
                 <TableCell
                   className={
                     cancelled
-                      ? "text-right text-muted-foreground tabular-nums line-through"
-                      : "text-right tabular-nums"
+                      ? "hidden text-right text-muted-foreground tabular-nums line-through sm:table-cell"
+                      : "hidden text-right tabular-nums sm:table-cell"
                   }
                 >
                   {formatRate(load.rate)}
                 </TableCell>
-                <TableCell className="hidden text-right tabular-nums sm:table-cell">
+                <TableCell className="text-right tabular-nums">
                   {pay === null || cancelled ? (
                     <span className="text-muted-foreground">—</span>
                   ) : (
