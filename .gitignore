@@ -1,6 +1,6 @@
 # dependencies
-/node_modules
-/.pnp
+node_modules/
+.pnp
 .pnp.*
 .yarn/*
 !.yarn/patches
@@ -9,14 +9,14 @@
 !.yarn/versions
 
 # testing
-/coverage
+coverage/
 
 # next.js
-/.next/
-/out/
+.next/
+out/
 
 # production
-/build
+web/build/
 
 # misc
 .DS_Store
@@ -38,3 +38,13 @@ pnpm-debug.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# xcode / swift
+xcuserdata/
+DerivedData/
+*.xcuserstate
+.build/
+.swiftpm/
+*.ipa
+*.dSYM.zip
+*.dSYM
