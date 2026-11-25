@@ -95,6 +95,26 @@ enum DemoBackend {
         """.utf8)
     }
 
+    /// The CDL is good for a year; the medical card runs out in 20 days, so
+    /// the warning shows.
+    static func profileJSON() -> Data {
+        func day(_ offset: Int) -> String {
+            Calendar.current.date(byAdding: .day, value: offset, to: .now)!
+                .formatted(.iso8601.year().month().day())
+        }
+        return Data("""
+        [{"driver_id": "55555555-0000-0000-0000-000000000001", "full_name": "Jordan Reyes",
+          "start_date": "2025-03-01",
+          "organization": {"id": "33333333-0000-0000-0000-000000000001", "name": "Acme Freight",
+                           "phone": "(901) 555-0142"},
+          "license_class": "cdl", "cdl_class": "A", "cdl_state": "TN", "cdl_number_last4": "5678",
+          "cdl_endorsements": ["H", "N", "T"], "cdl_restrictions": null,
+          "cdl_expires_on": "\(day(400))", "medical_card_expires_on": "\(day(20))",
+          "holds_medical_variance": false, "pay_type": "per_mile", "pay_rate": 0.6, "pay_period": "week",
+          "truck": {"unit_number": "T-101", "year": 2022, "make": "Freightliner", "model": "Cascadia"}}]
+        """.utf8)
+    }
+
     static let settlementsJSON = """
     [{"id": "44444444-0000-0000-0000-000000000001", "organization_name": "Acme Freight",
       "period_start": "2026-11-16", "period_end": "2026-11-22", "status": "paid",

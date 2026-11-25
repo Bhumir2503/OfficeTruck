@@ -151,3 +151,67 @@ enum DocumentKind: String, Codable, CaseIterable, Identifiable, Sendable {
         }
     }
 }
+
+/// One entry of `my_profile()`: the signed-in driver at one carrier.
+struct DriverProfile: Decodable, Identifiable, Sendable {
+    var id: UUID { driverId }
+    let driverId: UUID
+    let fullName: String
+    let startDate: String?
+    let organization: Organization
+    let licenseClass: String?
+    let cdlClass: String?
+    let cdlState: String?
+    let cdlNumberLast4: String?
+    let cdlEndorsements: [String]
+    let cdlRestrictions: String?
+    /// "yyyy-MM-dd".
+    let cdlExpiresOn: String?
+    let medicalCardExpiresOn: String?
+    let holdsMedicalVariance: Bool
+    let payType: String?
+    let payRate: Double?
+    let payPeriod: String
+    let truck: Truck?
+
+    struct Organization: Decodable, Sendable {
+        let id: UUID
+        let name: String
+        let phone: String?
+    }
+
+    struct Truck: Decodable, Sendable {
+        let unitNumber: String
+        let year: Int?
+        let make: String?
+        let model: String?
+    }
+
+    var licenseLabel: String {
+        switch licenseClass {
+        case "cdl": "CDL"
+        case "clp": "CDL permit"
+        case "non_cdl": "Non-CDL"
+        default: "—"
+        }
+    }
+
+    /// "$0.60 / mile", "25% of the load", "$350 per load".
+    var payLabel: String? {
+        guard let payType, let payRate else { return nil }
+        switch payType {
+        case "per_mile": return "\(payRate.formatted(.currency(code: "USD"))) / mile"
+        case "percent": return "\(payRate.formatted())% of the load"
+        case "flat": return "\(payRate.formatted(.currency(code: "USD"))) per load"
+        default: return nil
+        }
+    }
+
+    var payPeriodLabel: String {
+        switch payPeriod {
+        case "two_weeks": "Every 2 weeks"
+        case "month": "Monthly"
+        default: "Weekly"
+        }
+    }
+}
