@@ -50,7 +50,9 @@ struct LoadScreen: View {
                     .keyboardType(.numberPad)
             }
             Button("Cancel", role: .cancel) {}
+            // The preferred action is drawn in the app's green.
             Button(request.event == .arrived ? "Arrived" : "Departed") { record(request) }
+                .keyboardShortcut(.defaultAction)
         } message: { _ in
             Text("This records \(Date.now.formatted(date: .omitted, time: .shortened)). Only dispatch can change it after.")
         }
@@ -66,6 +68,7 @@ struct LoadScreen: View {
                     addKind = missing.kind
                 }
             }
+            .keyboardShortcut(.defaultAction)
             Button("Check out anyway") {
                 Task { @MainActor in
                     try? await Task.sleep(for: .milliseconds(350))
@@ -166,7 +169,15 @@ struct LoadScreen: View {
         .toolbar {
             if let phone = load.organization.phone, let url = URL(string: "tel:\(phone.filter(\.isNumber))") {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Link(destination: url) {
+                    // iOS's own call prompt only shows the number, so the
+                    // menu says who it is first.
+                    Menu {
+                        Section("\(load.organization.name) · \(phone)") {
+                            Link(destination: url) {
+                                Label("Call Dispatch", systemImage: "phone")
+                            }
+                        }
+                    } label: {
                         Label("Call dispatch", systemImage: "phone")
                     }
                 }
@@ -225,6 +236,7 @@ struct LoadScreen: View {
         ) { kind in
             if DocumentScanner.isAvailable {
                 Button("Scan") { scanKind = kind }
+                    .keyboardShortcut(.defaultAction)
             }
             Button("Choose from Photos") {
                 photoKind = kind
