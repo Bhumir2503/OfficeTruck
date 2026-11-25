@@ -213,6 +213,10 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					FAB053A7EDED78972DF48520 = {
+						DevelopmentTeam = HJ38J55HQM;
+						ProvisioningStyle = Automatic;
+					};
 				};
 			};
 			buildConfigurationList = 9276FBA9AE2EEE2C8188E8ED /* Build configuration list for PBXProject "OfficeTruckDriver" */;
@@ -281,6 +285,8 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = HJ38J55HQM;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = OfficeTruckDriver/Resources/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = OfficeTruck;
@@ -427,6 +433,8 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = HJ38J55HQM;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = OfficeTruckDriver/Resources/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = OfficeTruck;
