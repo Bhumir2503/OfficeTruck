@@ -231,15 +231,15 @@ export function NewTruckSkeleton() {
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
         {/* The "All trucks" link: a small ghost button. */}
         <Skeleton className="h-8 w-26 rounded-md" />
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
-          <div className="flex min-w-0 flex-col gap-6 lg:col-start-1 lg:row-start-1">
+        <div className="grid items-start gap-6 @4xl/main:grid-cols-[minmax(0,1fr)_20rem] @6xl/main:grid-cols-[minmax(0,1fr)_24rem]">
+          <div className="flex min-w-0 flex-col gap-6 @4xl/main:col-start-1 @4xl/main:row-start-1">
             <TruckFormSkeleton />
             <CostsCardSkeleton />
             <SettingsCard title="Notes">
               <Skeleton className="h-16 w-full" />
             </SettingsCard>
           </div>
-          <aside className="lg:col-start-2 lg:row-start-1">
+          <aside className="@4xl/main:col-start-2 @4xl/main:row-start-1">
             <AddRecordPanelSkeleton
               eyebrow="New truck"
               placeholderTitle="Add a truck"
@@ -279,11 +279,11 @@ export function TruckDetailSkeleton() {
         </div>
         {/* Overview, Maintenance, Documents. */}
         <TabBarSkeleton widths={["w-20", "w-24", "w-24"]} />
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
+        <div className="grid items-start gap-6 @4xl/main:grid-cols-[minmax(0,1fr)_20rem] @6xl/main:grid-cols-[minmax(0,1fr)_24rem]">
           <div className="flex min-w-0 flex-col gap-4">
             <TruckFormSkeleton editing schedule={false} />
           </div>
-          <aside className="order-first flex flex-col gap-4 lg:order-none">
+          <aside className="order-first flex flex-col gap-4 @4xl/main:order-none">
             <section className={panel}>
               <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                 Next action

@@ -281,7 +281,7 @@ export function NewLoadSkeleton() {
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
         {/* The "All loads" link: a small ghost button. */}
         <Skeleton className="h-8 w-24 rounded-md" />
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
+        <div className="grid items-start gap-6 @4xl/main:grid-cols-[minmax(0,1fr)_20rem] @6xl/main:grid-cols-[minmax(0,1fr)_24rem]">
           <div className="flex min-w-0 flex-col gap-6">
             <SettingsCard
               title="Load"
@@ -424,7 +424,7 @@ export function LoadDetailSkeleton() {
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
         {/* The "All loads" link: a small ghost button. */}
         <Skeleton className="h-8 w-24 rounded-md" />
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
+        <div className="grid items-start gap-6 @4xl/main:grid-cols-[minmax(0,1fr)_20rem] @6xl/main:grid-cols-[minmax(0,1fr)_24rem]">
           <div className="flex min-w-0 flex-col gap-6">
             <SettingsCard
               title="Load"

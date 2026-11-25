@@ -297,7 +297,7 @@ export function NewLoadForm({
     <form ref={formRef} {...formProps} autoComplete="off">
       <fieldset
         disabled={pending}
-        className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]"
+        className="grid items-start gap-6 @4xl/main:grid-cols-[minmax(0,1fr)_20rem] @6xl/main:grid-cols-[minmax(0,1fr)_24rem]"
       >
         <div className="relative min-w-0">
           {reading && <AiFillOverlay onCancel={cancelRead} />}
@@ -476,7 +476,7 @@ export function NewLoadForm({
 
         {/* Beside the cards, the rate con and saving stay in view; on a
             phone they come after them. */}
-        <aside className="flex flex-col gap-6 lg:sticky lg:top-6">
+        <aside className="flex flex-col gap-6 @4xl/main:sticky @4xl/main:top-6">
           <section className="overflow-hidden rounded-xl border bg-card text-card-foreground shadow-xs">
             <div className="px-5 pt-4 pb-5">
               <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">

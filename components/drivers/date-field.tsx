@@ -36,13 +36,27 @@ export function DateField({
 }) {
   const [value, setValue] = useState(defaultValue ?? "")
   const hiddenRef = useRef<HTMLInputElement>(null)
-  const firstRender = useRef(true)
+  // Set when the user picks a date, so onUpdate runs for edits only.
+  const edited = useRef(false)
+  // A new saved date (say, a logged service moving the odometer's date)
+  // replaces the shown one, as a text field's new defaultValue does. It
+  // isn't an edit, so it doesn't run onUpdate.
+  const [saved, setSaved] = useState(defaultValue)
+  if (defaultValue !== saved) {
+    setSaved(defaultValue)
+    setValue(defaultValue ?? "")
+  }
+
+  function change(next: string) {
+    edited.current = true
+    setValue(next)
+  }
 
   useEffect(() => {
-    if (firstRender.current) {
-      firstRender.current = false
+    if (!edited.current) {
       return
     }
+    edited.current = false
     onUpdate(hiddenRef.current?.form ?? null)
     // Only when the value changes; onUpdate is a new function every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -57,7 +71,7 @@ export function DateField({
       <DatePicker
         id={id}
         value={value}
-        onChange={setValue}
+        onChange={change}
         invalid={invalid}
         label={label}
       />

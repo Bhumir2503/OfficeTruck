@@ -130,7 +130,7 @@ export default async function TrailerPage({
             />
           )}
         </div>
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
+        <div className="grid items-start gap-6 @4xl/main:grid-cols-[minmax(0,1fr)_20rem] @6xl/main:grid-cols-[minmax(0,1fr)_24rem]">
           <div className="flex min-w-0 flex-col gap-4">
             {manager ? (
               <TrailerForm
@@ -184,7 +184,7 @@ export default async function TrailerPage({
           </div>
           {/* What's due and who's pulling it stay in view; on a phone
               they come first. */}
-          <aside className="order-first flex flex-col gap-4 lg:sticky lg:top-6 lg:order-none">
+          <aside className="order-first flex flex-col gap-4 @4xl/main:sticky @4xl/main:top-6 @4xl/main:order-none">
             <section className={panel}>
               <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                 Compliance

@@ -406,6 +406,27 @@ export function TruckForm({
     }
   }, [pending])
 
+  // A value changed elsewhere (a logged service moves the odometer and the
+  // annual inspection) is the new saved value, not an edit.
+  const loaded = useRef(truck)
+  useEffect(() => {
+    const before = loaded.current
+    loaded.current = truck
+    if (!truck || !before || before === truck || pending || !baseline.current) {
+      return
+    }
+    const now = snapshot(formRef.current)
+    for (const [name, value] of now) {
+      const key = name as keyof Truck
+      if (key in truck && before[key] !== truck[key]) {
+        baseline.current.set(name, value)
+      }
+    }
+    checkDirty(formRef.current)
+    // Only when the truck's saved values change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [truck])
+
   /** Which cards have a field that differs from the baseline. */
   function checkDirty(form: HTMLFormElement | null) {
     if (!form || !baseline.current) {
@@ -504,14 +525,14 @@ export function TruckForm({
               ? "flex flex-col gap-6"
               : // Adding: the cards, with costs, notes and saving beside them
                 // in view, as on Add driver and New load.
-                "grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]"
+                "grid items-start gap-6 @4xl/main:grid-cols-[minmax(0,1fr)_20rem] @6xl/main:grid-cols-[minmax(0,1fr)_24rem]"
           }
         >
           <div
             className={
               truck
                 ? "contents"
-                : "flex min-w-0 flex-col gap-6 lg:col-start-1 lg:row-start-1"
+                : "flex min-w-0 flex-col gap-6 @4xl/main:col-start-1 @4xl/main:row-start-1"
             }
           >
             <SettingsCard
@@ -763,7 +784,7 @@ export function TruckForm({
           {!truck && (
             // Beside the cards, what's filled in and saving stay in view; on
             // a phone they come after them, as on New load.
-            <aside className="lg:sticky lg:top-6 lg:col-start-2 lg:row-start-1">
+            <aside className="@4xl/main:sticky @4xl/main:top-6 @4xl/main:col-start-2 @4xl/main:row-start-1">
               <AddRecordPanel
                 eyebrow="New truck"
                 placeholderTitle="Add a truck"

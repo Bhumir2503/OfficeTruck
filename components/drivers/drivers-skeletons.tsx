@@ -193,8 +193,8 @@ export function NewDriverSkeleton() {
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
         {/* The "All drivers" link: a small ghost button. */}
         <Skeleton className="h-8 w-28 rounded-md" />
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
-          <div className="flex min-w-0 flex-col gap-6 lg:col-start-1 lg:row-start-1">
+        <div className="grid items-start gap-6 @4xl/main:grid-cols-[minmax(0,1fr)_20rem] @6xl/main:grid-cols-[minmax(0,1fr)_24rem]">
+          <div className="flex min-w-0 flex-col gap-6 @4xl/main:col-start-1 @4xl/main:row-start-1">
             <DriverFormSkeleton />
             <SettingsCard
               title="Pay"
@@ -207,7 +207,7 @@ export function NewDriverSkeleton() {
               <Skeleton className="h-16 w-full" />
             </SettingsCard>
           </div>
-          <aside className="lg:col-start-2 lg:row-start-1">
+          <aside className="@4xl/main:col-start-2 @4xl/main:row-start-1">
             <AddRecordPanelSkeleton
               eyebrow="New driver"
               placeholderTitle="Add a driver"
@@ -246,12 +246,12 @@ export function DriverDetailSkeleton() {
         </div>
         {/* The tabs: Overview, Payment, Loads, Documents, Qualification file. */}
         <TabBarSkeleton widths={["w-20", "w-18", "w-14", "w-24", "w-32"]} />
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
+        <div className="grid items-start gap-6 @4xl/main:grid-cols-[minmax(0,1fr)_20rem] @6xl/main:grid-cols-[minmax(0,1fr)_24rem]">
           {/* The Overview tab, the one a driver opens on. */}
           <div className="flex min-w-0 flex-col gap-4">
             <DriverFormSkeleton editing />
           </div>
-          <aside className="order-first flex flex-col gap-4 lg:order-none">
+          <aside className="order-first flex flex-col gap-4 @4xl/main:order-none">
             <section className="overflow-hidden rounded-xl border bg-card px-5 pt-4 pb-5 shadow-xs">
               <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                 Next action

@@ -106,7 +106,7 @@ export default async function LoadPage({
           All loads
         </Link>
         <PageTabsProvider>
-          <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
+          <div className="grid items-start gap-6 @4xl/main:grid-cols-[minmax(0,1fr)_20rem] @6xl/main:grid-cols-[minmax(0,1fr)_24rem]">
             <div className="flex min-w-0 flex-col gap-6">
               <LoadDetailsCard
                 organizationId={organization.id}
@@ -214,7 +214,7 @@ export default async function LoadPage({
             </div>
             {/* Beside the cards, what's next stays in view; on a phone it
               comes after them. */}
-            <aside className="flex flex-col gap-6 lg:sticky lg:top-6 lg:max-h-[calc(100svh-3rem)] lg:overflow-y-auto">
+            <aside className="flex flex-col gap-6 @4xl/main:sticky @4xl/main:top-6 @4xl/main:max-h-[calc(100svh-3rem)] @4xl/main:overflow-y-auto">
               <LoadSidePanel
                 organizationId={organization.id}
                 load={load}
