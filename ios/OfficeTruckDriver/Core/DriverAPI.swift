@@ -101,6 +101,14 @@ struct DriverAPI: Sendable {
         )).execute()
     }
 
+    /// The signed-in driver, once per carrier they drive for (usually one).
+    func myProfile() async throws -> [DriverProfile] {
+        #if DEBUG
+        if DemoBackend.isOn { return try decode(DemoBackend.profileJSON()) }
+        #endif
+        return try await decode(client.rpc("my_profile").execute().data)
+    }
+
     func mySettlements() async throws -> [SettlementSummary] {
         #if DEBUG
         if DemoBackend.isOn { return try decode(Data(DemoBackend.settlementsJSON.utf8)) }
