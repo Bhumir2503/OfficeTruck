@@ -8,7 +8,7 @@ import {
   UNDATED_DRIVER_KINDS,
 } from "@/lib/driver-document-format"
 import { today } from "@/lib/driver-format"
-import { syncChecklist } from "@/lib/dq/service"
+import { reopenAfterReturn, syncChecklist } from "@/lib/dq/service"
 import { canManage, getMyOrganizations } from "@/lib/organizations"
 import {
   driverSchema,
@@ -157,13 +157,28 @@ export async function setDriverStatus(
 
   // Back to active: they're driving again, so a last day from when they
   // left no longer applies.
-  return update(
+  const result = await update(
     organizationId,
     driverId,
     parsed.data === "active"
       ? { status: "active", end_date: null }
       : { status: parsed.data }
   )
+  if ("error" in result || parsed.data !== "active") return result
+
+  // And their qualification file reopens: what leaving closed goes back
+  // on it, and anything missing since is added.
+  const supabase = await createClient()
+  const reopened = await reopenAfterReturn(supabase, driverId)
+  const synced = reopened.ok
+    ? await syncChecklist(supabase, driverId, today())
+    : reopened
+  if (!synced.ok) {
+    return {
+      error: `Marked active, but the qualification file couldn't be reopened: ${synced.error}`,
+    }
+  }
+  return result
 }
 
 /**

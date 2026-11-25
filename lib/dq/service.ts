@@ -1335,6 +1335,35 @@ export async function markNotApplicable(
   return ok({ id: item.id })
 }
 
+/** Starts the reason on items closed because the driver left. */
+const LEFT_REASON = "Not needed: the driver left on"
+
+/**
+ * Reopens what leaving closed, for a driver back at work (or marked as
+ * left by mistake): items closed only because they left go back on the
+ * file. Anything closed for another reason, or done, stays as it is. Run
+ * after their end date is cleared, since a closed file can't change.
+ */
+export async function reopenAfterReturn(
+  supabase: SupabaseClient,
+  driverId: string
+): Promise<Result<{ reopened: number }>> {
+  const { data, error } = await supabase
+    .from("dq_items")
+    // The reason, who and when are set or cleared together.
+    .update({
+      not_applicable_reason: null,
+      not_applicable_by: null,
+      not_applicable_at: null,
+    })
+    .eq("driver_id", driverId)
+    .is("completed_at", null)
+    .like("not_applicable_reason", `${LEFT_REASON}%`)
+    .select("id")
+  if (error) return dbError(error)
+  return ok({ reopened: (data ?? []).length })
+}
+
 /**
  * Sets the day the driver left. Open items due after it are marked not
  * applicable first (once the date passes, the file is read-only). Recurring
@@ -1360,7 +1389,7 @@ export async function setEndDate(
   const { data, error } = await supabase
     .from("dq_items")
     .update({
-      not_applicable_reason: `Not needed: the driver left on ${endDate}.`,
+      not_applicable_reason: `${LEFT_REASON} ${endDate}.`,
     })
     .eq("driver_id", driverId)
     .is("completed_at", null)

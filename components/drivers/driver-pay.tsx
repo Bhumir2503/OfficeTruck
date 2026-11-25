@@ -373,12 +373,15 @@ export function DriverPay({
             <Button
               variant="outline"
               size="sm"
+              aria-label="Add adjustment"
               onClick={() => {
                 setDialogKey((key) => key + 1)
                 setAdding(true)
               }}
             >
-              <Plus /> Add adjustment
+              {/* Short on a phone, where the full label runs off the card. */}
+              <Plus /> <span className="sm:hidden">Add</span>
+              <span className="hidden sm:inline">Add adjustment</span>
             </Button>
           )}
         </div>

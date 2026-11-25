@@ -90,6 +90,11 @@ export type Settlement = {
   loads: SettlementLoad[]
   expenses: SettlementExpense[]
   adjustments: SettlementAdjustment[]
+  /**
+   * Other open periods starting inside this one, left from an earlier
+   * schedule: their adjustments count here, and move here when it's paid.
+   */
+  mergedFrom: string[]
   /** Live while open; what was frozen when it was paid. */
   totals: SettlementTotals
 }
@@ -164,6 +169,21 @@ export async function getSettlement(
   const rows = settlements.data as SettlementRow[]
   const row = periodRow(rows, start, end)
   const paid = row?.status === "paid"
+  // Open periods from an earlier schedule that start inside this one (an
+  // old week undone after a switch to 2 weeks, say). Their adjustments
+  // belong here; left alone they'd never be paid.
+  const strays = paid
+    ? []
+    : rows.filter(
+        (r) =>
+          r.status === "open" &&
+          r.id !== row?.id &&
+          r.week_start >= start &&
+          r.week_start <= end
+      )
+  const adjustmentRows = [row, ...strays]
+    .filter((r): r is SettlementRow => r !== null)
+    .map((r) => r.id)
 
   let loadRows = loads.data as LoadRow[]
   if (paid) {
@@ -203,12 +223,12 @@ export async function getSettlement(
           .in("load_id", ids)
           .order("spent_on")
       : Promise.resolve({ data: [], error: null }),
-    row
+    adjustmentRows.length
       ? supabase
           .from("driver_settlement_adjustments")
           .select("id, description, amount")
           .eq("organization_id", organizationId)
-          .eq("settlement_id", row.id)
+          .in("settlement_id", adjustmentRows)
           .order("created_at")
       : Promise.resolve({ data: [], error: null }),
   ])
@@ -249,6 +269,7 @@ export async function getSettlement(
     loads: shownLoads,
     expenses: shownExpenses,
     adjustments: driverAdjustments,
+    mergedFrom: strays.map((r) => r.id),
     totals: paid
       ? {
           ...live,
