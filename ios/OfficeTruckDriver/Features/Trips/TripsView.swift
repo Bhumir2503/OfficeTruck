@@ -7,65 +7,52 @@ struct TripsView: View {
 
     var body: some View {
         NavigationStack {
-            LoadableView(value: loads, retry: load) { loads in
-                if loads.isEmpty {
-                    ContentUnavailableView("No trips yet", systemImage: "list.bullet.rectangle")
-                } else {
-                    List(loads) { trip in
-                        NavigationLink(value: trip) { TripRow(trip: trip) }
+            Group {
+                switch loads {
+                case .loading:
+                    ProgressView()
+                case .failed(let message):
+                    ContentUnavailableView {
+                        Label("Couldn't load", systemImage: "wifi.exclamationmark")
+                    } description: {
+                        Text(message)
+                    } actions: {
+                        Button("Try again") { Task { await fetch() } }
+                            .buttonStyle(.borderedProminent)
                     }
+                case .loaded(let trips) where trips.isEmpty:
+                    ContentUnavailableView("No trips yet", systemImage: "list.bullet.rectangle")
+                case .loaded(let trips):
+                    List(trips) { trip in
+                        NavigationLink(value: trip.id) {
+                            VStack(alignment: .leading) {
+                                LabeledContent(trip.reference, value: trip.status.label)
+                                    .font(.headline)
+                                Text("\(trip.pickupLocation) → \(trip.deliveryLocation)")
+                                Text(WallClock.format(trip.pickupStart))
+                                    .font(.callout)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .refreshable { await fetch() }
                 }
             }
             .navigationTitle("Trips")
-            .navigationDestination(for: LoadSummary.self) { TripDetailView(id: $0.id) }
-            .refreshable { await load() }
-            .task { await load() }
+            .navigationDestination(for: UUID.self) { id in
+                LoadScreen(loadID: id)
+                    .navigationTitle("Load")
+                    .navigationBarTitleDisplayMode(.inline)
+            }
+            .task { await fetch() }
         }
     }
 
-    private func load() async {
+    private func fetch() async {
         do {
             loads = .loaded(try await api.myLoads())
         } catch {
             loads = .failed(error.driverMessage)
-        }
-    }
-}
-
-struct TripRow: View {
-    let trip: LoadSummary
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(trip.reference).font(.headline)
-                Spacer()
-                StatusBadge(status: trip.status)
-            }
-            Text("\(trip.pickupLocation) → \(trip.deliveryLocation)")
-            Text(WallClock.format(trip.pickupStart)).font(.callout).foregroundStyle(.secondary)
-        }
-        .padding(.vertical, 4)
-    }
-}
-
-struct TripDetailView: View {
-    let id: UUID
-    @State private var detail: Loadable<LoadDetail> = .loading
-    private let api = DriverAPI()
-
-    var body: some View {
-        LoadableView(value: detail, retry: load) { LoadDetailContent(load: $0) }
-            .navigationTitle("Load")
-            .navigationBarTitleDisplayMode(.inline)
-            .task { await load() }
-    }
-
-    private func load() async {
-        do {
-            detail = .loaded(try await api.myLoad(id))
-        } catch {
-            detail = .failed(error.driverMessage)
         }
     }
 }

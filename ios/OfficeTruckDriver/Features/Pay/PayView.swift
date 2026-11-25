@@ -7,36 +7,39 @@ struct PayView: View {
 
     var body: some View {
         NavigationStack {
-            LoadableView(value: settlements, retry: load) { rows in
-                if rows.isEmpty {
-                    ContentUnavailableView("No pay statements yet", systemImage: "dollarsign.circle")
-                } else {
-                    List(rows) { row in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("\(WallClock.day(row.periodStart)) – \(WallClock.day(row.periodEnd))")
-                                    .font(.headline)
-                                Text(row.isPaid
-                                     ? "Paid \(row.paidOn.map(WallClock.day) ?? "")"
-                                     : "Open")
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            if let net = row.netPay {
-                                Text(net.dollars).font(.title3.bold().monospacedDigit())
-                            }
-                        }
-                        .padding(.vertical, 4)
+            Group {
+                switch settlements {
+                case .loading:
+                    ProgressView()
+                case .failed(let message):
+                    ContentUnavailableView {
+                        Label("Couldn't load", systemImage: "wifi.exclamationmark")
+                    } description: {
+                        Text(message)
+                    } actions: {
+                        Button("Try again") { Task { await fetch() } }
+                            .buttonStyle(.borderedProminent)
                     }
+                case .loaded(let rows) where rows.isEmpty:
+                    ContentUnavailableView("No pay statements yet", systemImage: "dollarsign.circle")
+                case .loaded(let rows):
+                    List(rows) { row in
+                        LabeledContent {
+                            if let net = row.netPay { Text(net.dollars).monospacedDigit() }
+                        } label: {
+                            Text("\(WallClock.day(row.periodStart)) – \(WallClock.day(row.periodEnd))")
+                            Text(row.isPaid ? "Paid \(row.paidOn.map(WallClock.day) ?? "")" : "Open")
+                        }
+                    }
+                    .refreshable { await fetch() }
                 }
             }
             .navigationTitle("Pay")
-            .refreshable { await load() }
-            .task { await load() }
+            .task { await fetch() }
         }
     }
 
-    private func load() async {
+    private func fetch() async {
         do {
             settlements = .loaded(try await api.mySettlements())
         } catch {

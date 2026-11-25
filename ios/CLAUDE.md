@@ -8,6 +8,7 @@ Native driver app: Swift 6, SwiftUI, iOS 17+. Backend is the shared Supabase pro
 3. Command-line build: `xcodebuild -project OfficeTruckDriver.xcodeproj -scheme OfficeTruckDriver -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -derivedDataPath build/DerivedData build`
 
 ## Conventions
+- Build UI from stock SwiftUI only (`List`, `Section`, `LabeledContent`, `Label`, `Button` with system styles, `.alert`, `.sheet`, `ContentUnavailableView`, `ProgressView`). Don't create custom component views (badges, wrapper or styled row views); write the UI inline in each screen.
 - SwiftUI and the Observation framework (`@Observable`, `@State`, `@Environment`). Don't use `ObservableObject` or Combine unless an API forces it.
 - async/await for all I/O. Keep UI state on `@MainActor`.
 - Talk to Supabase with the `supabase-swift` SPM package. Use the publishable (anon) key only; never ship the service-role key.
@@ -18,4 +19,5 @@ Native driver app: Swift 6, SwiftUI, iOS 17+. Backend is the shared Supabase pro
 - Tabs: Load, Trips, Pay, Me.
 - UI for drivers: big tap targets (≥ 44pt, prefer 56pt for primary actions), high contrast, Dynamic Type, system light/dark mode.
 - Writes made with no signal (stop check-ins, document uploads, expenses) go through the offline queue and retry later.
-- Verify in the iOS Simulator: build, launch, take a screenshot and tap through the flow.
+- Verify in the iOS Simulator on the latest iOS 26 runtime (iPhone 17 Pro): build, launch, take a screenshot and tap through the flow.
+- Demo mode (Debug builds): launch with `-demo` (`xcrun simctl launch <device> com.officetruck.driver -demo`) to sign in with sample data from `Core/DemoBackend.swift`, with no SMS or server.

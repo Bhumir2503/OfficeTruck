@@ -18,6 +18,12 @@ final class SessionModel {
     private var listener: Task<Void, Never>?
 
     func start() {
+        #if DEBUG
+        if DemoBackend.isOn {
+            state = .signedIn(phone: "+15550101234")
+            return
+        }
+        #endif
         guard listener == nil else { return }
         listener = Task { [weak self] in
             guard let client = self?.client else { return }
