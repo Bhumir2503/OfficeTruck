@@ -15,6 +15,9 @@ packages:
   Supabase:
     url: https://github.com/supabase/supabase-swift
     from: "2.55.0"
+  Lottie:
+    url: https://github.com/airbnb/lottie-spm
+    from: "4.5.0"
 targets:
   OfficeTruckDriver:
     type: application
@@ -27,6 +30,8 @@ targets:
     dependencies:
       - package: Supabase
         product: Supabase
+      - package: Lottie
+        product: Lottie
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.officetruck.driver

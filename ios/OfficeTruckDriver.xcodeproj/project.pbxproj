@@ -22,9 +22,11 @@
 		7CDA828000B16030E1F9C6E5 /* DemoBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A4FF66F8728F85F6F28FF96 /* DemoBackend.swift */; };
 		7E90DAE590B06CE25DAB52CC /* PayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A3E872C0629148E4766F4D2 /* PayView.swift */; };
 		8DAC0EB7CBE26E8D4D7DAECA /* TripsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0A33E628EE17C3991F2E848 /* TripsView.swift */; };
+		9D67D25AC45739DC656659CF /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 0FAEC068E9AAD3D8724CA89B /* Lottie */; };
 		B821E67C97468CFDE1BD71D8 /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39366105CA8CCF401D6F513D /* Formatting.swift */; };
 		CC310C8D2B0E2D14135755A8 /* OfficeTruckDriverApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82F6D77869384EB21AE9BC6D /* OfficeTruckDriverApp.swift */; };
 		E0C27594EC903A57A7C6FD21 /* SessionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AF0644B7B43B60685913422 /* SessionModel.swift */; };
+		F5D9E7157A6166D93974AF93 /* Cargo.json in Resources */ = {isa = PBXBuildFile; fileRef = AA51E16A41E3B4F49E0FF5E7 /* Cargo.json */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -44,6 +46,7 @@
 		89D9DA8125ED34204F5BC2D0 /* DocumentScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentScanner.swift; sourceTree = "<group>"; };
 		8AF622169B6092F4E7FD1E32 /* OfflineQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineQueue.swift; sourceTree = "<group>"; };
 		9A3E872C0629148E4766F4D2 /* PayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PayView.swift; sourceTree = "<group>"; };
+		AA51E16A41E3B4F49E0FF5E7 /* Cargo.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Cargo.json; sourceTree = "<group>"; };
 		B64C94BD588CA035C8E2C16C /* OfficeTruckDriver.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = OfficeTruckDriver.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C0A33E628EE17C3991F2E848 /* TripsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripsView.swift; sourceTree = "<group>"; };
 		F0CF3C4F008D37C87E5C9E69 /* SupabaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseService.swift; sourceTree = "<group>"; };
@@ -56,6 +59,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0EC8662B29794A6EF7FEF63C /* Supabase in Frameworks */,
+				9D67D25AC45739DC656659CF /* Lottie in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -100,6 +104,7 @@
 			isa = PBXGroup;
 			children = (
 				FD62A3A84301E2E9A003FA80 /* Assets.xcassets */,
+				AA51E16A41E3B4F49E0FF5E7 /* Cargo.json */,
 				0912BE344D8291D20D8C5796 /* Info.plist */,
 			);
 			path = Resources;
@@ -202,6 +207,7 @@
 			name = OfficeTruckDriver;
 			packageProductDependencies = (
 				7EF643A8DF3C1F5499FA9EA7 /* Supabase */,
+				0FAEC068E9AAD3D8724CA89B /* Lottie */,
 			);
 			productName = OfficeTruckDriver;
 			productReference = B64C94BD588CA035C8E2C16C /* OfficeTruckDriver.app */;
@@ -232,6 +238,7 @@
 			mainGroup = 2DB37A2AE889AFB8D2A6FF6F;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				AF67DF1721E8CC082F3CDD9F /* XCRemoteSwiftPackageReference "lottie-spm" */,
 				93B773DCA2EA11CE73DBE373 /* XCRemoteSwiftPackageReference "supabase-swift" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -250,6 +257,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2AB6951E30D0DA8C0EC247E7 /* Assets.xcassets in Resources */,
+				F5D9E7157A6166D93974AF93 /* Cargo.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -489,9 +497,22 @@
 				minimumVersion = 2.55.0;
 			};
 		};
+		AF67DF1721E8CC082F3CDD9F /* XCRemoteSwiftPackageReference "lottie-spm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/airbnb/lottie-spm";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.5.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		0FAEC068E9AAD3D8724CA89B /* Lottie */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AF67DF1721E8CC082F3CDD9F /* XCRemoteSwiftPackageReference "lottie-spm" */;
+			productName = Lottie;
+		};
 		7EF643A8DF3C1F5499FA9EA7 /* Supabase */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 93B773DCA2EA11CE73DBE373 /* XCRemoteSwiftPackageReference "supabase-swift" */;

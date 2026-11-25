@@ -8,6 +8,9 @@ enum DemoBackend {
     static let isOn = ProcessInfo.processInfo.arguments.contains("-demo")
     /// Add `-two-carriers` too to see a driver who drives for two companies.
     static let twoCarriers = ProcessInfo.processInfo.arguments.contains("-two-carriers")
+    /// Add `-signed-out` too to start at sign-in. No text is sent; any
+    /// 6-digit code signs in.
+    static let startsSignedOut = ProcessInfo.processInfo.arguments.contains("-signed-out")
 
     static let loadID = "11111111-0000-0000-0000-000000000001"
     private static let stopIDs = [

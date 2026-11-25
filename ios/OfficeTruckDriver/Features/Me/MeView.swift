@@ -47,19 +47,39 @@ struct MeView: View {
                     newPhone = ""
                     changingPhone = true
                 }
-                Button("Sign out", role: .destructive) { confirmingSignOut = true }
             } header: {
                 Text("Account")
             } footer: {
-                Text("You sign in with this number. Changing it updates it for dispatch too.\n\n\(appVersion)")
+                Text("You sign in with this number. Changing it updates it for dispatch too.")
+            }
+
+            // On its own: a full-width red button, confirmed with an alert.
+            Section {
+                Button(role: .destructive) {
+                    confirmingSignOut = true
+                } label: {
+                    Text("Sign out").font(.headline).frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+                .controlSize(.large)
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+            } footer: {
+                Text(appVersion)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 8)
             }
         }
         .navigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await fetch() }
         .task { await fetch() }
-        .confirmationDialog("Sign out of OfficeTruck?", isPresented: $confirmingSignOut, titleVisibility: .visible) {
+        .alert("Sign out?", isPresented: $confirmingSignOut) {
+            Button("Cancel", role: .cancel) {}
             Button("Sign out", role: .destructive) { Task { await session.signOut() } }
+        } message: {
+            Text("You'll need a code texted to your phone to sign back in.")
         }
         .alert("Change phone number", isPresented: $changingPhone) {
             TextField("New number", text: $newPhone)
@@ -195,6 +215,9 @@ struct MeView: View {
         }
         do {
             try await session.sendChangeCode(to: number)
+        } catch let error as AuthError where error.errorCode == .phoneExists {
+            await showChangeError("That number already signs in to OfficeTruck. Ask dispatch for help.")
+            return
         } catch {
             await showChangeError("We couldn't send a code to that number. If it's already used to sign in to OfficeTruck, ask dispatch for help.")
             return

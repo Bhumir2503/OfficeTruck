@@ -8,7 +8,7 @@ Native driver app: Swift 6, SwiftUI, iOS 17+. Backend is the shared Supabase pro
 3. Command-line build: `xcodebuild -project OfficeTruckDriver.xcodeproj -scheme OfficeTruckDriver -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -derivedDataPath build/DerivedData build`
 
 ## Conventions
-- Build UI from stock SwiftUI only (`List`, `Section`, `LabeledContent`, `Label`, `Button` with system styles, `.alert`, `.sheet`, `ContentUnavailableView`, `ProgressView`). Don't create custom component views (badges, wrapper or styled row views); write the UI inline in each screen.
+- Build UI from stock SwiftUI only (`List`, `Section`, `LabeledContent`, `Label`, `Button` with system styles, `.alert`, `.sheet`, `ContentUnavailableView`, `ProgressView`). Don't create custom component views (badges, wrapper or styled row views); write the UI inline in each screen. One exception: the sign-in screen plays `Resources/Cargo.json` with the Lottie package (`LottieView`).
 - SwiftUI and the Observation framework (`@Observable`, `@State`, `@Environment`). Don't use `ObservableObject` or Combine unless an API forces it.
 - async/await for all I/O. Keep UI state on `@MainActor`.
 - Talk to Supabase with the `supabase-swift` SPM package. Use the publishable (anon) key only; never ship the service-role key.
@@ -20,4 +20,4 @@ Native driver app: Swift 6, SwiftUI, iOS 17+. Backend is the shared Supabase pro
 - UI for drivers: big tap targets (≥ 44pt, prefer 56pt for primary actions), high contrast, Dynamic Type, system light/dark mode.
 - Writes made with no signal (stop check-ins, document uploads, expenses) go through the offline queue and retry later.
 - Verify in the iOS Simulator on the latest iOS 26 runtime (iPhone 17 Pro): build, launch, take a screenshot and tap through the flow.
-- Demo mode (Debug builds): launch with `-demo` (`xcrun simctl launch <device> com.officetruck.driver -demo`) to sign in with sample data from `Core/DemoBackend.swift`, with no SMS or server. Add `-two-carriers` to see a driver who drives for two companies.
+- Demo mode (Debug builds): launch with `-demo` (`xcrun simctl launch <device> com.officetruck.driver -demo`) to sign in with sample data from `Core/DemoBackend.swift`, with no SMS or server. Add `-two-carriers` to see a driver who drives for two companies, or `-signed-out` to start at sign-in (no text is sent; any 6-digit code signs in).
