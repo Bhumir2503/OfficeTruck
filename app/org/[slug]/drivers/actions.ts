@@ -5,6 +5,7 @@ import { refresh } from "next/cache"
 import {
   DATED_ON_DRIVER,
   isDriverDocumentKind,
+  UNDATED_DRIVER_KINDS,
 } from "@/lib/driver-document-format"
 import { today } from "@/lib/driver-format"
 import { syncChecklist } from "@/lib/dq/service"
@@ -311,7 +312,13 @@ export async function addDriverDocument(
     kind: input.kind,
     title: title ? title.slice(0, 200) : null,
     // CDL and medical card dates are kept on the driver.
-    expires_on: (!DATED_ON_DRIVER[input.kind] && input.expires_on) || null,
+    // Its own date only: not for a kind dated on the driver (CDL, medical
+    // card) or one that doesn't expire (a W-9).
+    expires_on:
+      (!DATED_ON_DRIVER[input.kind] &&
+        !UNDATED_DRIVER_KINDS.includes(input.kind) &&
+        input.expires_on) ||
+      null,
     path: input.path,
     file_name: input.file_name.trim().slice(0, 200) || "Document",
     content_type: input.content_type,

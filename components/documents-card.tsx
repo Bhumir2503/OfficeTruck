@@ -2,7 +2,6 @@
 
 import { cn } from "cn"
 import {
-  ExternalLink,
   FileText,
   FolderOpen,
   ImageIcon,
@@ -10,6 +9,7 @@ import {
   Plus,
   ChevronLeft,
   ChevronRight,
+  Pencil,
   Trash2,
   Upload,
 } from "lucide-react"
@@ -84,6 +84,8 @@ type Kinds<K extends string> = {
   dateLabels?: Partial<Record<K, string>>
   /** Kinds whose date is when the next one is due, not when this expires. */
   dueKinds?: readonly K[]
+  /** Kinds that don't expire, so no date is asked on upload. */
+  undated?: readonly K[]
 }
 
 /** Documents shown at a time. */
@@ -141,6 +143,7 @@ function AddDocumentDialog<K extends string>({
   const fileRef = useRef<HTMLInputElement>(null)
   // Some dates are kept elsewhere, so they aren't asked here.
   const datedElsewhere = kinds.datedElsewhere[kind]
+  const undated = kinds.undated?.includes(kind) ?? false
 
   function pick(next: File | null | undefined) {
     if (!next) return
@@ -171,7 +174,7 @@ function AddDocumentDialog<K extends string>({
               const error = await upload({
                 kind,
                 title,
-                expires_on: datedElsewhere ? "" : expiresOn,
+                expires_on: datedElsewhere || undated ? "" : expiresOn,
                 file,
               })
               if (error) {
@@ -205,23 +208,26 @@ function AddDocumentDialog<K extends string>({
               </SelectContent>
             </Select>
           </Field>
-          <Field>
-            <FieldLabel htmlFor="doc-expires">
-              {kinds.dateLabels?.[kind] ?? "Expires"}
-            </FieldLabel>
-            {datedElsewhere ? (
-              <FieldDescription className="pt-1.5">
-                {datedElsewhere}
-              </FieldDescription>
-            ) : (
-              <DatePicker
-                id="doc-expires"
-                value={expiresOn}
-                onChange={setExpiresOn}
-                label="Expires"
-              />
-            )}
-          </Field>
+          {/* Nothing to ask for a kind that doesn't expire (a W-9). */}
+          {!undated && (
+            <Field>
+              <FieldLabel htmlFor="doc-expires">
+                {kinds.dateLabels?.[kind] ?? "Expires"}
+              </FieldLabel>
+              {datedElsewhere ? (
+                <FieldDescription className="pt-1.5">
+                  {datedElsewhere}
+                </FieldDescription>
+              ) : (
+                <DatePicker
+                  id="doc-expires"
+                  value={expiresOn}
+                  onChange={setExpiresOn}
+                  label="Expires"
+                />
+              )}
+            </Field>
+          )}
           <Field className="sm:col-span-2">
             <FieldLabel htmlFor="doc-title">
               Name {kind !== "other" && "(optional)"}
@@ -356,6 +362,7 @@ export function DocumentsCard<K extends string>({
   dueFor,
   upload,
   remove: removeDocument,
+  rename,
   canManage,
   warn,
   today,
@@ -372,6 +379,11 @@ export function DocumentsCard<K extends string>({
   dueFor: (doc: DocumentRow<K>) => string | null
   upload: (input: DocumentUpload<K>) => Promise<string | null>
   remove: (id: string) => Promise<{ error: string } | { ok: true }>
+  /** Renames a document's file. Without it, names can't be changed. */
+  rename?: (
+    id: string,
+    name: string
+  ) => Promise<{ error: string } | { ok: true }>
   canManage: boolean
   /** Inactive drivers and parked trucks don't need warnings. */
   warn: boolean
@@ -389,6 +401,32 @@ export function DocumentsCard<K extends string>({
   const [dialogKey, setDialogKey] = useState(0)
   // The document waiting on the delete confirmation, if any.
   const [deleting, setDeleting] = useState<DocumentRow<K> | null>(null)
+  // The document whose name is being edited, and what's typed so far.
+  const [renaming, setRenaming] = useState<{
+    id: string
+    draft: string
+  } | null>(null)
+  // Enter saves, then the input's blur would save again: only the first counts.
+  const settled = useRef(false)
+
+  function saveName(doc: DocumentRow<K>) {
+    if (!renaming || !rename || settled.current) return
+    settled.current = true
+    const name = renaming.draft.trim()
+    if (!name || name === doc.file_name) {
+      setRenaming(null)
+      return
+    }
+    start(async () => {
+      const result = await rename(doc.id, name)
+      if ("error" in result) {
+        toast.error(result.error)
+      } else {
+        toast.success("Renamed.")
+      }
+      setRenaming(null)
+    })
+  }
   // Five documents a page. Deleting the last one on a page steps back.
   const [page, setPage] = useState(0)
   const pages = Math.max(1, Math.ceil(documents.length / PAGE_SIZE))
@@ -526,9 +564,71 @@ export function DocumentsCard<K extends string>({
                         >
                           {doc.title ?? label}
                         </a>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {doc.file_name}
-                        </p>
+                        {renaming?.id === doc.id ? (
+                          <Input
+                            aria-label="New name"
+                            value={renaming.draft}
+                            autoFocus
+                            maxLength={200}
+                            className="mt-0.5 h-7 text-xs"
+                            onFocus={(event) => {
+                              // Select the name, not the extension, ready to
+                              // type over.
+                              const dot =
+                                event.currentTarget.value.lastIndexOf(".")
+                              event.currentTarget.setSelectionRange(
+                                0,
+                                dot > 0 ? dot : event.currentTarget.value.length
+                              )
+                            }}
+                            onChange={(event) =>
+                              setRenaming({
+                                id: doc.id,
+                                draft: event.target.value,
+                              })
+                            }
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault()
+                                saveName(doc)
+                              } else if (event.key === "Escape") {
+                                event.preventDefault()
+                                settled.current = true
+                                setRenaming(null)
+                              }
+                            }}
+                            onBlur={() => saveName(doc)}
+                          />
+                        ) : (
+                          <div className="flex min-w-0 items-center gap-1">
+                            <p
+                              className={cn(
+                                "truncate text-xs text-muted-foreground",
+                                pending && "opacity-60"
+                              )}
+                            >
+                              {doc.file_name}
+                            </p>
+                            {rename && canManage && (
+                              <button
+                                type="button"
+                                aria-label={`Rename ${doc.file_name}`}
+                                title="Rename"
+                                disabled={pending}
+                                className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                                onClick={() => {
+                                  settled.current = false
+                                  setRenaming({
+                                    id: doc.id,
+                                    draft: doc.file_name,
+                                  })
+                                }}
+                              >
+                                <Pencil className="size-3" />
+                              </button>
+                            )}
+                          </div>
+                        )}
                         {noteFor?.(doc) && (
                           <p className="text-xs text-amber-700 dark:text-amber-400">
                             {noteFor(doc)}
@@ -564,12 +664,14 @@ export function DocumentsCard<K extends string>({
                           target="_blank"
                           rel="noreferrer"
                           aria-label={`Open ${doc.file_name}`}
+                          title={`Open ${doc.file_name}`}
                           className={buttonVariants({
                             variant: "ghost",
                             size: "icon-sm",
                           })}
                         >
-                          <ExternalLink />
+                          {/* The same file icon the qualification file uses. */}
+                          <FileText />
                         </a>
                       )}
                       {canManage && (
