@@ -164,22 +164,43 @@ struct LoadScreen: View {
         .refreshable { await fetch() }
         .navigationTitle("Load \(load.reference)")
         .navigationBarTitleDisplayMode(.inline)
-        // Toolbar: call dispatch, and add paperwork with what the next stop
-        // usually needs first (BOL at a pickup, POD at a delivery).
+        // Toolbar: a More menu (calls, directions, the stop's number), and
+        // add paperwork with what the next stop usually needs first (BOL at
+        // a pickup, POD at a delivery).
         .toolbar {
-            if let phone = load.organization.phone, let url = URL(string: "tel:\(phone.filter(\.isNumber))") {
-                ToolbarItem(placement: .topBarTrailing) {
-                    // iOS's own call prompt only shows the number, so the
-                    // menu says who it is first.
-                    Menu {
-                        Section("\(load.organization.name) · \(phone)") {
+            // More: calls, directions and the stop's number, the things a
+            // driver reaches for at a stop.
+            ToolbarItem(placement: .topBarTrailing) {
+                let stop = next ?? load.stops.last
+                Menu {
+                    Section("Call") {
+                        if let phone = load.organization.phone, let url = telURL(phone) {
                             Link(destination: url) {
-                                Label("Call Dispatch", systemImage: "phone")
+                                Label("Dispatch", systemImage: "phone")
                             }
                         }
-                    } label: {
-                        Label("Call dispatch", systemImage: "phone")
+                        if let stop, let phone = stop.contactPhone, let url = telURL(phone) {
+                            Link(destination: url) {
+                                Label(stop.facility ?? stop.location, systemImage: "phone")
+                            }
+                        }
                     }
+                    if let stop {
+                        Section("Stop \(stop.position) · \(stop.isPickup ? "Pickup" : "Delivery")") {
+                            if let url = directionsURL(stop) {
+                                Link(destination: url) {
+                                    Label("Directions", systemImage: "arrow.triangle.turn.up.right.diamond")
+                                }
+                            }
+                            if let number = stop.stopNumber {
+                                Button("Copy \(number)", systemImage: "doc.on.doc") {
+                                    UIPasteboard.general.string = number
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    Label("More", systemImage: "ellipsis")
                 }
             }
             if load.canEdit {
@@ -284,6 +305,20 @@ struct LoadScreen: View {
             asksOdometer: (event == .arrived && stop.position == load.stops.first?.position)
                 || (event == .departed && stop.position == load.stops.last?.position)
         )
+    }
+
+    private func telURL(_ phone: String) -> URL? {
+        URL(string: "tel:\(phone.filter { $0.isNumber || $0 == "+" })")
+    }
+
+    /// Apple Maps directions to a stop.
+    private func directionsURL(_ stop: LoadDetail.Stop) -> URL? {
+        var components = URLComponents(string: "https://maps.apple.com/")
+        components?.queryItems = [URLQueryItem(
+            name: "daddr",
+            value: [stop.facility, stop.location].compactMap { $0 }.joined(separator: ", ")
+        )]
+        return components?.url
     }
 
     /// The first stop the driver hasn't left yet, counting taps still queued.
