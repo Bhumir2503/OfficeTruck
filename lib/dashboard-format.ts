@@ -47,6 +47,8 @@ export type AttentionInput = {
     status: LoadStatus
     /** Wall-clock time, "YYYY-MM-DDTHH:mm:ss". */
     delivery_start: string
+    /** The day it was really delivered; null for TONU. */
+    delivered_on: string | null
     missing: string[]
   }[]
   /** Booked loads, for the ones still missing a driver or truck. */
@@ -144,7 +146,7 @@ export function buildAttention(input: AttentionInput): AttentionItem[] {
   }
 
   for (const load of input.ready) {
-    const ago = daysFrom(load.delivery_start, today)
+    const ago = daysFrom(load.delivered_on ?? load.delivery_start, today)
     const delivered =
       load.status === "tonu" ? "TONU" : `Delivered ${relativeDay(-ago)}`
     if (load.missing.includes("pod")) {

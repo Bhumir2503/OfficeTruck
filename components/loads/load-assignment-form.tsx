@@ -10,6 +10,7 @@ import {
   checkAssignmentConflicts,
   saveAssignment,
 } from "@/app/org/[slug]/loads/actions"
+import { ComplianceWarning } from "@/components/loads/compliance-warning"
 import { DriverSelect } from "@/components/loads/driver-select"
 import { LoadPayDialog } from "@/components/loads/load-pay-dialog"
 import { EmptyMilesField } from "@/components/loads/empty-miles-field"
@@ -27,6 +28,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { useZodForm } from "@/hooks/use-zod-form"
+import { loadUntil } from "@/lib/assignment-compliance"
 import { saveLabel, willDispatch } from "@/lib/assignment-format"
 import { driverPay, formatPay, loadDriverPay } from "@/lib/driver-format"
 import type { DriverOption } from "@/lib/drivers"
@@ -98,6 +100,9 @@ export function LoadAssignmentForm({
 }) {
   const [truckId, setTruckId] = useState<string | null>(load.truck_id)
   const [driverId, setDriverId] = useState<string | null>(load.driver_id)
+  // Picked by hand (or already on the load): the truck's usual driver
+  // doesn't replace them.
+  const [driverPicked, setDriverPicked] = useState(!!load.driver_id)
   const [conflicts, setConflicts] = useState(NO_CONFLICTS)
   const [payOpen, setPayOpen] = useState(false)
   // The miles boxes as they read now, to tell whether anything changed.
@@ -106,6 +111,9 @@ export function LoadAssignmentForm({
 
   const driver = drivers.find((option) => option.id === driverId) ?? null
   const truck = trucks.find((option) => option.id === truckId) ?? null
+  // Expiry warnings matter until the load is delivered; after, it's history.
+  const onTheRoad = ["booked", "dispatched", "loaded"].includes(load.status)
+  const until = onTheRoad ? loadUntil(load) : null
   const driverChanged = driverId !== load.driver_id
   const sameMiles = (typed: string | null, saved: number | null) =>
     typed === null || typed.replace(/,/g, "") === (saved?.toString() ?? "")
@@ -167,7 +175,9 @@ export function LoadAssignmentForm({
         ? `${driver.full_name} has no pay rate yet.`
         : pay === null
           ? `Add the miles to work out pay at ${rate}. Locked when you save.`
-          : `${formatRate(pay)} at ${rate}, locked when you save.`
+          : driver.pay_type === "flat"
+            ? `${formatRate(pay)} flat, locked when you save.`
+            : `${formatRate(pay)} at ${rate}, locked when you save.`
     }
   } else if (!load.driver) {
     payNote = "Pick a driver to see their pay."
@@ -186,7 +196,9 @@ export function LoadAssignmentForm({
         ? `Add the miles to work out pay at ${lockedRate}.`
         : own
           ? `${formatRate(savedPay)}${load.driver_pay_type === "flat" ? "" : ` at ${lockedRate}`} for this load. Usually ${usualRate}.`
-          : `${formatRate(savedPay)} at ${lockedRate}, locked when assigned.`
+          : load.driver_pay_type === "flat"
+            ? `${formatRate(savedPay)} flat, locked when assigned.`
+            : `${formatRate(savedPay)} at ${lockedRate}, locked when assigned.`
   }
   // Pay can be changed for the driver saved on the load, not one just picked.
   const showChangePay = canChangePay && !!load.driver && !driverChanged
@@ -276,9 +288,18 @@ export function LoadAssignmentForm({
                 <TruckSelect
                   id="load-truck-id"
                   trucks={trucks}
+                  organizationId={organizationId}
+                  load={{ loadId: load.id }}
+                  until={until}
                   defaultValue={load.truck_id}
                   invalid={!!errors.truck_id}
-                  onPick={(picked) => setTruckId(picked?.id ?? null)}
+                  onPick={(picked) => {
+                    setTruckId(picked?.id ?? null)
+                    // The truck's usual driver, as on the other pickers.
+                    if (!driverPicked && picked?.default_driver_id) {
+                      setDriverId(picked.default_driver_id)
+                    }
+                  }}
                   onUpdate={revalidate}
                 />
                 <FieldError errors={errors.truck_id} />
@@ -288,8 +309,12 @@ export function LoadAssignmentForm({
                 <DriverSelect
                   id="load-driver-id"
                   drivers={drivers}
+                  until={until}
                   value={driverId}
-                  onValueChange={setDriverId}
+                  onValueChange={(value) => {
+                    setDriverId(value)
+                    setDriverPicked(true)
+                  }}
                   invalid={!!errors.driver_id}
                   onUpdate={revalidate}
                 />
@@ -328,6 +353,16 @@ export function LoadAssignmentForm({
                   />
                 )}
               </div>
+            )}
+
+            {onTheRoad && (
+              <ComplianceWarning
+                driver={driver}
+                truck={truck}
+                until={until}
+                driversBase={driversBase}
+                trucksBase={trucksBase}
+              />
             )}
 
             <div className="grid gap-5 sm:grid-cols-2">

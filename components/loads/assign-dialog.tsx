@@ -10,6 +10,7 @@ import {
   checkAssignmentConflicts,
   saveAssignment,
 } from "@/app/org/[slug]/loads/actions"
+import { ComplianceWarning } from "@/components/loads/compliance-warning"
 import { DriverSelect } from "@/components/loads/driver-select"
 import { EmptyMilesField } from "@/components/loads/empty-miles-field"
 import { Conflict } from "@/components/loads/load-assignment-form"
@@ -30,6 +31,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { useZodForm } from "@/hooks/use-zod-form"
+import { loadUntil } from "@/lib/assignment-compliance"
 import { saveLabel, willDispatch } from "@/lib/assignment-format"
 import { driverPay, formatPay } from "@/lib/driver-format"
 import type { DriverOption } from "@/lib/drivers"
@@ -67,6 +69,8 @@ function AssignForm({
   const [conflicts, setConflicts] = useState(NO_CONFLICTS)
 
   const driver = drivers.find((option) => option.id === driverId) ?? null
+  const truck = trucks.find((option) => option.id === truckId) ?? null
+  const until = loadUntil(load)
   const dispatches = willDispatch({
     status: load.status,
     savedDriverId: load.driver_id,
@@ -114,7 +118,9 @@ function AssignForm({
       ? `${driver.full_name} has no pay rate yet.`
       : pay === null
         ? `Paid ${rate}. Add the miles to work out the pay.`
-        : `${formatRate(pay)} at ${rate}, locked when you save.`
+        : driver.pay_type === "flat"
+          ? `${formatRate(pay)} flat, locked when you save.`
+          : `${formatRate(pay)} at ${rate}, locked when you save.`
   }
 
   return (
@@ -127,6 +133,9 @@ function AssignForm({
           <TruckSelect
             id="assign-truck-id"
             trucks={trucks}
+            organizationId={organizationId}
+            load={{ loadId: load.id }}
+            until={until}
             defaultValue={load.truck_id}
             invalid={!!errors.truck_id}
             onPick={(truck) => {
@@ -156,6 +165,7 @@ function AssignForm({
           <DriverSelect
             id="assign-driver-id"
             drivers={drivers}
+            until={until}
             value={driverId}
             onValueChange={(value) => {
               setDriverId(value)
@@ -202,17 +212,21 @@ function AssignForm({
             )}
             {conflicts.truck.length > 0 && (
               <Conflict
-                who={
-                  trucks.find((truck) => truck.id === truckId)
-                    ? `Truck ${trucks.find((truck) => truck.id === truckId)!.unit_number}`
-                    : "This truck"
-                }
+                who={truck ? `Truck ${truck.unit_number}` : "This truck"}
                 loads={conflicts.truck}
                 loadsBase={loadsBase}
               />
             )}
           </div>
         )}
+
+        <ComplianceWarning
+          driver={driver}
+          truck={truck}
+          until={until}
+          driversBase={driversBase}
+          trucksBase={trucksBase}
+        />
 
         {dispatches && driver && (
           <p className="text-sm text-muted-foreground">

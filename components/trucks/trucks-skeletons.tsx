@@ -282,6 +282,7 @@ export function TruckDetailSkeleton() {
         <div className="grid items-start gap-6 @4xl/main:grid-cols-[minmax(0,1fr)_20rem] @6xl/main:grid-cols-[minmax(0,1fr)_24rem]">
           <div className="flex min-w-0 flex-col gap-4">
             <TruckFormSkeleton editing schedule={false} />
+            <CostsCardSkeleton editing />
           </div>
           <aside className="order-first flex flex-col gap-4 @4xl/main:order-none">
             <section className={panel}>

@@ -146,6 +146,11 @@ export type SettlementLoad = {
   reference: string
   /** Wall-clock time, "YYYY-MM-DDTHH:mm:ss". */
   delivery_start: string
+  /**
+   * The day it was really delivered, "YYYY-MM-DD". Missing from lines
+   * frozen on statements paid before it was kept.
+   */
+  delivered_on?: string | null
   rate: number
   miles: number | null
   /** The driver's pay on the load, or null when it can't be worked out. */

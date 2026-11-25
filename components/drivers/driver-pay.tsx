@@ -292,7 +292,7 @@ export function DriverPay({
       kind: "load" as const,
       title: load.reference,
       href: `${loadsBase}/${load.id}`,
-      detail: `${formatStopDate(load.delivery_start)} · ${load.route}${load.miles ? ` · ${load.miles} mi` : ""}`,
+      detail: `${formatStopDate(load.delivered_on ? `${load.delivered_on}T00:00:00` : load.delivery_start)} · ${load.route}${load.miles ? ` · ${load.miles} mi` : ""}`,
       amount:
         load.pay === null ? (
           <span className="text-destructive">Needs miles</span>

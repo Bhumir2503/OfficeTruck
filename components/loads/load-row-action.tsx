@@ -22,6 +22,7 @@ import {
   saveAssignment,
 } from "@/app/org/[slug]/loads/actions"
 import { createInvoice } from "@/app/org/[slug]/invoices/actions"
+import { ComplianceWarning } from "@/components/loads/compliance-warning"
 import { DriverSelect } from "@/components/loads/driver-select"
 import { TruckSelect } from "@/components/loads/truck-select"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -36,6 +37,7 @@ import {
 } from "@/components/ui/dialog"
 import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { useZodForm } from "@/hooks/use-zod-form"
+import { loadUntil } from "@/lib/assignment-compliance"
 import { SCHEDULED_STATUSES, overlapping } from "@/lib/dispatch-format"
 import type { DriverOption } from "@/lib/drivers"
 import type { LoadInvoice } from "@/lib/invoices"
@@ -174,9 +176,11 @@ function AssignForm({
   context: RowActionContext
   onDone: () => void
 }) {
+  const [truckId, setTruckId] = useState<string | null>(load.truck_id)
   const [driverId, setDriverId] = useState<string | null>(load.driver_id)
   const [driverPicked, setDriverPicked] = useState(!!load.driver_id)
   const clashes = clashesFor(load, driverId, context.loads)
+  const until = loadUntil(load)
   const { errors, formError, pending, formProps, revalidate } = useZodForm(
     loadAssignmentSchema,
     async (values) => {
@@ -211,9 +215,13 @@ function AssignForm({
           <TruckSelect
             id={`assign-truck-${load.id}`}
             trucks={context.trucks}
+            organizationId={context.organizationId}
+            load={{ loadId: load.id }}
+            until={until}
             defaultValue={load.truck_id}
             invalid={!!errors.truck_id}
             onPick={(truck) => {
+              setTruckId(truck?.id ?? null)
               // Prefill the truck's usual driver, unless one was picked by hand.
               if (!driverPicked && truck?.default_driver_id) {
                 setDriverId(truck.default_driver_id)
@@ -228,6 +236,7 @@ function AssignForm({
           <DriverSelect
             id={`assign-driver-${load.id}`}
             drivers={context.drivers}
+            until={until}
             value={driverId}
             onValueChange={(value) => {
               setDriverId(value)
@@ -269,6 +278,13 @@ function AssignForm({
             </span>
           </div>
         )}
+        <ComplianceWarning
+          driver={context.drivers.find((d) => d.id === driverId)}
+          truck={context.trucks.find((t) => t.id === truckId)}
+          until={until}
+          driversBase={`${context.orgBase}/drivers`}
+          trucksBase={`${context.orgBase}/equipment`}
+        />
         {(context.trucks.length === 0 || context.drivers.length === 0) && (
           <p className="text-muted-foreground">
             Add{" "}
@@ -349,6 +365,13 @@ function DispatchForm({
         <p className="text-muted-foreground">
           The load moves to dispatched for {name}.
         </p>
+        <ComplianceWarning
+          driver={driver}
+          truck={context.trucks.find((t) => t.id === load.truck_id)}
+          until={loadUntil(load)}
+          driversBase={`${context.orgBase}/drivers`}
+          trucksBase={`${context.orgBase}/equipment`}
+        />
       </div>
       <DialogFooter>
         <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>

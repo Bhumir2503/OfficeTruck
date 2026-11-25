@@ -12,7 +12,12 @@ import {
   type ExpenseValues,
 } from "@/lib/load-expense-format"
 import { getMyOrganizations, getUser } from "@/lib/organizations"
-import { estimateEmptyMiles, type EmptyMilesEstimate } from "@/lib/empty-miles"
+import {
+  estimateEmptyMiles,
+  type EmptyMilesEstimate,
+  truckStartingPoints,
+  type TruckStartingPoint,
+} from "@/lib/empty-miles"
 import { MAX_ROUTE_STOPS, routeMiles, type RouteMiles } from "@/lib/route-miles"
 import {
   accessorialSchema,
@@ -439,6 +444,45 @@ export async function calculateRouteMiles(
     return { ok: false, error: "Check the stop addresses." }
   }
   return routeMiles(addresses)
+}
+
+/**
+ * Where each active truck would start this load from, its empty miles and
+ * any load it's already on then, for the truck picker. A saved load is
+ * looked up by id; a new one passes its first pickup.
+ */
+export async function getTruckStartingPoints(
+  organizationId: string,
+  input: {
+    loadId?: string
+    pickupLocation?: string
+    pickupStart?: string | null
+  }
+): Promise<TruckStartingPoint[]> {
+  if (!(await isMember(organizationId))) return []
+  let pickupLocation = String(input.pickupLocation ?? "").slice(0, 200)
+  let pickupStart = input.pickupStart ? String(input.pickupStart) : null
+  let deliveryEnd: string | null = null
+  if (input.loadId) {
+    const supabase = await createClient()
+    const { data: load } = await supabase
+      .from("loads")
+      .select("pickup_location, pickup_start, delivery_start, delivery_end")
+      .eq("organization_id", organizationId)
+      .eq("id", input.loadId)
+      .maybeSingle()
+    if (!load) return []
+    pickupLocation = load.pickup_location as string
+    pickupStart = load.pickup_start as string
+    deliveryEnd = (load.delivery_end ?? load.delivery_start) as string
+  }
+  return truckStartingPoints({
+    organizationId,
+    pickupLocation,
+    pickupStart,
+    deliveryEnd,
+    excludeLoadId: input.loadId,
+  })
 }
 
 /**
@@ -1048,18 +1092,13 @@ export async function setStopTime(
   if (Number.isNaN(time.getTime())) {
     return { error: "Enter the date and time." }
   }
-  if (!reason.trim()) {
-    return {
-      error: 'Say why you\'re entering the time, e.g. "Driver called it in".',
-    }
-  }
-
   const supabase = await createClient()
   const { error } = await supabase.rpc("set_stop_time", {
     target_stop: stopId,
     event,
     at_time: time.toISOString(),
-    reason: reason.trim(),
+    // The record keeps a note with every time the office enters.
+    reason: reason.trim() || "Entered by the office",
   })
   if (error) {
     return { error: rpcError(error) }

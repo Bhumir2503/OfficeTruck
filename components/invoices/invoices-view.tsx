@@ -266,7 +266,11 @@ export function InvoicesView({
                     </div>
                   </TableCell>
                   <TableCell className="hidden whitespace-nowrap text-muted-foreground @2xl:table-cell">
-                    {formatStopDate(load.delivery_start)}
+                    {formatStopDate(
+                      load.delivered_on
+                        ? `${load.delivered_on}T00:00:00`
+                        : load.delivery_start
+                    )}
                   </TableCell>
                   <TableCell className="hidden text-sm whitespace-nowrap @xl:table-cell">
                     {load.missing.length === 0 ? (
