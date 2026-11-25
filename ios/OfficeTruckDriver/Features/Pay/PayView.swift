@@ -23,12 +23,15 @@ struct PayView: View {
             case .loaded(let rows) where rows.isEmpty:
                 ContentUnavailableView("No pay statements yet", systemImage: "dollarsign")
             case .loaded(let rows):
+                // The carrier's name shows only for drivers paid by more than one.
+                let showsCarrier = Set(rows.map(\.organizationName)).count > 1
                 List(rows) { row in
                     LabeledContent {
                         if let net = row.netPay { Text(net.dollars).monospacedDigit() }
                     } label: {
                         Text("\(WallClock.day(row.periodStart)) – \(WallClock.day(row.periodEnd))")
-                        Text(row.isPaid ? "Paid \(row.paidOn.map(WallClock.day) ?? "")" : "Open")
+                        let state = row.isPaid ? "Paid \(row.paidOn.map(WallClock.day) ?? "")" : "Open"
+                        Text(showsCarrier ? "\(row.organizationName) · \(state)" : state)
                     }
                 }
                 .refreshable { await fetch() }

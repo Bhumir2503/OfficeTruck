@@ -43,8 +43,10 @@ final class SessionModel {
             return
         }
         if event == .signedIn || event == .initialSession {
-            // Links this phone number to the driver records that use it.
+            // Links this phone number to the driver records that use it,
+            // and finishes a number change that lost signal halfway.
             try? await DriverAPI().claimDriverLogins()
+            try? await DriverAPI().updateMyPhone()
         }
         state = .signedIn(phone: session.user.phone ?? "")
     }
@@ -56,6 +58,28 @@ final class SessionModel {
 
     func verify(phone: String, code: String) async throws {
         try await client.auth.verifyOTP(phone: phone, token: code, type: .sms)
+    }
+
+    /// Texts a code to the driver's new number. Nothing changes until the
+    /// code is entered.
+    func sendChangeCode(to phone: String) async throws {
+        #if DEBUG
+        if DemoBackend.isOn { return }
+        #endif
+        try await client.auth.update(user: UserAttributes(phone: phone))
+    }
+
+    /// Moves the login to the new number, then the driver records, so
+    /// dispatch sees it in the office app.
+    func confirmChange(phone: String, code: String) async throws {
+        #if DEBUG
+        if DemoBackend.isOn {
+            state = .signedIn(phone: phone)
+            return
+        }
+        #endif
+        try await client.auth.verifyOTP(phone: phone, token: code, type: .phoneChange)
+        try await DriverAPI().updateMyPhone()
     }
 
     func signOut() async {

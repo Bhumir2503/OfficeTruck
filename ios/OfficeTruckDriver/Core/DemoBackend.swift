@@ -6,6 +6,8 @@ import Foundation
 /// the driver is signed in and has one dispatched load.
 enum DemoBackend {
     static let isOn = ProcessInfo.processInfo.arguments.contains("-demo")
+    /// Add `-two-carriers` too to see a driver who drives for two companies.
+    static let twoCarriers = ProcessInfo.processInfo.arguments.contains("-two-carriers")
 
     static let loadID = "11111111-0000-0000-0000-000000000001"
     private static let stopIDs = [
@@ -56,9 +58,17 @@ enum DemoBackend {
           "status": "\(status)", "pickup_location": "Memphis, TN", "pickup_start": "2026-11-25T08:00:00",
           "delivery_location": "Atlanta, GA", "delivery_start": "2026-11-26T14:00:00",
           "delivered_on": null, "truck": "T-101", "trailer_number": "53-220",
-          "stop_count": 2, "stops_departed": \(departed.count)}]
+          "stop_count": 2, "stops_departed": \(departed.count)}\(twoCarriers ? secondCarrierLoad : "")]
         """.utf8)
     }
+
+    private static let secondCarrierLoad = """
+    , {"id": "11111111-0000-0000-0000-000000000002", "organization_name": "Bluegrass Haulers", "reference": "BG-310",
+       "status": "delivered", "pickup_location": "Louisville, KY", "pickup_start": "2026-11-20T06:00:00",
+       "delivery_location": "Nashville, TN", "delivery_start": "2026-11-20T13:00:00",
+       "delivered_on": "2026-11-20", "truck": "B-7", "trailer_number": null,
+       "stop_count": 2, "stops_departed": 2}
+    """
 
     static func loadJSON() -> Data {
         func time(_ value: (Date, Int?)?) -> String {
@@ -111,14 +121,28 @@ enum DemoBackend {
           "cdl_endorsements": ["H", "N", "T"], "cdl_restrictions": null,
           "cdl_expires_on": "\(day(400))", "medical_card_expires_on": "\(day(20))",
           "holds_medical_variance": false, "pay_type": "per_mile", "pay_rate": 0.6, "pay_period": "week",
-          "truck": {"unit_number": "T-101", "year": 2022, "make": "Freightliner", "model": "Cascadia"}}]
+          "truck": {"unit_number": "T-101", "year": 2022, "make": "Freightliner", "model": "Cascadia"}}\(twoCarriers ? """
+        , {"driver_id": "55555555-0000-0000-0000-000000000002", "full_name": "Jordan Reyes",
+          "start_date": "2026-06-15",
+          "organization": {"id": "33333333-0000-0000-0000-000000000002", "name": "Bluegrass Haulers",
+                           "phone": "(502) 555-0190"},
+          "license_class": "cdl", "cdl_class": "A", "cdl_state": "TN", "cdl_number_last4": "5678",
+          "cdl_endorsements": ["N", "T"], "cdl_restrictions": null,
+          "cdl_expires_on": "\(day(400))", "medical_card_expires_on": "\(day(200))",
+          "holds_medical_variance": false, "pay_type": "percent", "pay_rate": 25, "pay_period": "two_weeks",
+          "truck": null}
+        """ : "")]
         """.utf8)
     }
 
-    static let settlementsJSON = """
+    static var settlementsJSON: String { """
     [{"id": "44444444-0000-0000-0000-000000000001", "organization_name": "Acme Freight",
       "period_start": "2026-11-16", "period_end": "2026-11-22", "status": "paid",
-      "paid_on": "2026-11-24", "net_pay": 1384.20, "load_count": 3}]
-    """
+      "paid_on": "2026-11-24", "net_pay": 1384.20, "load_count": 3}\(twoCarriers ? """
+    , {"id": "44444444-0000-0000-0000-000000000002", "organization_name": "Bluegrass Haulers",
+      "period_start": "2026-11-09", "period_end": "2026-11-22", "status": "paid",
+      "paid_on": "2026-11-25", "net_pay": 612.50, "load_count": 1}
+    """ : "")]
+    """ }
 }
 #endif

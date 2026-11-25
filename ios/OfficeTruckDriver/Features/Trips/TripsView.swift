@@ -33,15 +33,16 @@ struct TripsView: View {
                 case .loaded(let trips):
                     let onRoad = trips.filter(\.isOnTheRoad)
                     let past = trips.filter { !$0.isOnTheRoad }
+                    let showsCarrier = Set(trips.map(\.organizationName)).count > 1
                     List {
                         if !onRoad.isEmpty {
                             Section("On the road") {
-                                ForEach(onRoad) { trip in tripRow(trip) }
+                                ForEach(onRoad) { trip in tripRow(trip, showsCarrier: showsCarrier) }
                             }
                         }
                         if !past.isEmpty {
                             Section("Past") {
-                                ForEach(past) { trip in tripRow(trip) }
+                                ForEach(past) { trip in tripRow(trip, showsCarrier: showsCarrier) }
                             }
                         }
                     }
@@ -66,13 +67,15 @@ struct TripsView: View {
         }
     }
 
-    private func tripRow(_ trip: LoadSummary) -> some View {
+    /// The carrier's name shows only for drivers who drive for more than one.
+    private func tripRow(_ trip: LoadSummary, showsCarrier: Bool) -> some View {
         NavigationLink(value: trip.id) {
             VStack(alignment: .leading) {
                 LabeledContent(trip.reference, value: trip.status.label)
                     .font(.headline)
                 Text("\(trip.pickupLocation) → \(trip.deliveryLocation)")
-                Text(WallClock.format(trip.pickupStart))
+                Text(showsCarrier ? "\(trip.organizationName) · \(WallClock.format(trip.pickupStart))"
+                                  : WallClock.format(trip.pickupStart))
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
