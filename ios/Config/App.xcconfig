@@ -1,0 +1,3 @@
+// Shared build settings. The Supabase project comes from Secrets.xcconfig,
+// which is git-ignored: copy Secrets.example.xcconfig to Secrets.xcconfig.
+#include? "Secrets.xcconfig"
