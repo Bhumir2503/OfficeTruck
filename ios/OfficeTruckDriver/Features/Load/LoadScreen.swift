@@ -218,10 +218,9 @@ struct LoadScreen: View {
                 .padding(.bottom, 8)
             }
         }
-        .confirmationDialog(
+        .alert(
             addKind.map { "Add \($0.label)" } ?? "",
             isPresented: Binding(get: { addKind != nil }, set: { if !$0 { addKind = nil } }),
-            titleVisibility: .visible,
             presenting: addKind
         ) { kind in
             if DocumentScanner.isAvailable {
@@ -231,6 +230,9 @@ struct LoadScreen: View {
                 photoKind = kind
                 choosingPhotos = true
             }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("Scan the paper, or pick photos you already took.")
         }
         .fullScreenCover(item: $scanKind) { kind in
             DocumentScanner(
