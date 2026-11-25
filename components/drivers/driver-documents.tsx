@@ -1,11 +1,15 @@
 "use client"
 
-import { removeDriverDocument } from "@/app/org/[slug]/drivers/actions"
+import {
+  removeDriverDocument,
+  renameDriverDocument,
+} from "@/app/org/[slug]/drivers/actions"
 import { DocumentsCard } from "@/components/documents-card"
 import {
   DATED_ON_DRIVER,
   DRIVER_DOCUMENT_KINDS,
   DRIVER_DOCUMENT_LABELS,
+  UNDATED_DRIVER_KINDS,
   type DriverDocumentKind,
 } from "@/lib/driver-document-format"
 import { uploadDriverDocument } from "@/lib/driver-document-upload"
@@ -34,6 +38,7 @@ const KINDS = {
       kind !== "cdl" && kind !== "medical_card" && !IN_FILE.includes(kind)
   ),
   labels: DRIVER_DOCUMENT_LABELS,
+  undated: UNDATED_DRIVER_KINDS,
   datedElsewhere: {
     cdl: "Set on the CDL card.",
     medical_card: "Set on the Medical card card.",
@@ -80,6 +85,9 @@ export function DriverDocuments({
       upload={(input) => uploadDriverDocument(organizationId, driverId, input)}
       remove={(documentId) =>
         removeDriverDocument(organizationId, driverId, documentId)
+      }
+      rename={(documentId, name) =>
+        renameDriverDocument(organizationId, driverId, documentId, name)
       }
       canManage={canManage}
       warn={warn}
