@@ -17,6 +17,7 @@ import {
   SettingsCard,
   SettingsCardFooter,
 } from "@/components/settings/settings-card"
+import { LocalDate } from "@/components/local-date"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -49,12 +50,6 @@ import {
   type LoadStatus,
   rateRevisionSchema,
 } from "@/lib/schemas/load"
-
-const dateFormat = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-})
 
 function terms(free: number | null, rate: number | null) {
   return free === null || rate === null
@@ -378,9 +373,15 @@ export function LoadChargesCard({
       footer={
         <SettingsCardFooter
           hint={
-            current
-              ? `Rate con version ${current.version}, ${dateFormat.format(new Date(current.reviewed_at ?? current.created_at))}. Only a person can change an amount.`
-              : "Only a person can change an amount."
+            current ? (
+              <>
+                Rate con version {current.version},{" "}
+                <LocalDate value={current.reviewed_at ?? current.created_at} />.
+                Only a person can change an amount.
+              </>
+            ) : (
+              "Only a person can change an amount."
+            )
           }
         />
       }
@@ -454,7 +455,7 @@ export function LoadChargesCard({
                   <span className="text-muted-foreground">
                     {" "}
                     · {version.status} ·{" "}
-                    {dateFormat.format(new Date(version.created_at))}
+                    <LocalDate value={version.created_at} />
                     {version.note && ` · ${version.note}`}
                   </span>
                 </span>

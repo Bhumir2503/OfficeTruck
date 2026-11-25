@@ -32,6 +32,7 @@ import {
 } from "@/app/org/[slug]/invoices/actions"
 import { DateField } from "@/components/drivers/date-field"
 import { LoadTextField } from "@/components/loads/freight-fields"
+import { LocalDate } from "@/components/local-date"
 import { Button, buttonVariants } from "@/components/ui/button"
 import {
   Dialog,
@@ -840,8 +841,18 @@ export function InvoiceSidePanel({
               </h4>
               <p className="mt-1 text-sm text-muted-foreground">
                 {invoice.sent_via ? SENT_VIA_LABELS[invoice.sent_via] : "Sent"}
-                {invoice.sent_at &&
-                  ` on ${formatInvoiceDate(invoice.invoice_date ?? invoice.sent_at)}`}
+                {/* The invoice date, or the moment it was sent, on the
+                    viewer's day. */}
+                {invoice.sent_at && (
+                  <>
+                    {" on "}
+                    {invoice.invoice_date ? (
+                      formatInvoiceDate(invoice.invoice_date)
+                    ) : (
+                      <LocalDate value={invoice.sent_at} />
+                    )}
+                  </>
+                )}
                 {invoice.sent_to.length > 0 &&
                   ` to ${invoice.sent_to.join(", ")}`}
                 . Due {formatInvoiceDate(dueOn)}.
@@ -884,8 +895,12 @@ export function InvoiceSidePanel({
               </h4>
               <p className="mt-1 text-sm text-muted-foreground">
                 {invoice.void_reason}
-                {invoice.voided_at &&
-                  ` (${formatInvoiceDate(invoice.voided_at)})`}
+                {invoice.voided_at && (
+                  <>
+                    {" ("}
+                    <LocalDate value={invoice.voided_at} />)
+                  </>
+                )}
               </p>
             </>
           )}

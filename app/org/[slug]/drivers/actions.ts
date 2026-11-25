@@ -101,8 +101,14 @@ export async function updateDriver(
   }
   // A new license state can call for more of the qualification file (a
   // hiring driving record per state); add those items. Nothing happens
-  // until the file's start date is set.
-  await syncChecklist(await createClient(), driverId, today())
+  // until the file's start date is set. A removed state's record comes off.
+  const synced = await syncChecklist(await createClient(), driverId, today())
+  if (!synced.ok) {
+    // The driver is saved; say so, so saving again retries the file.
+    return {
+      error: `Saved, but the qualification file couldn't be updated: ${synced.error}`,
+    }
+  }
   return result
 }
 

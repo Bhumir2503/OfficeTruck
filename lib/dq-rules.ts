@@ -310,8 +310,11 @@ const itemKey = (item: Pick<DqItem, "template_code" | "license_state">) =>
   `${item.template_code}:${item.license_state ?? ""}`
 
 /**
- * The latest cycle of each requirement. Earlier cycles are history: an annual
- * MVR from two years ago has long expired, but the newer one is what counts.
+ * The latest cycle of each requirement, plus any earlier cycle still open.
+ * Done (or not applicable) earlier cycles are history: an annual MVR from
+ * two years ago has long expired, but the newer one is what counts. An
+ * earlier one never done still counts, though: completing year 1's annual
+ * MVR adds year 2's review while year 1's may not be signed yet.
  */
 export function currentItems<T extends DqItem>(items: readonly T[]): T[] {
   const latest = new Map<string, T>()
@@ -322,7 +325,11 @@ export function currentItems<T extends DqItem>(items: readonly T[]): T[] {
       latest.set(key, item)
     }
   }
-  return [...latest.values()]
+  const newest = new Set(latest.values())
+  return items.filter(
+    (item) =>
+      newest.has(item) || (!item.completed_at && !item.not_applicable_reason)
+  )
 }
 
 export type DqDriverStatus =

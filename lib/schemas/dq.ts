@@ -86,6 +86,9 @@ export const confirmDocumentSchema = z
       .enum(QUERY_RESULTS, "Choose what the query showed.")
       .nullable()
       .default(null),
+    // An employment application's copy: the reviewer checked the driver
+    // signed and dated it (only the driver can sign it).
+    driver_signed: z.boolean().default(false),
   })
   .refine(
     (value) => !value.expiry_date || value.expiry_date >= value.issue_date,
