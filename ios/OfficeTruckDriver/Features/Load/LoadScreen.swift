@@ -78,11 +78,31 @@ struct LoadScreen: View {
                         LabeledContent("Phone") { Link(phone, destination: url) }
                     }
                     if let notes = stop.notes { Text(notes).foregroundStyle(.secondary) }
-                    if let arrived {
-                        LabeledContent("Arrived", value: arrived.formatted(date: .omitted, time: .shortened))
-                    }
-                    if let departed {
-                        LabeledContent("Departed", value: departed.formatted(date: .omitted, time: .shortened))
+                    ForEach([StopEvent.arrived, .departed], id: \.self) { event in
+                        let time = event == .arrived ? arrived : departed
+                        // The one row waiting on the driver: the next stop's
+                        // arrival, or its departure once they've arrived.
+                        let actionable = isNext && time == nil && (event == .arrived || arrived != nil)
+                        LabeledContent(event == .arrived ? "Arrived" : "Departed") {
+                            if let time {
+                                Text(time.formatted(date: .omitted, time: .shortened))
+                            } else if actionable {
+                                prominent(Button(event == .arrived ? "Check in" : "Check out") {
+                                    odometer = ""
+                                    checkIn = CheckInRequest(
+                                        loadID: load.id,
+                                        stopID: stop.id,
+                                        event: event,
+                                        place: stop.facility ?? stop.location,
+                                        asksOdometer: (event == .arrived && stop.position == load.stops.first?.position)
+                                            || (event == .departed && stop.position == load.stops.last?.position)
+                                    )
+                                })
+                                .controlSize(.large)
+                            } else {
+                                Text("—")
+                            }
+                        }
                     }
                     if let reading = stop.departedOdometer ?? stop.arrivedOdometer {
                         LabeledContent("Odometer", value: "\(reading.formatted()) mi")
@@ -90,28 +110,6 @@ struct LoadScreen: View {
                     if waiting {
                         Label("Saved on this phone. Sends when you have signal.", systemImage: "icloud.and.arrow.up")
                             .foregroundStyle(.orange)
-                    }
-                    if isNext {
-                        let event: StopEvent = arrived == nil ? .arrived : .departed
-                        prominent(Button {
-                            odometer = ""
-                            checkIn = CheckInRequest(
-                                loadID: load.id,
-                                stopID: stop.id,
-                                event: event,
-                                place: stop.facility ?? stop.location,
-                                asksOdometer: (event == .arrived && stop.position == load.stops.first?.position)
-                                    || (event == .departed && stop.position == load.stops.last?.position)
-                            )
-                        } label: {
-                            Label(
-                                event == .arrived ? "Arrived" : "Departed",
-                                systemImage: event == .arrived ? "mappin.and.ellipse" : "arrow.right.circle.fill"
-                            )
-                            .font(.title3.bold())
-                            .frame(maxWidth: .infinity)
-                        })
-                        .controlSize(.extraLarge)
                     }
                 } header: {
                     if isNext {
