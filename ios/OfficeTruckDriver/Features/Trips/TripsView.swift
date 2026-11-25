@@ -1,8 +1,11 @@
 import SwiftUI
 
-/// Every load sent to the driver: on the road first, then the last 120 days.
+/// The app's one main screen: every load sent to the driver, the ones on
+/// the road first. Tap a trip to work it. Pay and Profile open as pages
+/// from the toolbar.
 struct TripsView: View {
     @State private var loads: Loadable<[LoadSummary]> = .loading
+    private let queue = OfflineQueue.shared
     private let api = DriverAPI()
 
     var body: some View {
@@ -21,17 +24,24 @@ struct TripsView: View {
                             .buttonStyle(.borderedProminent)
                     }
                 case .loaded(let trips) where trips.isEmpty:
-                    ContentUnavailableView("No trips yet", systemImage: "list.bullet.rectangle")
+                    ContentUnavailableView(
+                        "No trips yet",
+                        systemImage: "truck.box",
+                        description: Text("When dispatch sends you a load, it shows up here.")
+                    )
+                    .refreshable { await fetch() }
                 case .loaded(let trips):
-                    List(trips) { trip in
-                        NavigationLink(value: trip.id) {
-                            VStack(alignment: .leading) {
-                                LabeledContent(trip.reference, value: trip.status.label)
-                                    .font(.headline)
-                                Text("\(trip.pickupLocation) → \(trip.deliveryLocation)")
-                                Text(WallClock.format(trip.pickupStart))
-                                    .font(.callout)
-                                    .foregroundStyle(.secondary)
+                    let onRoad = trips.filter(\.isOnTheRoad)
+                    let past = trips.filter { !$0.isOnTheRoad }
+                    List {
+                        if !onRoad.isEmpty {
+                            Section("On the road") {
+                                ForEach(onRoad) { trip in tripRow(trip) }
+                            }
+                        }
+                        if !past.isEmpty {
+                            Section("Past") {
+                                ForEach(past) { trip in tripRow(trip) }
                             }
                         }
                     }
@@ -41,10 +51,31 @@ struct TripsView: View {
             .navigationTitle("Trips")
             .navigationDestination(for: UUID.self) { id in
                 LoadScreen(loadID: id)
-                    .navigationTitle("Load")
-                    .navigationBarTitleDisplayMode(.inline)
             }
-            .task { await fetch() }
+            .toolbar {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    NavigationLink { PayView() } label: {
+                        Label("Pay", systemImage: "dollarsign")
+                    }
+                    NavigationLink { MeView() } label: {
+                        Label("Profile", systemImage: "person")
+                    }
+                }
+            }
+            .task(id: queue.deliveredCount) { await fetch() }
+        }
+    }
+
+    private func tripRow(_ trip: LoadSummary) -> some View {
+        NavigationLink(value: trip.id) {
+            VStack(alignment: .leading) {
+                LabeledContent(trip.reference, value: trip.status.label)
+                    .font(.headline)
+                Text("\(trip.pickupLocation) → \(trip.deliveryLocation)")
+                Text(WallClock.format(trip.pickupStart))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
@@ -52,6 +83,7 @@ struct TripsView: View {
         do {
             loads = .loaded(try await api.myLoads())
         } catch {
+            if case .loaded = loads { return }
             loads = .failed(error.driverMessage)
         }
     }

@@ -24,7 +24,6 @@
 		8DAC0EB7CBE26E8D4D7DAECA /* TripsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0A33E628EE17C3991F2E848 /* TripsView.swift */; };
 		B821E67C97468CFDE1BD71D8 /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39366105CA8CCF401D6F513D /* Formatting.swift */; };
 		CC310C8D2B0E2D14135755A8 /* OfficeTruckDriverApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82F6D77869384EB21AE9BC6D /* OfficeTruckDriverApp.swift */; };
-		DDA0690E58D1ACA8C6DF8D7D /* CurrentLoadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E15EF71456FC3381797FDB3C /* CurrentLoadView.swift */; };
 		E0C27594EC903A57A7C6FD21 /* SessionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AF0644B7B43B60685913422 /* SessionModel.swift */; };
 /* End PBXBuildFile section */
 
@@ -47,7 +46,6 @@
 		9A3E872C0629148E4766F4D2 /* PayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PayView.swift; sourceTree = "<group>"; };
 		B64C94BD588CA035C8E2C16C /* OfficeTruckDriver.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = OfficeTruckDriver.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C0A33E628EE17C3991F2E848 /* TripsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripsView.swift; sourceTree = "<group>"; };
-		E15EF71456FC3381797FDB3C /* CurrentLoadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentLoadView.swift; sourceTree = "<group>"; };
 		F0CF3C4F008D37C87E5C9E69 /* SupabaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseService.swift; sourceTree = "<group>"; };
 		FD62A3A84301E2E9A003FA80 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -75,7 +73,6 @@
 		0AABD040BFD8F66F704C7795 /* Load */ = {
 			isa = PBXGroup;
 			children = (
-				E15EF71456FC3381797FDB3C /* CurrentLoadView.swift */,
 				89D9DA8125ED34204F5BC2D0 /* DocumentScanner.swift */,
 				09E096561EA73F55E3E4E080 /* LoadScreen.swift */,
 			);
@@ -263,7 +260,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				DDA0690E58D1ACA8C6DF8D7D /* CurrentLoadView.swift in Sources */,
 				7CDA828000B16030E1F9C6E5 /* DemoBackend.swift in Sources */,
 				12F334A72B4DCDD1E7DB096E /* DocumentPDF.swift in Sources */,
 				607E7E9383137DEBB001F845 /* DocumentScanner.swift in Sources */,

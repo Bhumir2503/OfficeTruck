@@ -1,8 +1,9 @@
 import PhotosUI
 import SwiftUI
 
-/// One load: its details, stops and paperwork. On a load that's on the road,
-/// the next stop has an Arrived or Departed button.
+/// One load: its stops, details and paperwork. On a load that's on the road,
+/// Check in / Check out for the next stop is pinned to the bottom, and
+/// paperwork is added from the toolbar.
 struct LoadScreen: View {
     let loadID: UUID
 
@@ -11,6 +12,8 @@ struct LoadScreen: View {
     @State private var odometer = ""
     /// Paperwork being added: the kind picked, then how.
     @State private var addKind: DocumentKind?
+    /// Checking out without the stop's BOL or POD: warn first.
+    @State private var missingPaperwork: MissingPaperwork?
     @State private var scanKind: DocumentKind?
     @State private var photoKind: DocumentKind?
     @State private var choosingPhotos = false
@@ -47,9 +50,34 @@ struct LoadScreen: View {
                     .keyboardType(.numberPad)
             }
             Button("Cancel", role: .cancel) {}
+            // The preferred action is drawn in the app's green.
             Button(request.event == .arrived ? "Arrived" : "Departed") { record(request) }
+                .keyboardShortcut(.defaultAction)
         } message: { _ in
             Text("This records \(Date.now.formatted(date: .omitted, time: .shortened)). Only dispatch can change it after.")
+        }
+        .alert(
+            missingPaperwork.map { "No \($0.kind.label) yet" } ?? "",
+            isPresented: Binding(get: { missingPaperwork != nil }, set: { if !$0 { missingPaperwork = nil } }),
+            presenting: missingPaperwork
+        ) { missing in
+            // Each choice waits for this alert to close before opening the next.
+            Button("Add \(missing.kind.label)") {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(350))
+                    addKind = missing.kind
+                }
+            }
+            .keyboardShortcut(.defaultAction)
+            Button("Check out anyway") {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(350))
+                    startCheckIn(.departed, stop: missing.stop, load: missing.load)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { missing in
+            Text("You haven't added the \(missing.kind.label) for \(missing.stop.facility ?? missing.stop.location). Add it before you leave so dispatch can bill the load.")
         }
         .alert(
             "Not saved",
@@ -105,7 +133,7 @@ struct LoadScreen: View {
                 }
             }
 
-            Section("Load \(load.reference)") {
+            Section("Details") {
                 LabeledContent("Status", value: load.status.label)
                 if let truck = load.truck { LabeledContent("Truck", value: truck) }
                 if let trailer = load.trailerNumber { LabeledContent("Trailer", value: trailer) }
@@ -131,46 +159,113 @@ struct LoadScreen: View {
                         Text("Not sent yet").foregroundStyle(.orange)
                     }
                 }
-                if load.canEdit {
+            }
+        }
+        .refreshable { await fetch() }
+        .navigationTitle("Load \(load.reference)")
+        .navigationBarTitleDisplayMode(.inline)
+        // Toolbar: a More menu (calls, directions, the stop's number), and
+        // add paperwork with what the next stop usually needs first (BOL at
+        // a pickup, POD at a delivery).
+        .toolbar {
+            // More: calls, directions and the stop's number, the things a
+            // driver reaches for at a stop.
+            ToolbarItem(placement: .topBarTrailing) {
+                let stop = next ?? load.stops.last
+                Menu {
+                    Section("Call") {
+                        if let phone = load.organization.phone, let url = telURL(phone) {
+                            Link(destination: url) {
+                                Label("Dispatch", systemImage: "phone")
+                            }
+                        }
+                        if let stop, let phone = stop.contactPhone, let url = telURL(phone) {
+                            Link(destination: url) {
+                                Label(stop.facility ?? stop.location, systemImage: "phone")
+                            }
+                        }
+                    }
+                    if let stop {
+                        Section("Stop \(stop.position) · \(stop.isPickup ? "Pickup" : "Delivery")") {
+                            if let url = directionsURL(stop) {
+                                Link(destination: url) {
+                                    Label("Directions", systemImage: "arrow.triangle.turn.up.right.diamond")
+                                }
+                            }
+                            if let number = stop.stopNumber {
+                                Button("Copy \(number)", systemImage: "doc.on.doc") {
+                                    UIPasteboard.general.string = number
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    Label("More", systemImage: "ellipsis")
+                }
+            }
+            if load.canEdit {
+                ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        // What the next stop usually needs comes first.
                         let first: DocumentKind = (next ?? load.stops.last)?.isPickup == true ? .bol : .pod
                         ForEach([first] + DocumentKind.allCases.filter { $0 != first }) { kind in
                             Button(kind.label) { addKind = kind }
                         }
                     } label: {
-                        Label("Add paperwork", systemImage: "doc.viewfinder")
+                        Label("Add paperwork", systemImage: "doc.badge.plus")
                     }
                 }
             }
         }
-        .refreshable { await fetch() }
-        // Check in / Check out stays in the navigation bar, so it's one tap
-        // away wherever the driver has scrolled.
-        .toolbar {
+        // Check in / Check out is the screen's primary action, pinned to the
+        // bottom so it's always one tap away.
+        .safeAreaInset(edge: .bottom) {
             if load.canEdit, let next {
                 let arrived = next.arrivedAt != nil || pending.contains { $0.stopID == next.id && $0.event == .arrived }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(arrived ? "Check out" : "Check in") {
+                let start = {
+                    let needed: DocumentKind = next.isPickup ? .bol : .pod
+                    let hasIt = load.documents.contains { $0.kind == needed.rawValue }
+                        || queue.documents(for: load.id).contains { $0.kind == needed }
+                    if arrived && !hasIt {
+                        missingPaperwork = MissingPaperwork(kind: needed, stop: next, load: load)
+                    } else {
                         startCheckIn(arrived ? .departed : .arrived, stop: next, load: load)
                     }
-                    .buttonStyle(.borderedProminent)
                 }
+                let title = arrived ? "Check out" : "Check in"
+                Group {
+                    if #available(iOS 26.0, *) {
+                        Button(action: start) {
+                            Text(title).font(.headline).frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.glassProminent)
+                    } else {
+                        Button(action: start) {
+                            Text(title).font(.headline).frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                }
+                .controlSize(.extraLarge)
+                .padding(.horizontal)
+                .padding(.bottom, 8)
             }
         }
-        .confirmationDialog(
+        .alert(
             addKind.map { "Add \($0.label)" } ?? "",
             isPresented: Binding(get: { addKind != nil }, set: { if !$0 { addKind = nil } }),
-            titleVisibility: .visible,
             presenting: addKind
         ) { kind in
             if DocumentScanner.isAvailable {
                 Button("Scan") { scanKind = kind }
+                    .keyboardShortcut(.defaultAction)
             }
             Button("Choose from Photos") {
                 photoKind = kind
                 choosingPhotos = true
             }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("Scan the paper, or pick photos you already took.")
         }
         .fullScreenCover(item: $scanKind) { kind in
             DocumentScanner(
@@ -212,6 +307,20 @@ struct LoadScreen: View {
         )
     }
 
+    private func telURL(_ phone: String) -> URL? {
+        URL(string: "tel:\(phone.filter { $0.isNumber || $0 == "+" })")
+    }
+
+    /// Apple Maps directions to a stop.
+    private func directionsURL(_ stop: LoadDetail.Stop) -> URL? {
+        var components = URLComponents(string: "https://maps.apple.com/")
+        components?.queryItems = [URLQueryItem(
+            name: "daddr",
+            value: [stop.facility, stop.location].compactMap { $0 }.joined(separator: ", ")
+        )]
+        return components?.url
+    }
+
     /// The first stop the driver hasn't left yet, counting taps still queued.
     private func nextStop(_ load: LoadDetail, pending: [PendingCheckIn]) -> LoadDetail.Stop? {
         load.stops.first { stop in
@@ -251,6 +360,13 @@ struct LoadScreen: View {
             load = .failed(error.driverMessage)
         }
     }
+}
+
+/// Checking out of a stop without its BOL (pickup) or POD (delivery).
+struct MissingPaperwork {
+    let kind: DocumentKind
+    let stop: LoadDetail.Stop
+    let load: LoadDetail
 }
 
 /// The check-in the driver is confirming.
