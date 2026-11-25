@@ -118,6 +118,70 @@ struct DriverAPI: Sendable {
         return try await decode(client.rpc("my_profile").execute().data)
     }
 
+    /// Sends a new CDL or medical card for the office to review. Uploads the
+    /// PDF to the driver's from-driver folder, then records it. Nothing on
+    /// the driver changes until the office accepts it.
+    func sendCard(_ kind: CardKind, for profile: DriverProfile, expiresOn: String, pdf: Data) async throws {
+        #if DEBUG
+        if DemoBackend.isOn { return DemoBackend.sendCard(kind, expiresOn: expiresOn) }
+        #endif
+        let path = "\(profile.organization.id.uuidString.lowercased())/\(profile.driverId.uuidString.lowercased())/from-driver/\(UUID().uuidString.lowercased()).pdf"
+        try await client.storage.from("driver-documents").upload(
+            path, data: pdf, options: FileOptions(contentType: "application/pdf", upsert: false)
+        )
+        struct Params: Encodable {
+            let target_driver: UUID
+            let kind: String
+            let expires_on: String
+            let path: String
+            let file_name: String
+            let content_type: String
+            let size_bytes: Int
+        }
+        try await client.rpc("submit_my_driver_update", params: Params(
+            target_driver: profile.driverId,
+            kind: kind.rawValue,
+            expires_on: expiresOn,
+            path: path,
+            file_name: "\(kind.title) from driver app.pdf",
+            content_type: "application/pdf",
+            size_bytes: pdf.count
+        )).execute()
+    }
+
+    /// The driver's standard DQ file, once per carrier.
+    func myDQFile() async throws -> [DQFile] {
+        #if DEBUG
+        if DemoBackend.isOn { return try decode(DemoBackend.dqFileJSON()) }
+        #endif
+        return try await decode(client.rpc("my_dq_file").execute().data)
+    }
+
+    /// Adds a document to a DQ item; it waits for the office to confirm.
+    func uploadDQDocument(_ item: DQItem, in file: DQFile, pdf: Data) async throws {
+        #if DEBUG
+        if DemoBackend.isOn { return DemoBackend.addDQUpload(item.id) }
+        #endif
+        let path = "\(file.organization.id.uuidString.lowercased())/\(file.driverId.uuidString.lowercased())/dq/\(UUID().uuidString.lowercased()).pdf"
+        try await client.storage.from("dq-files").upload(
+            path, data: pdf, options: FileOptions(contentType: "application/pdf", upsert: false)
+        )
+        struct Params: Encodable {
+            let target_item: UUID
+            let path: String
+            let file_name: String
+            let content_type: String
+            let size_bytes: Int
+        }
+        try await client.rpc("add_my_dq_document", params: Params(
+            target_item: item.id,
+            path: path,
+            file_name: "\(item.displayTitle.prefix(120)).pdf",
+            content_type: "application/pdf",
+            size_bytes: pdf.count
+        )).execute()
+    }
+
     func mySettlements() async throws -> [SettlementSummary] {
         #if DEBUG
         if DemoBackend.isOn { return try decode(Data(DemoBackend.settlementsJSON.utf8)) }

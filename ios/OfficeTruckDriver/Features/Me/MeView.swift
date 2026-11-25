@@ -1,12 +1,14 @@
 import Supabase
 import SwiftUI
 
-/// The driver's profile, opened from Trips: who they are, their CDL and
-/// medical card (with a warning before either runs out), their truck and how
-/// they're paid. The driver qualification to-do list comes here next.
+/// The driver's profile, opened from Trips: who they are; their CDL and
+/// medical card, with a warning before either runs out and a way to send a
+/// new one; their DQ file; their truck and how they're paid.
 struct MeView: View {
     @Environment(SessionModel.self) private var session
     @State private var profiles: Loadable<[DriverProfile]> = .loading
+    @State private var dqFiles: [DQFile] = []
+    @State private var sendingCard: SendCardRequest?
     @State private var confirmingSignOut = false
     @State private var changingPhone = false
     @State private var newPhone = ""
@@ -75,6 +77,9 @@ struct MeView: View {
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await fetch() }
         .task { await fetch() }
+        .sheet(item: $sendingCard) { request in
+            SendCardView(request: request) { await fetch() }
+        }
         .alert("Sign out?", isPresented: $confirmingSignOut) {
             Button("Cancel", role: .cancel) {}
             Button("Sign out", role: .destructive) { Task { await session.signOut() } }
@@ -119,13 +124,14 @@ struct MeView: View {
             showsCompanyHeader ? "\(title) · \(profile.organization.name)" : title
         }
         Section {
-            LabeledContent("Name", value: profile.fullName)
-            if !showsCompanyHeader {
-                LabeledContent("Company", value: profile.organization.name)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(profile.fullName)
+                    .font(.title2.bold())
+                Text([profile.organization.name, profile.startDate.map { "Driving since \(WallClock.fullDay($0))" }]
+                    .compactMap { $0 }.joined(separator: " · "))
+                    .foregroundStyle(.secondary)
             }
-            if let start = profile.startDate {
-                LabeledContent("Driving since", value: WallClock.fullDay(start))
-            }
+            .padding(.vertical, 4)
             if let phone = profile.organization.phone,
                let url = URL(string: "tel:\(phone.filter { $0.isNumber || $0 == "+" })") {
                 Link(destination: url) {
@@ -150,6 +156,7 @@ struct MeView: View {
                 LabeledContent("Restrictions", value: restrictions)
             }
             expiryRows(profile.cdlExpiresOn, what: "Your CDL")
+            cardRows(profile, .cdl)
         }
 
         Section(header("Medical card")) {
@@ -157,6 +164,24 @@ struct MeView: View {
             if profile.holdsMedicalVariance {
                 Text("Medical variance on file").foregroundStyle(.secondary)
             }
+            cardRows(profile, .medicalCard)
+        }
+
+        Section {
+            NavigationLink {
+                DQFileView(driverID: profile.driverId)
+            } label: {
+                let summary = dqSummary(profile)
+                LabeledContent {
+                    Text(summary.text).foregroundStyle(summary.color)
+                } label: {
+                    Label("DQ file", systemImage: "folder")
+                }
+            }
+        } header: {
+            Text(header("Driver qualification"))
+        } footer: {
+            Text("The papers the law says your carrier keeps on you.")
         }
 
         if let truck = profile.truck {
@@ -175,6 +200,41 @@ struct MeView: View {
                 LabeledContent("Paid", value: profile.payPeriodLabel)
             }
         }
+    }
+
+    /// Where a new card stands, and the button to send one.
+    @ViewBuilder
+    private func cardRows(_ profile: DriverProfile, _ kind: CardKind) -> some View {
+        let update = profile.update(for: kind)
+        if let update {
+            if update.isPending {
+                Label("New \(kind.name) sent (expires \(WallClock.fullDay(update.expiresOn))). The office is checking it.",
+                      systemImage: "clock")
+                    .foregroundStyle(.secondary)
+            } else {
+                Label("Your new \(kind.name) wasn't accepted\(update.reviewNote.map { ": \($0)" } ?? "."). Send it again.",
+                      systemImage: "xmark.circle.fill")
+                    .foregroundStyle(.red)
+            }
+        }
+        Button {
+            sendingCard = SendCardRequest(kind: kind, profile: profile)
+        } label: {
+            Label(update?.isPending == true ? "Send a different \(kind.name)" : "Upload new \(kind.name)",
+                  systemImage: "camera.viewfinder")
+        }
+    }
+
+    /// "2 need attention", "Being checked", "All set" for the DQ file row.
+    private func dqSummary(_ profile: DriverProfile) -> (text: String, color: Color) {
+        guard let file = dqFiles.first(where: { $0.driverId == profile.driverId }) else { return ("", .secondary) }
+        guard file.setUp, !file.items.isEmpty else { return ("Not set up yet", .secondary) }
+        let today = WallClock.today()
+        let statuses = file.items.map { $0.status(today: today) }
+        let attention = statuses.filter(\.needsAttention).count
+        if attention > 0 { return ("\(attention) need\(attention == 1 ? "s" : "") attention", .orange) }
+        if statuses.contains(.pendingReview) { return ("Being checked", .secondary) }
+        return ("All set", .green)
     }
 
     /// The expiration date, and a warning within 30 days of it or after.
@@ -250,8 +310,11 @@ struct MeView: View {
     }
 
     private func fetch() async {
+        // The DQ file row's summary is extra; Profile shows without it.
+        async let files = try? api.myDQFile()
         do {
             profiles = .loaded(try await api.myProfile())
+            dqFiles = await files ?? dqFiles
         } catch {
             if case .loaded = profiles { return }
             profiles = .failed(error.driverMessage)

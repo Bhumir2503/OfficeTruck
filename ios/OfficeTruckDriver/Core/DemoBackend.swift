@@ -24,6 +24,29 @@ enum DemoBackend {
     /// Documents added this run.
     nonisolated(unsafe) private static var documents: [PendingDocument] = []
 
+    /// CDL and medical cards sent this run: kind → expiration date.
+    nonisolated(unsafe) private static var sentCards: [CardKind: String] = [:]
+    /// DQ items given an upload this run.
+    nonisolated(unsafe) private static var dqUploads: Set<UUID> = []
+
+    static func sendCard(_ kind: CardKind, expiresOn: String) {
+        sentCards[kind] = expiresOn
+    }
+
+    static func addDQUpload(_ item: UUID) {
+        dqUploads.insert(item)
+    }
+
+    private static var updatesJSON: String {
+        let sent = Date.ISO8601FormatStyle(includingFractionalSeconds: true).format(.now)
+        let rows = sentCards.map { kind, expires in
+            """
+            {"kind": "\(kind.rawValue)", "status": "pending", "expires_on": "\(expires)", "review_note": null, "sent_at": "\(sent)"}
+            """
+        }
+        return "[" + rows.joined(separator: ",") + "]"
+    }
+
     static func addDocument(_ document: PendingDocument) {
         documents.append(document)
     }
@@ -124,7 +147,8 @@ enum DemoBackend {
           "cdl_endorsements": ["H", "N", "T"], "cdl_restrictions": null,
           "cdl_expires_on": "\(day(400))", "medical_card_expires_on": "\(day(20))",
           "holds_medical_variance": false, "pay_type": "per_mile", "pay_rate": 0.6, "pay_period": "week",
-          "truck": {"unit_number": "T-101", "year": 2022, "make": "Freightliner", "model": "Cascadia"}}\(twoCarriers ? """
+          "truck": {"unit_number": "T-101", "year": 2022, "make": "Freightliner", "model": "Cascadia"},
+          "updates": \(updatesJSON)}\(twoCarriers ? """
         , {"driver_id": "55555555-0000-0000-0000-000000000002", "full_name": "Jordan Reyes",
           "start_date": "2026-06-15",
           "organization": {"id": "33333333-0000-0000-0000-000000000002", "name": "Bluegrass Haulers",
@@ -133,9 +157,57 @@ enum DemoBackend {
           "cdl_endorsements": ["N", "T"], "cdl_restrictions": null,
           "cdl_expires_on": "\(day(400))", "medical_card_expires_on": "\(day(200))",
           "holds_medical_variance": false, "pay_type": "percent", "pay_rate": 25, "pay_period": "two_weeks",
-          "truck": null}
+          "truck": null, "updates": []}
         """ : "")]
         """.utf8)
+    }
+
+    /// One of each status: done, waiting for the office, expiring soon,
+    /// coming up, and one the driver needs to send.
+    static func dqFileJSON() -> Data {
+        func day(_ offset: Int) -> String {
+            Calendar.current.date(byAdding: .day, value: offset, to: .now)!
+                .formatted(.iso8601.year().month().day())
+        }
+        let done = "\"\(Date.ISO8601FormatStyle(includingFractionalSeconds: true).format(.now.addingTimeInterval(-86400 * 200)))\""
+        func item(_ n: Int, _ code: String, _ title: String, due: String?, completed: Bool, validUntil: String?,
+                  canUpload: Bool, state: String? = nil, description: String? = nil) -> String {
+            let id = "66666666-0000-0000-0000-00000000000\(n)"
+            let pending = !completed && dqUploads.contains(UUID(uuidString: id)!)
+            return """
+            {"id": "\(id)", "code": "\(code)", "title": "\(title)",
+             "description": \(description.map { "\"\($0)\"" } ?? "null"),
+             "license_state": \(state.map { "\"\($0)\"" } ?? "null"),
+             "due_date": \(due.map { "\"\($0)\"" } ?? "null"), "completed_at": \(completed ? done : "null"),
+             "valid_until": \(validUntil.map { "\"\($0)\"" } ?? "null"), "not_applicable": false,
+             "pending_review": \(pending || code == "employment_application"), "can_upload": \(canUpload)}
+            """
+        }
+        let items = [
+            item(1, "employment_application", "Employment application, signed and dated", due: day(-200), completed: false,
+                 validUntil: nil, canUpload: false, description: "Filled in and signed by the driver."),
+            item(2, "hire_mvr", "Driving record (MVR) from each state that licensed the driver in the past 3 years",
+                 due: day(-170), completed: true, validUntil: nil, canUpload: true, state: "TN"),
+            item(3, "road_test", "Road test certificate, or a copy of the CDL accepted in its place",
+                 due: nil, completed: false, validUntil: nil, canUpload: true),
+            item(4, "medical_proof_cdl", "Medical proof: MVR showing current medical certification status",
+                 due: day(-200), completed: true, validUntil: day(20), canUpload: true,
+                 description: "For CDL and CLP holders. Due again when the certification runs out."),
+            item(5, "annual_mvr", "Annual driving record (MVR)", due: day(165), completed: false, validUntil: nil, canUpload: true),
+        ]
+        var files = ["""
+        {"driver_id": "55555555-0000-0000-0000-000000000001",
+         "organization": {"id": "33333333-0000-0000-0000-000000000001", "name": "Acme Freight"},
+         "set_up": true, "items": [\(items.joined(separator: ","))]}
+        """]
+        if twoCarriers {
+            files.append("""
+            {"driver_id": "55555555-0000-0000-0000-000000000002",
+             "organization": {"id": "33333333-0000-0000-0000-000000000002", "name": "Bluegrass Haulers"},
+             "set_up": false, "items": []}
+            """)
+        }
+        return Data(("[" + files.joined(separator: ",") + "]").utf8)
     }
 
     static var settlementsJSON: String { """

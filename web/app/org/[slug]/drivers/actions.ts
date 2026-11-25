@@ -473,3 +473,41 @@ export async function applyRateToUpcomingLoads(
   refresh()
   return { ok: true, changed: Number(data) }
 }
+
+/**
+ * Accepts or declines a CDL or medical card the driver sent from the app.
+ * Accepting adds the copy to their documents and sets the expiration date
+ * on the driver (expiresOn, if the office read it differently); declining
+ * needs a note, which the driver sees.
+ */
+export async function reviewDriverUpdate(
+  organizationId: string,
+  updateId: string,
+  input: { accept: boolean; expiresOn?: string; note?: string }
+): Promise<ActionResult> {
+  if (!(await canManageDrivers(organizationId))) {
+    return { error: NOT_ALLOWED }
+  }
+  if (input.expiresOn && !/^\d{4}-\d{2}-\d{2}$/.test(input.expiresOn)) {
+    return { error: "Enter the expiration date." }
+  }
+  const note = input.note?.trim() ?? ""
+  if (!input.accept && !note) {
+    return { error: "Say why, so the driver can send the right one." }
+  }
+  if (note.length > 500) {
+    return { error: "Keep the note under 500 characters." }
+  }
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("review_driver_update", {
+    update_id: updateId,
+    accept: input.accept,
+    corrected_expires_on: input.expiresOn || null,
+    note: note || null,
+  })
+  if (error) {
+    return { error: error.message }
+  }
+  refresh()
+  return { ok: true }
+}

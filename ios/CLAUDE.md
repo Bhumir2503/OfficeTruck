@@ -16,6 +16,7 @@ Native driver app: Swift 6, SwiftUI, iOS 17+. Backend is the shared Supabase pro
 - Read driver data only through driver-scoped RPCs and RLS. Never decode or show load rates, `load_charges`, invoices or broker pay.
 - Layout: `OfficeTruckDriver/App`, `Features/{Auth,Load,Trips,Pay,Me}`, `Core` (Supabase client, `DriverAPI`, models, offline queue).
 - Stop and appointment times are wall-clock strings at the stop. Show them as written (`WallClock`); never convert them to the phone's time zone.
+- Profile: drivers send a new CDL or medical card (`submit_my_driver_update`; nothing on the driver changes until an owner or admin accepts it on the web) and see their DQ file (`my_dq_file`, uploads with `add_my_dq_document`). DQ item status is worked out in the app like `web/lib/dq-rules.ts`.
 - One screen, no tab bar: Trips is the root (Pay and Profile open as pages from its top-right toolbar). Tapping a trip opens the load: Check in / Check out is the bottom primary button, Add paperwork is in the top toolbar.
 - UI for drivers: big tap targets (≥ 44pt, prefer 56pt for primary actions), high contrast, Dynamic Type, system light/dark mode.
 - Writes made with no signal (stop check-ins, document uploads, expenses) go through the offline queue and retry later.

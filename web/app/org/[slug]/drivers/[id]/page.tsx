@@ -19,6 +19,7 @@ import {
   DriverSidePanel,
 } from "@/components/drivers/driver-side-panel"
 import { DriverStatusMenu } from "@/components/drivers/driver-status-menu"
+import { DriverUpdates } from "@/components/drivers/driver-updates"
 import { DriverFormSkeleton } from "@/components/drivers/drivers-skeletons"
 import { PayHistory } from "@/components/drivers/pay-history"
 import {
@@ -40,7 +41,12 @@ import {
   formatPay,
   today as getToday,
 } from "@/lib/driver-format"
-import { getDriver, getDriverLoads, getDriverDocuments } from "@/lib/drivers"
+import {
+  getDriver,
+  getDriverDocuments,
+  getDriverLoads,
+  getDriverUpdates,
+} from "@/lib/drivers"
 import { canManage, getOrganization } from "@/lib/organizations"
 import { formatPhone } from "@/lib/phone"
 import { parsePeriod, periodOf, shiftPeriod } from "@/lib/settlement-format"
@@ -104,29 +110,33 @@ export default async function DriverPage({
     (unpaidSince
       ? periodOf(unpaidSince, period)
       : shiftPeriod(thisWeek, period, -1))
-  const [loads, documents, dqFile, settlement, paidWeeks] = await Promise.all([
-    getDriverLoads(organization.id, driver.id),
-    getDriverDocuments(organization.id, driver.id),
-    loadDqFile({
-      driverId: driver.id,
-      organizationId: organization.id,
-      manager,
-      today,
-    }),
-    onPayment
-      ? getSettlement(
-          organization.id,
-          driver.id,
-          week,
-          period,
-          // From a Pay history link: the paid period's own last day.
-          typeof query.end === "string" && /^\d{4}-\d{2}-\d{2}$/.test(query.end)
-            ? query.end
-            : null
-        )
-      : null,
-    onPayment ? getPaidWeeks(organization.id, driver.id) : [],
-  ])
+  const [loads, documents, dqFile, settlement, paidWeeks, updates] =
+    await Promise.all([
+      getDriverLoads(organization.id, driver.id),
+      getDriverDocuments(organization.id, driver.id),
+      loadDqFile({
+        driverId: driver.id,
+        organizationId: organization.id,
+        manager,
+        today,
+      }),
+      onPayment
+        ? getSettlement(
+            organization.id,
+            driver.id,
+            week,
+            period,
+            // From a Pay history link: the paid period's own last day.
+            typeof query.end === "string" &&
+              /^\d{4}-\d{2}-\d{2}$/.test(query.end)
+              ? query.end
+              : null
+          )
+        : null,
+      onPayment ? getPaidWeeks(organization.id, driver.id) : [],
+      // A new CDL or medical card sent from the driver app.
+      manager ? getDriverUpdates(organization.id, driver.id) : [],
+    ])
   // Booked loads still locked at a rate other than the driver's current one.
   const staleLoads = loads
     .filter(
@@ -306,6 +316,13 @@ export default async function DriverPage({
             {/* Beside the cards, what's next stays in view; on a phone it
               comes first. */}
             <aside className="order-first flex flex-col gap-4 @4xl/main:sticky @4xl/main:top-6 @4xl/main:order-none @4xl/main:max-h-[calc(100svh-3rem)] @4xl/main:overflow-y-auto">
+              {manager && (
+                <DriverUpdates
+                  organizationId={organization.id}
+                  updates={updates}
+                  today={today}
+                />
+              )}
               <DriverSidePanel
                 organizationId={organization.id}
                 driver={driver}

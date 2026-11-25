@@ -173,6 +173,24 @@ struct DriverProfile: Decodable, Identifiable, Sendable {
     let payRate: Double?
     let payPeriod: String
     let truck: Truck?
+    /// A new CDL or medical card the driver sent: waiting for the office,
+    /// or declined in the last 30 days.
+    let updates: [CardUpdate]
+
+    func update(for kind: CardKind) -> CardUpdate? {
+        updates.first { $0.kind == kind }
+    }
+
+    struct CardUpdate: Decodable, Sendable {
+        let kind: CardKind
+        /// "pending" or "declined".
+        let status: String
+        let expiresOn: String
+        let reviewNote: String?
+        let sentAt: Date
+
+        var isPending: Bool { status == "pending" }
+    }
 
     struct Organization: Decodable, Sendable {
         let id: UUID
@@ -213,5 +231,89 @@ struct DriverProfile: Decodable, Identifiable, Sendable {
         case "month": "Monthly"
         default: "Weekly"
         }
+    }
+}
+
+/// The two cards a driver sends a new copy of from Profile.
+enum CardKind: String, Decodable, Sendable, Identifiable {
+    case cdl
+    case medicalCard = "medical_card"
+
+    var id: String { rawValue }
+
+    /// "CDL", "Medical card".
+    var title: String {
+        switch self {
+        case .cdl: "CDL"
+        case .medicalCard: "Medical card"
+        }
+    }
+
+    /// Mid-sentence: "CDL", "medical card".
+    var name: String {
+        switch self {
+        case .cdl: "CDL"
+        case .medicalCard: "medical card"
+        }
+    }
+}
+
+/// One carrier's standard DQ file for the signed-in driver, from
+/// `my_dq_file()`.
+struct DQFile: Decodable, Identifiable, Sendable {
+    var id: UUID { driverId }
+    let driverId: UUID
+    let organization: Organization
+    /// False until the office sets the driver's start date.
+    let setUp: Bool
+    let items: [DQItem]
+
+    struct Organization: Decodable, Sendable {
+        let id: UUID
+        let name: String
+    }
+}
+
+struct DQItem: Decodable, Identifiable, Sendable {
+    let id: UUID
+    let code: String
+    let title: String
+    let description: String?
+    let licenseState: String?
+    /// "yyyy-MM-dd".
+    let dueDate: String?
+    let completedAt: Date?
+    let validUntil: String?
+    let notApplicable: Bool
+    /// An upload or signature is waiting for the office to confirm.
+    let pendingReview: Bool
+    /// Takes a document the driver can send.
+    let canUpload: Bool
+
+    enum Status {
+        case missing, pendingReview, complete, dueSoon, upcoming, overdue, notApplicable
+
+        /// Needs the driver (or the office) to act now.
+        var needsAttention: Bool { [.missing, .overdue, .dueSoon].contains(self) }
+    }
+
+    /// Worked out from the dates, as itemStatus() in web/lib/dq-rules.ts.
+    func status(today: String) -> Status {
+        if notApplicable { return .notApplicable }
+        let soon = WallClock.adding(days: 30, to: today)
+        if completedAt != nil {
+            guard let validUntil else { return .complete }
+            if validUntil < today { return .overdue }
+            return validUntil <= soon ? .dueSoon : .complete
+        }
+        if pendingReview { return .pendingReview }
+        guard let dueDate, dueDate != today else { return .missing }
+        if dueDate < today { return .overdue }
+        return dueDate <= soon ? .dueSoon : .upcoming
+    }
+
+    /// The title, with the state for per-state items ("… · TN").
+    var displayTitle: String {
+        licenseState.map { "\(title) · \($0)" } ?? title
     }
 }
