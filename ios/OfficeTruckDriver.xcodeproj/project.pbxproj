@@ -14,6 +14,7 @@
 		3B8833A185ED584A608CA770 /* MeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 681C7128317562FAE0DCAF44 /* MeView.swift */; };
 		5843AE3CACAC6BDABAAA03B9 /* LoadScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09E096561EA73F55E3E4E080 /* LoadScreen.swift */; };
 		58459F41E09747B089BF84E1 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4465669BC99F25D70CB2C06A /* Models.swift */; };
+		5F1C2C7E516641215C35B9F0 /* DQFileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17E38FD7FCF036CE1645E7C6 /* DQFileView.swift */; };
 		607E7E9383137DEBB001F845 /* DocumentScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89D9DA8125ED34204F5BC2D0 /* DocumentScanner.swift */; };
 		6409E7F395EC452A25F0B74B /* SupabaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0CF3C4F008D37C87E5C9E69 /* SupabaseService.swift */; };
 		65B9CBB505B87FB4FC44BF76 /* DriverAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41D4D9559A6CF9472D0D8B50 /* DriverAPI.swift */; };
@@ -24,6 +25,7 @@
 		8DAC0EB7CBE26E8D4D7DAECA /* TripsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0A33E628EE17C3991F2E848 /* TripsView.swift */; };
 		9D67D25AC45739DC656659CF /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 0FAEC068E9AAD3D8724CA89B /* Lottie */; };
 		B821E67C97468CFDE1BD71D8 /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39366105CA8CCF401D6F513D /* Formatting.swift */; };
+		C66AF7C675554F319F8DCA3B /* SendCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAA8E6A83362A5FE0A358017 /* SendCardView.swift */; };
 		CC310C8D2B0E2D14135755A8 /* OfficeTruckDriverApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82F6D77869384EB21AE9BC6D /* OfficeTruckDriverApp.swift */; };
 		E0C27594EC903A57A7C6FD21 /* SessionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AF0644B7B43B60685913422 /* SessionModel.swift */; };
 		F5D9E7157A6166D93974AF93 /* Cargo.json in Resources */ = {isa = PBXBuildFile; fileRef = AA51E16A41E3B4F49E0FF5E7 /* Cargo.json */; };
@@ -33,6 +35,7 @@
 		021061EA99F776A5A93FEE86 /* DocumentPDF.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentPDF.swift; sourceTree = "<group>"; };
 		0912BE344D8291D20D8C5796 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		09E096561EA73F55E3E4E080 /* LoadScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadScreen.swift; sourceTree = "<group>"; };
+		17E38FD7FCF036CE1645E7C6 /* DQFileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DQFileView.swift; sourceTree = "<group>"; };
 		2F9DB45DF976678E1563E191 /* App.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = App.xcconfig; sourceTree = "<group>"; };
 		39366105CA8CCF401D6F513D /* Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatting.swift; sourceTree = "<group>"; };
 		41D4D9559A6CF9472D0D8B50 /* DriverAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverAPI.swift; sourceTree = "<group>"; };
@@ -50,6 +53,7 @@
 		B64C94BD588CA035C8E2C16C /* OfficeTruckDriver.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = OfficeTruckDriver.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C0A33E628EE17C3991F2E848 /* TripsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripsView.swift; sourceTree = "<group>"; };
 		F0CF3C4F008D37C87E5C9E69 /* SupabaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseService.swift; sourceTree = "<group>"; };
+		FAA8E6A83362A5FE0A358017 /* SendCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendCardView.swift; sourceTree = "<group>"; };
 		FD62A3A84301E2E9A003FA80 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -69,7 +73,9 @@
 		0456FE07CABD0F47690E4772 /* Me */ = {
 			isa = PBXGroup;
 			children = (
+				17E38FD7FCF036CE1645E7C6 /* DQFileView.swift */,
 				681C7128317562FAE0DCAF44 /* MeView.swift */,
+				FAA8E6A83362A5FE0A358017 /* SendCardView.swift */,
 			);
 			path = Me;
 			sourceTree = "<group>";
@@ -268,6 +274,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5F1C2C7E516641215C35B9F0 /* DQFileView.swift in Sources */,
 				7CDA828000B16030E1F9C6E5 /* DemoBackend.swift in Sources */,
 				12F334A72B4DCDD1E7DB096E /* DocumentPDF.swift in Sources */,
 				607E7E9383137DEBB001F845 /* DocumentScanner.swift in Sources */,
@@ -280,6 +287,7 @@
 				CC310C8D2B0E2D14135755A8 /* OfficeTruckDriverApp.swift in Sources */,
 				7AECB06D0BFC7052E2FB470A /* OfflineQueue.swift in Sources */,
 				7E90DAE590B06CE25DAB52CC /* PayView.swift in Sources */,
+				C66AF7C675554F319F8DCA3B /* SendCardView.swift in Sources */,
 				E0C27594EC903A57A7C6FD21 /* SessionModel.swift in Sources */,
 				6CA7C11F3FDAE248043F162B /* SignInView.swift in Sources */,
 				6409E7F395EC452A25F0B74B /* SupabaseService.swift in Sources */,

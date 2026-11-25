@@ -360,3 +360,53 @@ export async function getDriverDocuments(
     url: urls.get(path) ?? null,
   }))
 }
+
+/** A new CDL or medical card the driver sent from the app, waiting for review. */
+export type DriverUpdate = {
+  id: string
+  kind: "cdl" | "medical_card"
+  /** As the driver read it off the card. */
+  expires_on: string
+  file_name: string
+  content_type: string
+  created_at: string
+  /** A link that works for an hour, or null. */
+  url: string | null
+}
+
+/** The driver's updates still waiting for an owner or admin, oldest first. */
+export async function getDriverUpdates(
+  organizationId: string,
+  driverId: string
+): Promise<DriverUpdate[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("driver_updates")
+    .select("id, kind, expires_on, path, file_name, content_type, created_at")
+    .eq("organization_id", organizationId)
+    .eq("driver_id", driverId)
+    .eq("status", "pending")
+    .order("created_at")
+  if (error) {
+    throw error
+  }
+  const urls = new Map<string, string>()
+  if (data.length) {
+    const { data: signed } = await supabase.storage
+      .from("driver-documents")
+      .createSignedUrls(
+        data.map((row) => row.path),
+        60 * 60
+      )
+    for (const item of signed ?? []) {
+      if (item.path && item.signedUrl) {
+        urls.set(item.path, item.signedUrl)
+      }
+    }
+  }
+  return data.map(({ path, ...row }) => ({
+    ...row,
+    kind: row.kind as DriverUpdate["kind"],
+    url: urls.get(path) ?? null,
+  }))
+}
