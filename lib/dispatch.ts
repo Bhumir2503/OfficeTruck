@@ -5,41 +5,6 @@ import {
 } from "@/lib/dispatch-format"
 import { createClient } from "@/lib/supabase/server"
 
-export type LoadDispatch = {
-  id: string
-  token: string
-  email_to: string | null
-  include_rate: boolean
-  sent_at: string
-  /** When the driver first opened their link. */
-  seen_at: string | null
-  /** The email with their link failed to send. */
-  email_failed: boolean
-  revoked_at: string | null
-  driver: { id: string; full_name: string } | null
-}
-
-/** The load's live dispatch (the last one sent and not taken back), if any. */
-export async function getLiveDispatch(
-  organizationId: string,
-  loadId: string
-): Promise<LoadDispatch | null> {
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("load_dispatches")
-    .select(
-      "id, token, email_to, include_rate, sent_at, seen_at, email_failed, revoked_at, driver:drivers (id, full_name)"
-    )
-    .eq("organization_id", organizationId)
-    .eq("load_id", loadId)
-    .is("revoked_at", null)
-    .maybeSingle()
-  if (error) {
-    throw error
-  }
-  return data as unknown as LoadDispatch | null
-}
-
 export type LoadEvent = {
   id: string
   kind:

@@ -4,12 +4,6 @@ import { refresh } from "next/cache"
 
 import { isStale } from "@/lib/broker-format"
 import { findDriverOverlaps } from "@/lib/dispatch"
-import { appUrl } from "@/lib/app-url"
-import {
-  sendDispatchEmail,
-  sendUnassignedEmail,
-} from "@/lib/email/dispatch-email"
-import { formatStopWindow } from "@/lib/load-format"
 import { checkFmcsa, FMCSA_COLUMNS, type FmcsaRecord } from "@/lib/fmcsa"
 import { DOCUMENT_KINDS, type DocumentKind } from "@/lib/load-document-format"
 import {
@@ -30,6 +24,8 @@ import {
   type LoadBrokerValues,
   loadDetailsSchema,
   type LoadDetailsValues,
+  loadDriverPaySchema,
+  type LoadDriverPayValues,
   loadSchema,
   loadStatusSchema,
   loadStopsSchema,
@@ -191,8 +187,8 @@ export async function updateLoadStatus(
   }
   // Canceling takes a reason, so it goes through cancelLoad, and TONU takes
   // its amount, so it goes through markLoadTonu. The rest of
-  // the flow moves on its own (Save and notify, the BOL and POD,
-  // check-ins) or through Mark complete; invoiced, paid and factored come
+  // the flow moves on its own (Save and dispatch, the BOL and POD,
+  // stop times) or through Mark complete; invoiced, paid and factored come
   // from the load's invoice, or by hand for a load billed elsewhere.
   if (parsed.data === "cancelled") {
     return { error: "Give a reason for canceling the load." }
@@ -203,7 +199,7 @@ export async function updateLoadStatus(
   if (!["invoiced", "paid", "factored"].includes(parsed.data)) {
     return {
       error:
-        "That status is set on its own from the BOL, POD and check-ins. Use Mark complete if they won't come.",
+        "That status is set on its own from the BOL, POD and stop times. Use Mark complete if they won't come.",
     }
   }
 
@@ -364,7 +360,7 @@ export async function markLoadComplete(
 
 /**
  * Takes back a Mark complete: the load goes back to booked if it was
- * completed from booked, otherwise to wherever its BOL, POD and check-ins
+ * completed from booked, otherwise to wherever its BOL, POD and stop times
  * put it. Returns the status it's now in. Logged.
  */
 export async function unmarkLoadComplete(
@@ -695,41 +691,6 @@ export async function removeAccessorial(
   return { ok: true }
 }
 
-/** Changes who drove a load and how many miles it was. */
-export async function updateLoadAssignment(
-  organizationId: string,
-  loadId: string,
-  input: LoadAssignmentValues
-): Promise<AssignmentResult> {
-  if (!(await isMember(organizationId))) {
-    return { error: "You aren't a member of this organization." }
-  }
-
-  const parsed = loadAssignmentSchema.safeParse(input)
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Check the form." }
-  }
-
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("loads")
-    .update(parsed.data)
-    .eq("organization_id", organizationId)
-    .eq("id", loadId)
-    .select("id")
-
-  if (error) {
-    return { error: error.code === "23503" ? DRIVER_NOT_FOUND : error.message }
-  }
-  // Row-level security skips the update, rather than failing.
-  if (!data.length) {
-    return { error: "That load doesn't exist anymore." }
-  }
-
-  refresh()
-  return { ok: true, warning: await overlapWarning(organizationId, loadId) }
-}
-
 /** Changes the broker on a load (or links a typed name to a broker), and who sent the rate con. */
 export async function updateLoadBroker(
   organizationId: string,
@@ -778,150 +739,57 @@ export type DispatchResult =
   | { error: string }
   | {
       ok: true
-      /** The driver's private link, to copy or text if the email didn't go. */
-      link: string
-      /** Why the email wasn't sent, if it wasn't. */
-      emailError?: string
-      resent: boolean
+      /** Another load on the driver's schedule at the same time, if any. */
       warning?: string
     }
 
 /**
- * Sends a load to its driver: records exactly what was sent, moves it to
- * Dispatched (sending again keeps it there and replaces the old link), and
- * emails the driver a private link to it.
+ * Dispatches a booked load that has its truck and driver: records the load
+ * as it was dispatched and moves it to Dispatched. Nothing is sent to the
+ * driver; the office tells them.
  */
-export async function sendToDriver(
+export async function dispatchLoad(
   organizationId: string,
   loadId: string
 ): Promise<DispatchResult> {
-  const organization = (await getMyOrganizations()).find(
-    (org) => org.id === organizationId
-  )
-  if (!organization) {
+  if (!(await isMember(organizationId))) {
     return { error: "You aren't a member of this organization." }
   }
 
   const supabase = await createClient()
-  const { data, error } = await supabase
+  const { error } = await supabase
     .rpc("dispatch_load", { target_load: loadId })
-    .single<{
-      token: string
-      email_to: string | null
-      driver_name: string
-      resent: boolean
-    }>()
+    .single()
   if (error) {
     return { error: rpcError(error) }
   }
 
-  const link = `${await appUrl()}/dispatch/${data.token}`
-  let emailError: string | undefined
-  if (!data.email_to) {
-    emailError = `${data.driver_name} has no email address. Send them the link another way.`
-  } else {
-    const [{ data: load }, { data: stops }] = await Promise.all([
-      supabase.from("loads").select("reference").eq("id", loadId).single(),
-      supabase
-        .from("load_stops")
-        .select(
-          "kind, facility, location, appointment_type, appointment_start, appointment_end"
-        )
-        .eq("load_id", loadId)
-        .order("position"),
-    ])
-    const problem = await sendDispatchEmail({
-      to: data.email_to,
-      driverName: data.driver_name,
-      organizationName: organization.name,
-      reference: load?.reference ?? "",
-      stops: (stops ?? []).map((stop) => ({
-        kind: stop.kind as "pickup" | "delivery",
-        location: stop.facility
-          ? `${stop.facility}, ${stop.location}`
-          : stop.location,
-        when: formatStopWindow(
-          stop.appointment_start,
-          stop.appointment_end,
-          stop.appointment_type
-        ),
-      })),
-      link,
-      resent: data.resent,
-    })
-    if (problem) {
-      emailError = `The email to ${data.email_to} didn't send: ${problem}`
-    }
-  }
-  await supabase
-    .rpc("record_dispatch_email", {
-      target_load: loadId,
-      failed: !!emailError,
-    })
-    .then(
-      () => {},
-      () => {}
-    )
-
   refresh()
-  return {
-    ok: true,
-    link,
-    emailError,
-    resent: data.resent,
-    warning: await overlapWarning(organizationId, loadId),
-  }
+  return { ok: true, warning: await overlapWarning(organizationId, loadId) }
 }
-
-export type UnassignResult =
-  { error: string } | { ok: true; emailError?: string }
 
 /**
  * Takes the truck and driver off a dispatched load and sends it back to
- * Booked, which is logged. The driver's link stops working and they're
- * emailed that the load is off their schedule.
+ * Booked, which is logged.
  */
 export async function unassignLoad(
   organizationId: string,
   loadId: string
-): Promise<UnassignResult> {
-  const organization = (await getMyOrganizations()).find(
-    (org) => org.id === organizationId
-  )
-  if (!organization) {
+): Promise<ActionResult> {
+  if (!(await isMember(organizationId))) {
     return { error: "You aren't a member of this organization." }
   }
 
   const supabase = await createClient()
-  const { data, error } = await supabase
+  const { error } = await supabase
     .rpc("unassign_load", { target_load: loadId })
-    .single<{ email_to: string | null; driver_name: string | null }>()
+    .single()
   if (error) {
     return { error: rpcError(error) }
   }
 
-  let emailError: string | undefined
-  if (data.email_to && data.driver_name) {
-    const { data: load } = await supabase
-      .from("loads")
-      .select("reference")
-      .eq("id", loadId)
-      .single()
-    const problem = await sendUnassignedEmail({
-      to: data.email_to,
-      driverName: data.driver_name,
-      organizationName: organization.name,
-      reference: load?.reference ?? "",
-    })
-    if (problem) {
-      emailError = `The email to ${data.email_to} didn't send: ${problem}`
-    }
-  } else if (data.driver_name) {
-    emailError = `${data.driver_name} has no email address, so let them know yourself.`
-  }
-
   refresh()
-  return { ok: true, emailError }
+  return { ok: true }
 }
 
 /** Puts a canceled or TONU load back to Booked, when it was a mistake. Logged. */
@@ -1240,29 +1108,23 @@ export type SaveAssignmentResult =
   | { error: string }
   | {
       ok: true
-      /** The driver notified, by name, if anyone was. */
-      notified?: string
+      /** The driver the load was dispatched to, by name, if it was. */
+      dispatched?: string
       /** The driver taken off, by name, if anyone was. */
       removed?: string
-      /** Problems telling either driver, to show as warnings. */
-      problems: string[]
     }
 
 /**
- * Saves the truck, driver and miles. When that leaves the load with a truck
- * and driver who haven't been sent it, the driver is notified with their
- * link; a driver taken off is told the load was removed and their link
- * stops working. Nothing is sent except from this save.
+ * Saves the truck, driver and miles. A booked load that ends up with a truck
+ * and driver is dispatched to them; changing a dispatched load's driver
+ * takes the old one off first. Nothing is sent to either driver.
  */
 export async function saveAssignment(
   organizationId: string,
   loadId: string,
   input: LoadAssignmentValues
 ): Promise<SaveAssignmentResult> {
-  const organization = (await getMyOrganizations()).find(
-    (org) => org.id === organizationId
-  )
-  if (!organization) {
+  if (!(await isMember(organizationId))) {
     return { error: "You aren't a member of this organization." }
   }
   const parsed = loadAssignmentSchema.safeParse(input)
@@ -1279,106 +1141,50 @@ export async function saveAssignment(
       new_miles: parsed.data.miles,
       new_empty_miles: parsed.data.empty_miles,
     })
-    .single<{
-      removed_email: string | null
-      removed_name: string | null
-      token: string | null
-      email_to: string | null
-      driver_name: string | null
-    }>()
+    .single<{ removed_name: string | null; driver_name: string | null }>()
   if (error) {
     return {
       error: error.code === "23503" ? DRIVER_NOT_FOUND : rpcError(error),
     }
   }
 
-  const problems: string[] = []
-  const needsLoad = data.removed_name || data.token
-  const { data: load } = needsLoad
-    ? await supabase.from("loads").select("reference").eq("id", loadId).single()
-    : { data: null }
-  const reference = load?.reference ?? ""
-
-  // Tell the driver who was taken off.
-  if (data.removed_name) {
-    if (data.removed_email) {
-      const problem = await sendUnassignedEmail({
-        to: data.removed_email,
-        driverName: data.removed_name,
-        organizationName: organization.name,
-        reference,
-      })
-      if (problem) {
-        problems.push(
-          `The email telling ${data.removed_name} didn't send: ${problem}`
-        )
-      }
-    } else {
-      problems.push(
-        `${data.removed_name} has no email address, so let them know the load was removed.`
-      )
-    }
-  }
-
-  // Notify the new driver with their link.
-  if (data.token && data.driver_name) {
-    let failed = false
-    if (data.email_to) {
-      const { data: stops } = await supabase
-        .from("load_stops")
-        .select(
-          "kind, facility, location, appointment_type, appointment_start, appointment_end"
-        )
-        .eq("load_id", loadId)
-        .order("position")
-      const problem = await sendDispatchEmail({
-        to: data.email_to,
-        driverName: data.driver_name,
-        organizationName: organization.name,
-        reference,
-        stops: (stops ?? []).map((stop) => ({
-          kind: stop.kind as "pickup" | "delivery",
-          location: stop.facility
-            ? `${stop.facility}, ${stop.location}`
-            : stop.location,
-          when: formatStopWindow(
-            stop.appointment_start,
-            stop.appointment_end,
-            stop.appointment_type
-          ),
-        })),
-        link: `${await appUrl()}/dispatch/${data.token}`,
-        resent: false,
-      })
-      if (problem) {
-        failed = true
-        problems.push(
-          `The email to ${data.driver_name} didn't send: ${problem}`
-        )
-      }
-    } else {
-      failed = true
-      problems.push(
-        `${data.driver_name} has no email address. Copy their link and send it another way.`
-      )
-    }
-    if (failed) {
-      await supabase
-        .rpc("record_dispatch_email", { target_load: loadId, failed: true })
-        .then(
-          () => {},
-          () => {}
-        )
-    }
-  }
-
   refresh()
   return {
     ok: true,
-    notified: data.driver_name ?? undefined,
+    dispatched: data.driver_name ?? undefined,
     removed: data.removed_name ?? undefined,
-    problems,
   }
+}
+
+/**
+ * Sets the driver's pay on this one load, in place of the rate locked when
+ * they were assigned. Owners and admins only, and not once the load is on a
+ * paid statement.
+ */
+export async function setLoadDriverPay(
+  organizationId: string,
+  loadId: string,
+  input: LoadDriverPayValues
+): Promise<ActionResult> {
+  if (!(await isMember(organizationId))) {
+    return { error: "You aren't a member of this organization." }
+  }
+  const parsed = loadDriverPaySchema.safeParse(input)
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Check the form." }
+  }
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("set_load_driver_pay", {
+    target_load: loadId,
+    new_type: parsed.data.pay_type,
+    new_rate: parsed.data.pay_rate,
+  })
+  if (error) {
+    return { error: rpcError(error) }
+  }
+  refresh()
+  return { ok: true }
 }
 
 export type AssignmentConflicts = {

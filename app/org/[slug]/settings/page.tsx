@@ -2,7 +2,6 @@ import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
 import { CompanyProfileSection } from "@/components/settings/company-profile-form"
-import { DispatchSettings } from "@/components/settings/dispatch-settings"
 import { DeleteOrganization } from "@/components/settings/delete-organization"
 import { LeaveOrganization } from "@/components/settings/leave-organization"
 import { IconUpload } from "@/components/settings/icon-upload"
@@ -29,7 +28,7 @@ export default async function GeneralSettingsPage({
     await createClient()
   )
     .from("organizations")
-    .select("share_rate_with_drivers, icon_url")
+    .select("icon_url")
     .eq("id", organization.id)
     .single()
 
@@ -52,11 +51,6 @@ export default async function GeneralSettingsPage({
       />
       <CompanyProfileSection section="contact" {...props} />
       <CompanyProfileSection section="address" {...props} />
-      <DispatchSettings
-        organizationId={organization.id}
-        shareRate={org?.share_rate_with_drivers ?? false}
-        canEdit={canManage(organization)}
-      />
       <OrganizationUrlForm
         organizationId={organization.id}
         slug={organization.slug}

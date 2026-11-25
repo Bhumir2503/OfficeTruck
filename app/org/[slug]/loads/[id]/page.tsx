@@ -12,6 +12,7 @@ import { LoadHistoryCard } from "@/components/loads/load-history-card"
 import { LoadSidePanel } from "@/components/loads/load-side-panel"
 import { LoadStatusMenu } from "@/components/loads/load-status-menu"
 import { LoadStopsCard } from "@/components/loads/load-stops-card"
+import { LOAD_TAB_SKELETONS } from "@/components/loads/loads-skeletons"
 import {
   LOAD_TAB_LABELS,
   LOAD_TABS,
@@ -23,22 +24,16 @@ import {
   PageTabPanel,
   PageTabsProvider,
 } from "@/components/page-tabs"
-import {
-  FieldsCardSkeleton,
-  TableCardSkeleton,
-  TabSkeleton,
-} from "@/components/tab-skeletons"
 import { buttonVariants } from "@/components/ui/button"
-import { appUrl } from "@/lib/app-url"
 import { getBrokerOptions } from "@/lib/brokers"
-import { getLiveDispatch, getLoadEvents } from "@/lib/dispatch"
+import { getLoadEvents } from "@/lib/dispatch"
 import { getDriverOptions } from "@/lib/drivers"
 import { getFactoringCompany } from "@/lib/factoring"
 import { getLoadDocuments } from "@/lib/load-documents"
 import { getLoadInvoice } from "@/lib/invoices"
 import { getLoadExpenses } from "@/lib/load-expenses"
 import { getLoadDetail } from "@/lib/loads"
-import { getOrganization } from "@/lib/organizations"
+import { canManage, getOrganization } from "@/lib/organizations"
 import { getTruckOptions } from "@/lib/trucks"
 
 async function loadFor(params: PageProps<"/org/[slug]/loads/[id]">["params"]) {
@@ -73,7 +68,6 @@ export default async function LoadPage({
     trucks,
     brokers,
     factoring,
-    dispatch,
     events,
     documents,
     expenses,
@@ -83,13 +77,11 @@ export default async function LoadPage({
     getTruckOptions(organization.id),
     getBrokerOptions(organization.id),
     getFactoringCompany(organization.id),
-    getLiveDispatch(organization.id, load.id),
     getLoadEvents(organization.id, load.id),
     getLoadDocuments(organization.id, load.id),
     getLoadExpenses(organization.id, load.id),
     getLoadInvoice(organization.id, load.id),
   ])
-  const link = dispatch ? `${await appUrl()}/dispatch/${dispatch.token}` : null
 
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
@@ -152,52 +144,51 @@ export default async function LoadPage({
                 className="flex min-w-0 flex-col gap-6"
                 skeletons={LOAD_TAB_SKELETONS}
               >
-                {tab === "customer" && (
-                  <LoadBrokerForm
-                    organizationId={organization.id}
-                    load={load}
-                    brokers={brokers}
-                    brokersHref={`/org/${organization.slug}/customers`}
-                    factoringName={factoring?.name ?? null}
-                  />
+                {tab === "trip" && (
+                  <>
+                    <LoadAssignmentForm
+                      // Remount when the assignment changes elsewhere (unassigning), so
+                      // the pickers don't keep the old truck and driver.
+                      key={`${load.truck_id ?? ""}:${load.driver_id ?? ""}`}
+                      organizationId={organization.id}
+                      load={load}
+                      drivers={drivers}
+                      driversBase={`/org/${organization.slug}/drivers`}
+                      trucks={trucks}
+                      trucksBase={`/org/${organization.slug}/equipment`}
+                      loadsBase={base}
+                      canChangePay={canManage(organization)}
+                    />
+                    <LoadStopsCard
+                      organizationId={organization.id}
+                      load={load}
+                      stops={stops}
+                      billedNotes={charges
+                        .filter(
+                          (charge) =>
+                            charge.kind === "detention" &&
+                            charge.description !== null
+                        )
+                        .map((charge) => charge.description as string)}
+                    />
+                  </>
                 )}
-                {tab === "stops" && (
-                  <LoadStopsCard
-                    organizationId={organization.id}
-                    load={load}
-                    stops={stops}
-                    billedNotes={charges
-                      .filter(
-                        (charge) =>
-                          charge.kind === "detention" &&
-                          charge.description !== null
-                      )
-                      .map((charge) => charge.description as string)}
-                  />
-                )}
-                {tab === "charges" && (
-                  <LoadChargesCard
-                    organizationId={organization.id}
-                    load={load}
-                    charges={charges}
-                    versions={versions}
-                  />
-                )}
-                {tab === "assignment" && (
-                  <LoadAssignmentForm
-                    // Remount when the assignment changes elsewhere (unassigning), so
-                    // the pickers don't keep the old truck and driver.
-                    key={`${load.truck_id ?? ""}:${load.driver_id ?? ""}`}
-                    organizationId={organization.id}
-                    load={load}
-                    drivers={drivers}
-                    driversBase={`/org/${organization.slug}/drivers`}
-                    trucks={trucks}
-                    trucksBase={`/org/${organization.slug}/equipment`}
-                    loadsBase={base}
-                    dispatch={dispatch}
-                    link={link}
-                  />
+                {tab === "billing" && (
+                  <>
+                    <LoadBrokerForm
+                      organizationId={organization.id}
+                      load={load}
+                      brokers={brokers}
+                      brokersHref={`/org/${organization.slug}/customers`}
+                      factoringName={factoring?.name ?? null}
+                    />
+                    <LoadChargesCard
+                      organizationId={organization.id}
+                      load={load}
+                      charges={charges}
+                      versions={versions}
+                    />
+                  </>
                 )}
                 {tab === "expenses" && (
                   <LoadExpensesCard
@@ -221,7 +212,6 @@ export default async function LoadPage({
                 charges={charges}
                 documents={documents}
                 expenses={expenses}
-                dispatch={dispatch}
                 trucks={trucks}
                 drivers={drivers}
                 trucksBase={`/org/${organization.slug}/equipment`}
@@ -236,38 +226,4 @@ export default async function LoadPage({
       </div>
     </div>
   )
-}
-
-/** Each tab's cards while it loads. */
-const LOAD_TAB_SKELETONS = {
-  customer: (
-    <TabSkeleton>
-      <FieldsCardSkeleton title="Customer" fields={2} />
-    </TabSkeleton>
-  ),
-  stops: (
-    <TabSkeleton>
-      <TableCardSkeleton title="Stops" rows={2} />
-    </TabSkeleton>
-  ),
-  charges: (
-    <TabSkeleton>
-      <TableCardSkeleton title="Charges" rows={3} />
-    </TabSkeleton>
-  ),
-  assignment: (
-    <TabSkeleton>
-      <FieldsCardSkeleton title="Assignment" fields={2} />
-    </TabSkeleton>
-  ),
-  expenses: (
-    <TabSkeleton>
-      <TableCardSkeleton title="Expenses" rows={2} />
-    </TabSkeleton>
-  ),
-  history: (
-    <TabSkeleton>
-      <TableCardSkeleton title="History" rows={4} />
-    </TabSkeleton>
-  ),
 }

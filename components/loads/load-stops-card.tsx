@@ -575,9 +575,9 @@ export function LoadStopsCard({
                   ` · ${miles.format(load.miles)} estimated`}
               </>
             ) : load.status === "booked" ? (
-              "The driver checks in at each stop once the load is dispatched."
+              "Add arrival and departure times once the load is dispatched."
             ) : (
-              "The driver records arrival, departure and the odometer. Add them here only if they couldn't."
+              "Add arrival, departure and the odometer as the driver reports them."
             )
           }
         />

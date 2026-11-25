@@ -21,7 +21,7 @@ import { createClient } from "@/lib/supabase/server"
 /** A database error as a message, naming the one people can fix. */
 function saveError(error: { code?: string; message: string }) {
   if (error.code === "23505" && error.message.includes("login_phone")) {
-    return "Another driver already has that phone number. Each driver signs in with their own."
+    return "Another driver already has that phone number. Each driver needs their own."
   }
   if (error.code === "23514" && error.message.includes("end_after_start")) {
     return "The start date can't be after the day they left."

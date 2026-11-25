@@ -11,6 +11,7 @@ import {
   type McLookup,
 } from "@/app/org/[slug]/customers/actions"
 import { FlagBadge, FmcsaBadge } from "@/components/brokers/broker-badges"
+import { FmcsaDown } from "@/components/brokers/fmcsa-down"
 import { SenderWarning } from "@/components/brokers/sender-warning"
 import {
   AddBrokerDialog,
@@ -142,6 +143,9 @@ function FmcsaLookupResult({
   typedName: string
 }) {
   const record = lookup.fmcsa
+  if (!record && lookup.fmcsaUnavailable) {
+    return <FmcsaDown mc={mc} />
+  }
   if (!record) {
     return (
       <p
@@ -190,12 +194,24 @@ function FmcsaLookupResult({
       )}
       <p className="text-xs text-muted-foreground">
         From FMCSA
-        {lookup.fmcsaError ? ` (saved copy: ${lookup.fmcsaError})` : ""}
+        {lookup.fmcsaError && !lookup.fmcsaUnavailable
+          ? ` (saved copy: ${lookup.fmcsaError})`
+          : ""}
         {record.city && record.state
           ? `, based in ${record.city}, ${record.state}`
           : ""}
         .
       </p>
+      {lookup.fmcsaUnavailable && (
+        <FmcsaDown
+          mc={mc}
+          savedOn={new Date(record.checked_at).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          })}
+        />
+      )}
     </div>
   )
 }

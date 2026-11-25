@@ -34,6 +34,7 @@ export function RouteMilesField({
   stopsVersion,
   defaultValue,
   errors,
+  onValueChange,
 }: {
   organizationId: string
   /** New Load: the stop addresses in the form right now, in order. */
@@ -42,6 +43,8 @@ export function RouteMilesField({
   stopsVersion?: number
   defaultValue?: number | null
   errors?: { message: string }[]
+  /** The box's value whenever it changes, typed or estimated. */
+  onValueChange?: (value: string) => void
 }) {
   const [value, setValue] = useState(
     defaultValue === null || defaultValue === undefined
@@ -53,6 +56,12 @@ export function RouteMilesField({
   const [typed, setTyped] = useState(false)
   const runId = useRef(0)
   const live = !!addresses
+
+  useEffect(() => {
+    onValueChange?.(value)
+    // Only when the value changes; the callback is new every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value])
 
   async function estimate() {
     const list = addresses?.() ?? []

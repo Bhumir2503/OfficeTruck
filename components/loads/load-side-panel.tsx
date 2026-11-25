@@ -8,7 +8,7 @@ import {
   Loader2,
   Plus,
   ReceiptText,
-  Send,
+  Truck,
   Upload,
   X,
 } from "lucide-react"
@@ -20,7 +20,7 @@ import { toast } from "sonner"
 import {
   markLoadComplete,
   removeLoadDocument,
-  sendToDriver,
+  dispatchLoad,
   updateLoadStatus,
 } from "@/app/org/[slug]/loads/actions"
 import { createInvoice } from "@/app/org/[slug]/invoices/actions"
@@ -28,7 +28,6 @@ import { AssignDialog } from "@/components/loads/assign-dialog"
 import { DocumentLink } from "@/components/loads/document-viewer"
 import { MoneyLine, Panel } from "@/components/side-panel"
 import { Button } from "@/components/ui/button"
-import type { LoadDispatch } from "@/lib/dispatch"
 import { formatInvoiceDate, INVOICE_STATE_LABELS } from "@/lib/invoice-format"
 import type { LoadInvoice } from "@/lib/invoices"
 import type { DriverOption } from "@/lib/drivers"
@@ -58,7 +57,7 @@ type Step = {
   detail: string
   action:
     | { type: "assign" }
-    | { type: "send" }
+    | { type: "dispatch" }
     | { type: "upload"; kind: DocumentKind }
     | { type: "status"; to: LoadStatus; label: string }
     /** Make the draft invoice, or open the one there is. */
@@ -68,13 +67,10 @@ type Step = {
   alternative?: { to: LoadStatus | "complete"; label: string }
 }
 
-const firstName = (name: string | null | undefined) => name?.split(" ")[0]
-
 /** What to do next with the load, and the one button that does it. */
 function nextStep(
   load: Load,
   missing: DocumentKind[],
-  dispatch: LoadDispatch | null,
   invoice: LoadInvoice | null
 ): Step {
   const has = (kind: DocumentKind) => !missing.includes(kind)
@@ -88,31 +84,25 @@ function nextStep(
     case "booked":
       return load.driver && load.truck_link
         ? {
-            title: `Notify ${firstName(load.driver.full_name)}`,
-            detail:
-              "Sends them the stops, appointments, pickup numbers and rate con. The load moves to dispatched.",
-            action: { type: "send" },
+            title: "Dispatch the load",
+            detail: `Moves it to dispatched for ${load.driver.full_name}.`,
+            action: { type: "dispatch" },
             alternative: { to: "complete", label: "Mark complete" },
           }
         : {
             title: "Assign a truck and driver",
-            detail: "Then send the load to the driver.",
+            detail: "Saving them dispatches the load.",
             action: { type: "assign" },
             alternative: { to: "complete", label: "Mark complete" },
           }
     case "dispatched":
     case "loaded": {
-      // The status moves on its own from the BOL, POD and check-ins; Mark
+      // The status moves on its own from the BOL, POD and stop times; Mark
       // complete is for when they won't come.
       const complete = { to: "complete" as const, label: "Mark complete" }
       if (!has("bol") && load.status === "dispatched") {
         return {
-          ...upload(
-            "bol",
-            dispatch?.seen_at
-              ? `${firstName(load.driver?.full_name) ?? "The driver"} has the load. The signed BOL moves it to in transit.`
-              : "The signed BOL moves the load to in transit."
-          ),
+          ...upload("bol", "The signed BOL moves the load to in transit."),
           alternative: complete,
         }
       }
@@ -229,7 +219,6 @@ export function LoadSidePanel({
   charges,
   documents,
   expenses,
-  dispatch,
   trucks,
   drivers,
   trucksBase,
@@ -243,7 +232,6 @@ export function LoadSidePanel({
   charges: LoadCharge[]
   documents: LoadDocument[]
   expenses: LoadExpense[]
-  dispatch: LoadDispatch | null
   /** For assigning a truck and driver from the next step. */
   trucks: TruckOption[]
   drivers: DriverOption[]
@@ -275,7 +263,7 @@ export function LoadSidePanel({
     ...(lumperReceipt ? [{ kind: "lumper_receipt" as const }] : []),
   ])
   const ready = missing.length === 0
-  const step = nextStep(load, missing, dispatch, invoice)
+  const step = nextStep(load, missing, invoice)
   const invoiced = INVOICED_STATUSES.includes(load.status)
   const shown: DocumentKind[] = [
     ...required,
@@ -341,7 +329,7 @@ export function LoadSidePanel({
       toast.error(result.error)
     } else {
       // Removing a BOL or POD can move the load back. Where to depends on
-      // what's left and the driver's check-ins, which the database decides.
+      // what's left and the stop times, which the database decides.
       const onTheRoad = ["dispatched", "loaded", "delivered"].includes(
         load.status
       )
@@ -355,22 +343,17 @@ export function LoadSidePanel({
     }
   }
 
-  async function send() {
-    setBusy("send")
-    const result = await sendToDriver(organizationId, load.id)
+  async function dispatchNow() {
+    setBusy("dispatch")
+    const result = await dispatchLoad(organizationId, load.id)
     setBusy(null)
     if ("error" in result) {
       toast.error(result.error)
       return
     }
-    const name = load.driver?.full_name
-    if (result.emailError) {
-      toast.warning(
-        `Load ${load.reference} sent to ${name}. ${result.emailError}`
-      )
-    } else {
-      toast.success(`Load ${load.reference} sent to ${name}.`)
-    }
+    toast.success(
+      `Load ${load.reference} dispatched to ${load.driver?.full_name}.`
+    )
     if (result.warning) {
       toast.warning(result.warning)
     }
@@ -473,28 +456,28 @@ export function LoadSidePanel({
                   className="w-full"
                   disabled={working}
                   onClick={() => {
-                    if (action.type === "send") void send()
+                    if (action.type === "dispatch") void dispatchNow()
                     else if (action.type === "upload") pick(action.kind)
                     else if (action.type === "invoice") void openInvoice()
                     else void move(action.to)
                   }}
                 >
                   {busy &&
-                  (busy === "send" ||
+                  (busy === "dispatch" ||
                     busy === "invoice" ||
                     busy.startsWith("status:") ||
                     (action.type === "upload" &&
                       busy === `upload:${action.kind}`)) ? (
                     <Loader2 className="animate-spin" />
-                  ) : action.type === "send" ? (
-                    <Send />
+                  ) : action.type === "dispatch" ? (
+                    <Truck />
                   ) : action.type === "upload" ? (
                     <Upload />
                   ) : action.type === "invoice" ? (
                     <ReceiptText />
                   ) : null}
-                  {action.type === "send"
-                    ? `Notify ${firstName(load.driver?.full_name)}`
+                  {action.type === "dispatch"
+                    ? "Dispatch"
                     : action.type === "upload"
                       ? `Upload ${DOCUMENT_LABELS[action.kind]}`
                       : action.label}

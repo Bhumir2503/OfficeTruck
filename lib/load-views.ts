@@ -13,7 +13,7 @@ export type LoadView = (typeof LOAD_VIEWS)[number]
 
 export const LOAD_VIEW_LABELS: Record<LoadView, string> = {
   needs_driver: "Needs driver",
-  ready_to_send: "Ready to send",
+  ready_to_send: "Ready to dispatch",
   on_the_road: "On the road",
   needs_billing: "Needs billing",
   waiting_on_pay: "Waiting on pay",
@@ -26,7 +26,7 @@ type ViewLoad = {
 }
 
 /**
- * A booked load can only be sent once it has both a truck and a driver, so
+ * A booked load can only be dispatched once it has both a truck and a driver, so
  * one missing either still needs assigning.
  */
 export function inView(view: LoadView, load: ViewLoad) {
