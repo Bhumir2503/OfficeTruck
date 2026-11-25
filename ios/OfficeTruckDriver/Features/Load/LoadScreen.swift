@@ -1,8 +1,9 @@
 import PhotosUI
 import SwiftUI
 
-/// One load: its details, stops and paperwork. On a load that's on the road,
-/// the next stop has an Arrived or Departed button.
+/// One load: its stops, details and paperwork. On a load that's on the road,
+/// Check in / Check out for the next stop is pinned to the bottom, and
+/// paperwork is added from the toolbar.
 struct LoadScreen: View {
     let loadID: UUID
 
@@ -105,7 +106,7 @@ struct LoadScreen: View {
                 }
             }
 
-            Section("Load \(load.reference)") {
+            Section("Details") {
                 LabeledContent("Status", value: load.status.label)
                 if let truck = load.truck { LabeledContent("Truck", value: truck) }
                 if let trailer = load.trailerNumber { LabeledContent("Trailer", value: trailer) }
@@ -131,31 +132,50 @@ struct LoadScreen: View {
                         Text("Not sent yet").foregroundStyle(.orange)
                     }
                 }
-                if load.canEdit {
+            }
+        }
+        .refreshable { await fetch() }
+        .navigationTitle("Load \(load.reference)")
+        .navigationBarTitleDisplayMode(.inline)
+        // Paperwork is added from the toolbar, with what the next stop
+        // usually needs first: BOL at a pickup, POD at a delivery.
+        .toolbar {
+            if load.canEdit {
+                ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        // What the next stop usually needs comes first.
                         let first: DocumentKind = (next ?? load.stops.last)?.isPickup == true ? .bol : .pod
                         ForEach([first] + DocumentKind.allCases.filter { $0 != first }) { kind in
                             Button(kind.label) { addKind = kind }
                         }
                     } label: {
-                        Label("Add paperwork", systemImage: "doc.viewfinder")
+                        Label("Add paperwork", systemImage: "doc.badge.plus")
                     }
                 }
             }
         }
-        .refreshable { await fetch() }
-        // Check in / Check out stays in the navigation bar, so it's one tap
-        // away wherever the driver has scrolled.
-        .toolbar {
+        // Check in / Check out is the screen's primary action, pinned to the
+        // bottom so it's always one tap away.
+        .safeAreaInset(edge: .bottom) {
             if load.canEdit, let next {
                 let arrived = next.arrivedAt != nil || pending.contains { $0.stopID == next.id && $0.event == .arrived }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(arrived ? "Check out" : "Check in") {
-                        startCheckIn(arrived ? .departed : .arrived, stop: next, load: load)
+                let start = { startCheckIn(arrived ? .departed : .arrived, stop: next, load: load) }
+                let title = arrived ? "Check out" : "Check in"
+                Group {
+                    if #available(iOS 26.0, *) {
+                        Button(action: start) {
+                            Text(title).font(.headline).frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.glassProminent)
+                    } else {
+                        Button(action: start) {
+                            Text(title).font(.headline).frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
-                    .buttonStyle(.borderedProminent)
                 }
+                .controlSize(.extraLarge)
+                .padding(.horizontal)
+                .padding(.bottom, 8)
             }
         }
         .confirmationDialog(

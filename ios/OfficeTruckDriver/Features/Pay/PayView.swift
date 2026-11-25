@@ -1,7 +1,9 @@
 import SwiftUI
 
-/// Pay statements, newest first. Totals appear once the office pays one.
+/// Pay statements, newest first, opened from Trips. Totals appear once the
+/// office pays one.
 struct PayView: View {
+    @Environment(\.dismiss) private var dismiss
     @State private var settlements: Loadable<[SettlementSummary]> = .loading
     private let api = DriverAPI()
 
@@ -35,6 +37,11 @@ struct PayView: View {
                 }
             }
             .navigationTitle("Pay")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
             .task { await fetch() }
         }
     }

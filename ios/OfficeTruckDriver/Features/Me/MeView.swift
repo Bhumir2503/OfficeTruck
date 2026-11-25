@@ -1,7 +1,9 @@
 import SwiftUI
 
-/// The driver's account. The DQ file, CDL and medical card come here next.
+/// The driver's profile, opened from Trips. The DQ file, CDL and medical
+/// card come here next.
 struct MeView: View {
+    @Environment(\.dismiss) private var dismiss
     @Environment(SessionModel.self) private var session
     @State private var confirmingSignOut = false
 
@@ -19,7 +21,12 @@ struct MeView: View {
                         .frame(maxWidth: .infinity, minHeight: 44)
                 }
             }
-            .navigationTitle("Me")
+            .navigationTitle("Profile")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
             .confirmationDialog("Sign out of OfficeTruck?", isPresented: $confirmingSignOut, titleVisibility: .visible) {
                 Button("Sign out", role: .destructive) { Task { await session.signOut() } }
             }
