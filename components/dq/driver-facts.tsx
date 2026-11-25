@@ -1,25 +1,10 @@
-"use client"
-
-import { DoorOpen } from "lucide-react"
-import { useRouter } from "next/navigation"
-import { useState } from "react"
-import { toast } from "sonner"
-
-import { dqFetch } from "@/components/dq/dq-api"
-import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Field, FieldLabel } from "@/components/ui/field"
-import { DatePicker } from "@/components/ui/date-picker"
-import { formatDate } from "@/lib/driver-format"
 import type { LICENSE_CLASSES } from "@/lib/schemas/dq"
 
+/**
+ * The driver facts the qualification file needs. A driver who leaves is
+ * marked inactive from Change status, which asks for their last day and
+ * closes the file.
+ */
 export type DriverFacts = {
   id: string
   full_name: string
@@ -31,90 +16,4 @@ export type DriverFacts = {
   holds_medical_variance: boolean
   login_phone: string | null
   linked: boolean
-}
-
-/** Sets the day the driver left: recurring work stops and the file freezes. */
-export function EndDateButton({ driver }: { driver: DriverFacts }) {
-  const router = useRouter()
-  const [open, setOpen] = useState(false)
-  const [pending, setPending] = useState(false)
-  const [date, setDate] = useState("")
-
-  async function save(event: React.FormEvent) {
-    event.preventDefault()
-    setPending(true)
-    const result = await dqFetch<{ closed: number }>(
-      `drivers/${driver.id}/end-date`,
-      {
-        json: { end_date: date },
-      }
-    )
-    setPending(false)
-    if (!result.ok) {
-      toast.error(result.error)
-      return
-    }
-    const keptUntil = `${Number(date.slice(0, 4)) + 3}${date.slice(4)}`
-    // Saving the last day marks them inactive once it has come.
-    toast.success(
-      date <= new Date().toLocaleDateString("en-CA")
-        ? `${driver.full_name} marked inactive. Their file is kept until ${formatDate(keptUntil)}.`
-        : `Last day saved. ${driver.full_name} stays active until then; the file is kept until ${formatDate(keptUntil)}.`
-    )
-    setOpen(false)
-    router.refresh()
-  }
-
-  return (
-    <>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="w-full text-muted-foreground"
-        onClick={() => setOpen(true)}
-      >
-        <DoorOpen /> Driver left
-      </Button>
-      <Dialog open={open} onOpenChange={(next) => !pending && setOpen(next)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{driver.full_name} left</DialogTitle>
-            <DialogDescription>
-              Recurring work stops, items due later are closed, and the file
-              becomes read-only after this date. It&apos;s kept for 3 years.
-              They&apos;re marked inactive once the day comes.
-            </DialogDescription>
-          </DialogHeader>
-          <form id="dq-end-date" onSubmit={save}>
-            <Field>
-              <FieldLabel htmlFor="dq-end">Last day</FieldLabel>
-              <DatePicker
-                id="dq-end"
-                required
-                min={driver.start_date ?? undefined}
-                value={date}
-                onChange={setDate}
-              />
-            </Field>
-          </form>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              disabled={pending}
-              onClick={() => setOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              form="dq-end-date"
-              disabled={pending || !date}
-            >
-              Save end date
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
-  )
 }
