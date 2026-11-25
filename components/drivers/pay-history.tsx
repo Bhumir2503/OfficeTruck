@@ -20,13 +20,13 @@ import {
 } from "@/components/ui/table"
 import { formatDate } from "@/lib/driver-format"
 import { formatRate } from "@/lib/load-format"
-import { formatWeek } from "@/lib/settlement-format"
+import { formatPeriod } from "@/lib/settlement-format"
 import type { PaidWeek } from "@/lib/settlements"
 
-/** Weeks shown at a time, as on the truck page. */
+/** Pay periods shown at a time, as on the truck page. */
 const PAGE_SIZE = 5
 
-/** "1–5 of 12", or "6 of 6" when a page has one week. */
+/** "1–5 of 12", or "6 of 6" when a page has one period. */
 const range = (first: number, last: number, total: number) =>
   `${first === last ? first : `${first}–${last}`} of ${total}`
 
@@ -57,13 +57,13 @@ export function PayHistory({
       description={
         weeks.length ? (
           <>
-            Weeks marked paid, as they were paid.
+            Pay periods marked paid, as they were paid.
             <span className="mt-1 block text-foreground tabular-nums">
               {formatRate(paidThisYear)} paid this year
             </span>
           </>
         ) : (
-          "Weeks marked paid, as they were paid."
+          "Pay periods marked paid, as they were paid."
         )
       }
       contentClassName={weeks.length ? "px-0 pb-0" : undefined}
@@ -96,13 +96,13 @@ export function PayHistory({
     >
       {weeks.length === 0 ? (
         <SettingsEmptyState icon={History} title="Nothing paid yet">
-          Mark a week paid on the statement above and it shows up here.
+          Mark a pay period paid on the statement above and it shows up here.
         </SettingsEmptyState>
       ) : (
         <Table className="[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6">
           <TableHeader className="bg-muted/40">
             <TableRow>
-              <TableHead>Week</TableHead>
+              <TableHead>Period</TableHead>
               <TableHead className="hidden sm:table-cell">Paid on</TableHead>
               <TableHead className="hidden text-right sm:table-cell">
                 Loads
@@ -118,11 +118,12 @@ export function PayHistory({
               <TableRow key={week.week}>
                 <TableCell className="py-3">
                   <Link
-                    href={`${payHref}&week=${week.week}#pay`}
+                    // Its own dates, in case the driver's schedule changed.
+                    href={`${payHref}&week=${week.week}&end=${week.end}#pay`}
                     scroll={false}
                     className="font-medium hover:underline"
                   >
-                    {formatWeek(week.week)}
+                    {formatPeriod(week.week, week.end)}
                   </Link>
                 </TableCell>
                 <TableCell className="hidden text-muted-foreground sm:table-cell">

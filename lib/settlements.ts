@@ -3,8 +3,9 @@ import { cityState } from "@/lib/report-format"
 import type { PayType } from "@/lib/schemas/driver"
 import {
   PAYABLE_STATUSES,
+  periodEnd,
   settlementTotals,
-  weekRange,
+  type PayPeriod,
   type SettlementAdjustment,
   type SettlementExpense,
   type SettlementLoad,
@@ -16,10 +17,14 @@ type SettlementRow = {
   id: string
   driver_id: string
   week_start: string
+  /** The period's last day. */
+  period_end: string
   status: "open" | "paid"
   notes: string | null
   paid_on: string | null
   load_ids: string[] | null
+  /** The lines as they were paid; null while open and for older weeks. */
+  paid_lines: { loads: SettlementLoad[]; expenses: SettlementExpense[] } | null
   gross_pay: number | string | null
   reimbursements: number | string | null
   adjustments: number | string | null
@@ -42,6 +47,12 @@ type LoadRow = {
 const LOAD_COLUMNS =
   "id, reference, driver_id, delivery_start, rate, miles, driver_pay_type, driver_pay_rate, pickup_location, delivery_location"
 
+/** The day after `day` ("YYYY-MM-DD"). */
+const dayAfter = (day: string) =>
+  new Date(Date.parse(`${day}T00:00:00Z`) + 86_400_000)
+    .toISOString()
+    .slice(0, 10)
+
 function toLoad(row: LoadRow): SettlementLoad {
   const rate = Number(row.rate)
   return {
@@ -61,10 +72,16 @@ function toLoad(row: LoadRow): SettlementLoad {
   }
 }
 
-/** One driver's week: the loads and money behind it, and where it stands. */
+/**
+ * One driver's pay period (a week, 2 weeks or a month): the loads and money
+ * behind it, and where it stands.
+ */
 export type Settlement = {
   driver: { id: string; full_name: string; email: string | null }
+  /** The period's first day. */
   week: string
+  /** The period's last day. */
+  end: string
   /** Null until there's an adjustment, a note or a payment to keep. */
   id: string | null
   status: "open" | "paid"
@@ -78,162 +95,178 @@ export type Settlement = {
 }
 
 /**
- * Every driver's settlement for a week: active drivers, and anyone else
- * with loads or a settlement that week. Paid weeks show what was paid.
+ * The row for the period `start`–`end` among a driver's settlements: the
+ * one with exactly those dates, or else an open one starting the same day
+ * (from before a schedule change; it takes the new end). A paid row with
+ * other dates is a different period, never this one.
  */
-export async function getPayWeek(
+export function periodRow<
+  T extends { week_start: string; period_end: string; status: string },
+>(rows: T[], start: string, end: string): T | null {
+  return (
+    rows.find((r) => r.week_start === start && r.period_end === end) ??
+    rows.find((r) => r.week_start === start && r.status === "open") ??
+    null
+  )
+}
+
+/**
+ * A driver's settlement for the pay period starting `start`, or null if
+ * the driver isn't found. An open period takes the driver's loads
+ * delivered in it, less any already paid in another period (the schedule
+ * may have changed since); a paid one shows what was paid.
+ */
+export async function getSettlement(
   organizationId: string,
-  week: string
-): Promise<Settlement[]> {
+  driverId: string,
+  start: string,
+  period: PayPeriod,
+  /**
+   * A paid period's own last day, from a Pay history link, when it differs
+   * from what the driver's schedule gives (the schedule changed since).
+   */
+  endOverride?: string | null
+): Promise<Settlement | null> {
   const supabase = await createClient()
-  const { from, to } = weekRange(week)
-  const [drivers, loads, settlements] = await Promise.all([
+  const end =
+    endOverride && endOverride >= start ? endOverride : periodEnd(start, period)
+  // Loads delivered from the first day up to the end of the last.
+  const from = start
+  const to = dayAfter(end)
+  const [driver, loads, settlements] = await Promise.all([
     supabase
       .from("drivers")
-      .select("id, full_name, email, status")
+      .select("id, full_name, email")
       .eq("organization_id", organizationId)
-      .order("full_name"),
+      .eq("id", driverId)
+      .maybeSingle(),
     supabase
       .from("loads")
       .select(LOAD_COLUMNS)
       .eq("organization_id", organizationId)
+      .eq("driver_id", driverId)
       .in("status", PAYABLE_STATUSES)
-      .not("driver_id", "is", null)
       .gte("delivery_start", `${from}T00:00:00`)
       .lt("delivery_start", `${to}T00:00:00`)
       .order("delivery_start"),
     supabase
       .from("driver_settlements")
       .select(
-        "id, driver_id, week_start, status, notes, paid_on, load_ids, gross_pay, reimbursements, adjustments, net_pay"
+        "id, driver_id, week_start, period_end, status, notes, paid_on, load_ids, paid_lines, gross_pay, reimbursements, adjustments, net_pay"
       )
       .eq("organization_id", organizationId)
-      .eq("week_start", week),
+      .eq("driver_id", driverId),
   ])
-  for (const result of [drivers, loads, settlements]) {
+  for (const result of [driver, loads, settlements]) {
     if (result.error) throw result.error
   }
+  if (!driver.data) return null
   const rows = settlements.data as SettlementRow[]
-  const loadRows = loads.data as LoadRow[]
+  const row = periodRow(rows, start, end)
+  const paid = row?.status === "paid"
 
-  // A paid week keeps the loads it paid for, even if one moved since.
-  const paidIds = rows.flatMap((row) => row.load_ids ?? [])
-  const missing = paidIds.filter((id) => !loadRows.some((l) => l.id === id))
-  if (missing.length) {
-    const { data, error } = await supabase
-      .from("loads")
-      .select(LOAD_COLUMNS)
-      .eq("organization_id", organizationId)
-      .in("id", missing)
-    if (error) throw error
-    loadRows.push(...(data as LoadRow[]))
+  let loadRows = loads.data as LoadRow[]
+  if (paid) {
+    // A paid period keeps the loads it paid for, even if one moved since.
+    const missing = row!.load_ids!.filter(
+      (id) => !loadRows.some((load) => load.id === id)
+    )
+    if (missing.length) {
+      const { data, error } = await supabase
+        .from("loads")
+        .select(LOAD_COLUMNS)
+        .eq("organization_id", organizationId)
+        .in("id", missing)
+      if (error) throw error
+      loadRows.push(...(data as LoadRow[]))
+    }
+    loadRows = loadRows.filter((load) => row!.load_ids!.includes(load.id))
+  } else {
+    // Never pay a load twice: leave out ones another period already paid.
+    const paidElsewhere = new Set(
+      rows
+        .filter((r) => r.status === "paid" && r.id !== row?.id)
+        .flatMap((r) => r.load_ids ?? [])
+    )
+    loadRows = loadRows.filter((load) => !paidElsewhere.has(load.id))
   }
+  const driverLoads = loadRows.map(toLoad)
 
-  const allLoadIds = [...new Set(loadRows.map((load) => load.id))]
-  const settlementIds = rows.map((row) => row.id)
+  const ids = driverLoads.map((load) => load.id)
   const [expenses, adjustments] = await Promise.all([
-    allLoadIds.length
+    ids.length
       ? supabase
           .from("load_expenses")
           .select("id, load_id, kind, amount, spent_on, note")
           .eq("organization_id", organizationId)
           .eq("paid_by", "driver")
-          .in("load_id", allLoadIds)
+          .in("load_id", ids)
           .order("spent_on")
       : Promise.resolve({ data: [], error: null }),
-    settlementIds.length
+    row
       ? supabase
           .from("driver_settlement_adjustments")
-          .select("id, settlement_id, description, amount")
+          .select("id, description, amount")
           .eq("organization_id", organizationId)
-          .in("settlement_id", settlementIds)
+          .eq("settlement_id", row.id)
           .order("created_at")
       : Promise.resolve({ data: [], error: null }),
   ])
   if (expenses.error) throw expenses.error
   if (adjustments.error) throw adjustments.error
 
-  return (
-    drivers.data as {
-      id: string
-      full_name: string
-      email: string | null
-      status: string
-    }[]
-  )
-    .map((driver): Settlement | null => {
-      const row = rows.find((r) => r.driver_id === driver.id) ?? null
-      const paid = row?.status === "paid"
-      const driverLoads = (
-        paid
-          ? loadRows.filter((load) => row!.load_ids!.includes(load.id))
-          : loadRows.filter((load) => load.driver_id === driver.id)
-      )
-        .filter(
-          (load, index, list) =>
-            list.findIndex((other) => other.id === load.id) === index
-        )
-        .map(toLoad)
-      if (!row && driverLoads.length === 0 && driver.status !== "active") {
-        return null
-      }
-      const ids = new Set(driverLoads.map((load) => load.id))
-      const driverExpenses = (expenses.data ?? [])
-        .filter((expense) => ids.has(expense.load_id))
-        .map((expense) => ({ ...expense, amount: Number(expense.amount) }))
-      const driverAdjustments = (adjustments.data ?? [])
-        .filter((adjustment) => adjustment.settlement_id === row?.id)
-        .map(({ id, description, amount }) => ({
-          id,
-          description,
-          amount: Number(amount),
-        }))
-      const live = settlementTotals(
-        driverLoads,
-        driverExpenses,
-        driverAdjustments
-      )
-      return {
-        driver: {
-          id: driver.id,
-          full_name: driver.full_name,
-          email: driver.email,
-        },
-        week,
-        id: row?.id ?? null,
-        status: row?.status ?? "open",
-        paid_on: row?.paid_on ?? null,
-        notes: row?.notes ?? null,
-        loads: driverLoads,
-        expenses: driverExpenses,
-        adjustments: driverAdjustments,
-        totals: paid
-          ? {
-              ...live,
-              gross: Number(row!.gross_pay),
-              reimbursements: Number(row!.reimbursements),
-              adjustments: Number(row!.adjustments),
-              net: Number(row!.net_pay),
-            }
-          : live,
-      }
+  const liveExpenses = (expenses.data ?? []).map((expense) => ({
+    ...expense,
+    amount: Number(expense.amount),
+  }))
+  const driverAdjustments = (adjustments.data ?? []).map(
+    ({ id, description, amount }) => ({
+      id,
+      description,
+      amount: Number(amount),
     })
-    .filter((settlement): settlement is Settlement => settlement !== null)
+  )
+  // A paid period shows its lines as they were paid, when they were kept.
+  const frozen = paid ? row!.paid_lines : null
+  const shownLoads = frozen?.loads ?? driverLoads
+  const shownExpenses = frozen?.expenses ?? liveExpenses
+  const live = settlementTotals(shownLoads, shownExpenses, driverAdjustments)
+  const info = driver.data as {
+    id: string
+    full_name: string
+    email: string | null
+  }
+
+  return {
+    driver: info,
+    week: start,
+    // A paid period keeps the dates it was paid for.
+    end: paid ? row!.period_end : end,
+    id: row?.id ?? null,
+    status: row?.status ?? "open",
+    paid_on: row?.paid_on ?? null,
+    notes: row?.notes ?? null,
+    loads: shownLoads,
+    expenses: shownExpenses,
+    adjustments: driverAdjustments,
+    totals: paid
+      ? {
+          ...live,
+          gross: Number(row!.gross_pay),
+          reimbursements: Number(row!.reimbursements),
+          adjustments: Number(row!.adjustments),
+          net: Number(row!.net_pay),
+        }
+      : live,
+  }
 }
 
-/** One driver's settlement for a week, or null if the driver isn't found. */
-export async function getSettlement(
-  organizationId: string,
-  driverId: string,
-  week: string
-) {
-  const week_ = await getPayWeek(organizationId, week)
-  return week_.find((settlement) => settlement.driver.id === driverId) ?? null
-}
-
-/** A week already paid to a driver, as it was frozen when marked paid. */
+/** A period already paid to a driver, as it was frozen when marked paid. */
 export type PaidWeek = {
+  /** The period's first day. */
   week: string
+  /** Its last day. */
+  end: string
   paid_on: string
   loads: number
   gross: number
@@ -242,7 +275,7 @@ export type PaidWeek = {
   net: number
 }
 
-/** The weeks a driver has been paid, newest first. Owners and admins only. */
+/** The periods a driver has been paid, newest first. Owners and admins only. */
 export async function getPaidWeeks(
   organizationId: string,
   driverId: string
@@ -251,7 +284,7 @@ export async function getPaidWeeks(
   const { data, error } = await supabase
     .from("driver_settlements")
     .select(
-      "week_start, paid_on, load_ids, gross_pay, reimbursements, adjustments, net_pay"
+      "week_start, period_end, paid_on, load_ids, gross_pay, reimbursements, adjustments, net_pay"
     )
     .eq("organization_id", organizationId)
     .eq("driver_id", driverId)
@@ -260,6 +293,7 @@ export async function getPaidWeeks(
   if (error) throw error
   return (data as SettlementRow[]).map((row) => ({
     week: row.week_start,
+    end: row.period_end,
     paid_on: row.paid_on!,
     loads: row.load_ids?.length ?? 0,
     gross: Number(row.gross_pay ?? 0),

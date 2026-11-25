@@ -10,7 +10,6 @@ import {
 } from "@/components/dq/dq-file-section"
 import { DriverStatusBadge } from "@/components/drivers/driver-badges"
 import { DriverDocuments } from "@/components/drivers/driver-documents"
-import { DriverEarnings } from "@/components/drivers/driver-earnings"
 import { DriverForm } from "@/components/drivers/driver-form"
 import { DriverLoads } from "@/components/drivers/driver-loads"
 import { DriverNotes } from "@/components/drivers/driver-notes"
@@ -33,11 +32,7 @@ import {
   PageTabPanel,
   PageTabsProvider,
 } from "@/components/page-tabs"
-import {
-  StatsCardSkeleton,
-  TableCardSkeleton,
-  TabSkeleton,
-} from "@/components/tab-skeletons"
+import { TableCardSkeleton, TabSkeleton } from "@/components/tab-skeletons"
 import { buttonVariants } from "@/components/ui/button"
 import {
   complianceItems,
@@ -48,7 +43,7 @@ import {
 import { getDriver, getDriverLoads, getDriverDocuments } from "@/lib/drivers"
 import { canManage, getOrganization } from "@/lib/organizations"
 import { formatPhone } from "@/lib/phone"
-import { parseWeek, shiftWeek, weekOf } from "@/lib/settlement-format"
+import { parsePeriod, periodOf, shiftPeriod } from "@/lib/settlement-format"
 import { getPaidWeeks, getSettlement } from "@/lib/settlements"
 
 async function driverFor(
@@ -87,10 +82,13 @@ export default async function DriverPage({
   const today = getToday()
   const loadsBase = `/org/${organization.slug}/loads`
   const currentRate = formatPay(driver.pay_type, driver.pay_rate)
-  // Payment: the statement shows last week by default, the week payroll
-  // usually covers.
-  const thisWeek = weekOf(today)
-  const week = parseWeek(query.week) ?? shiftWeek(thisWeek, -1)
+  // Payment: the statement covers the driver's pay period (a week, 2 weeks
+  // or a month), the last full one by default, the one payroll usually
+  // covers.
+  const period = driver.pay_period
+  const thisWeek = periodOf(today, period)
+  const week =
+    parsePeriod(query.week, period) ?? shiftPeriod(thisWeek, period, -1)
   const payHref = `${driverHref}?tab=pay`
   const onPayment = tab === "pay"
   const [loads, documents, dqFile, settlement, paidWeeks] = await Promise.all([
@@ -102,7 +100,18 @@ export default async function DriverPage({
       manager,
       today,
     }),
-    onPayment ? getSettlement(organization.id, driver.id, week) : null,
+    onPayment
+      ? getSettlement(
+          organization.id,
+          driver.id,
+          week,
+          period,
+          // From a Pay history link: the paid period's own last day.
+          typeof query.end === "string" && /^\d{4}-\d{2}-\d{2}$/.test(query.end)
+            ? query.end
+            : null
+        )
+      : null,
     onPayment ? getPaidWeeks(organization.id, driver.id) : [],
   ])
   // Booked loads still locked at a rate other than the driver's current one.
@@ -229,8 +238,9 @@ export default async function DriverPage({
                           details: "hidden",
                           cdl: "hidden",
                           medical: "hidden",
-                          // The rate setting, after what was earned and owed.
-                          pay: "order-4",
+                          // How they're paid comes first, then the week's
+                          // statement and what's been paid.
+                          pay: "order-1",
                         }
                       : { details: "", cdl: "", medical: "", pay: "hidden" }
                   }
@@ -238,9 +248,6 @@ export default async function DriverPage({
               )}
               {onPayment && (
                 <>
-                  <div className="order-1">
-                    <DriverEarnings loads={loads} today={today} />
-                  </div>
                   {settlement && (
                     <div id="pay" className="order-2 scroll-mt-6">
                       <DriverPay
@@ -248,10 +255,10 @@ export default async function DriverPage({
                         settlement={settlement}
                         today={today}
                         loadsBase={loadsBase}
-                        prevHref={`${payHref}&week=${shiftWeek(week, -1)}#pay`}
+                        prevHref={`${payHref}&week=${shiftPeriod(week, period, -1)}#pay`}
                         nextHref={
                           week < thisWeek
-                            ? `${payHref}&week=${shiftWeek(week, 1)}#pay`
+                            ? `${payHref}&week=${shiftPeriod(week, period, 1)}#pay`
                             : null
                         }
                       />
@@ -325,7 +332,6 @@ const DRIVER_TAB_SKELETONS = {
   ),
   pay: (
     <TabSkeleton>
-      <StatsCardSkeleton title="Earnings" />
       <TableCardSkeleton title="Pay statement" rows={2} />
       <TableCardSkeleton title="Pay history" rows={2} />
     </TabSkeleton>
