@@ -59,30 +59,15 @@ struct LoadScreen: View {
         let next = nextStop(load, pending: pending)
 
         return List {
-            Section {
-                LabeledContent("Status", value: load.status.label)
-                if let truck = load.truck { LabeledContent("Truck", value: truck) }
-                if let trailer = load.trailerNumber { LabeledContent("Trailer", value: trailer) }
-                if let commodity = load.commodity { LabeledContent("Commodity", value: commodity) }
-                if let weight = load.weightLbs { LabeledContent("Weight", value: "\(weight.formatted()) lbs") }
-                if let miles = load.miles { LabeledContent("Miles", value: miles.formatted()) }
-                if let phone = load.organization.phone, let url = URL(string: "tel:\(phone.filter(\.isNumber))") {
-                    Link(destination: url) {
-                        Label("Call dispatch", systemImage: "phone.fill")
-                    }
-                }
-            } header: {
-                Text("Load \(load.reference)")
-            }
-
             ForEach(load.stops) { stop in
                 let arrived = stop.arrivedAt ?? pending.first { $0.stopID == stop.id && $0.event == .arrived }?.tappedAt
                 let departed = stop.departedAt ?? pending.first { $0.stopID == stop.id && $0.event == .departed }?.tappedAt
                 let waiting = pending.contains { $0.stopID == stop.id }
+                let isNext = load.canEdit && stop.id == next?.id
 
                 Section {
                     VStack(alignment: .leading) {
-                        Text(stop.facility ?? stop.location).font(.headline)
+                        Text(stop.facility ?? stop.location).font(isNext ? .title2.bold() : .headline)
                         if stop.facility != nil { Text(stop.location).foregroundStyle(.secondary) }
                     }
                     LabeledContent("Appointment", value: appointment(stop))
@@ -106,29 +91,23 @@ struct LoadScreen: View {
                         Label("Saved on this phone. Sends when you have signal.", systemImage: "icloud.and.arrow.up")
                             .foregroundStyle(.orange)
                     }
-                    if load.canEdit, stop.id == next?.id {
-                        let event: StopEvent = arrived == nil ? .arrived : .departed
-                        Button {
-                            odometer = ""
-                            checkIn = CheckInRequest(
-                                loadID: load.id,
-                                stopID: stop.id,
-                                event: event,
-                                place: stop.facility ?? stop.location,
-                                asksOdometer: (event == .arrived && stop.position == load.stops.first?.position)
-                                    || (event == .departed && stop.position == load.stops.last?.position)
-                            )
-                        } label: {
-                            Text(event == .arrived ? "Arrived" : "Departed")
-                                .font(.headline)
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
-                    }
                 } header: {
-                    Text("Stop \(stop.position) · \(stop.isPickup ? "Pickup" : "Delivery")")
+                    if isNext {
+                        Label("Next · Stop \(stop.position) · \(stop.isPickup ? "Pickup" : "Delivery")", systemImage: "location.fill")
+                            .foregroundStyle(.tint)
+                    } else {
+                        Text("Stop \(stop.position) · \(stop.isPickup ? "Pickup" : "Delivery")")
+                    }
                 }
+            }
+
+            Section("Load \(load.reference)") {
+                LabeledContent("Status", value: load.status.label)
+                if let truck = load.truck { LabeledContent("Truck", value: truck) }
+                if let trailer = load.trailerNumber { LabeledContent("Trailer", value: trailer) }
+                if let commodity = load.commodity { LabeledContent("Commodity", value: commodity) }
+                if let weight = load.weightLbs { LabeledContent("Weight", value: "\(weight.formatted()) lbs") }
+                if let miles = load.miles { LabeledContent("Miles", value: miles.formatted()) }
             }
 
             if let notes = load.notes, !notes.isEmpty {
@@ -145,6 +124,86 @@ struct LoadScreen: View {
             }
         }
         .refreshable { await fetch() }
+        .safeAreaInset(edge: .bottom) {
+            actions(load, next: next, pending: pending)
+        }
+    }
+
+    /// Pinned under the list so the next step is always one tap away:
+    /// Directions and Call dispatch, then Arrived / Departed.
+    private func actions(_ load: LoadDetail, next: LoadDetail.Stop?, pending: [PendingCheckIn]) -> some View {
+        let target = next ?? load.stops.last
+        let arrived = next.map { stop in
+            stop.arrivedAt != nil || pending.contains { $0.stopID == stop.id && $0.event == .arrived }
+        } ?? false
+        let event: StopEvent = arrived ? .departed : .arrived
+
+        return VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                if let target, let url = directionsURL(target) {
+                    secondary(Link(destination: url) {
+                        Label("Directions", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
+                            .frame(maxWidth: .infinity)
+                    })
+                }
+                if let phone = load.organization.phone, let url = URL(string: "tel:\(phone.filter(\.isNumber))") {
+                    secondary(Link(destination: url) {
+                        Label("Call dispatch", systemImage: "phone.fill")
+                            .frame(maxWidth: .infinity)
+                    })
+                }
+            }
+            .controlSize(.large)
+
+            if load.canEdit, let next {
+                prominent(Button {
+                    odometer = ""
+                    checkIn = CheckInRequest(
+                        loadID: load.id,
+                        stopID: next.id,
+                        event: event,
+                        place: next.facility ?? next.location,
+                        asksOdometer: (event == .arrived && next.position == load.stops.first?.position)
+                            || (event == .departed && next.position == load.stops.last?.position)
+                    )
+                } label: {
+                    Label(
+                        event == .arrived ? "Arrived at stop \(next.position)" : "Departed stop \(next.position)",
+                        systemImage: event == .arrived ? "mappin.and.ellipse" : "arrow.right.circle.fill"
+                    )
+                    .font(.title3.bold())
+                    .frame(maxWidth: .infinity)
+                })
+                .controlSize(.extraLarge)
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+    }
+
+    @ViewBuilder
+    private func prominent(_ button: some View) -> some View {
+        if #available(iOS 26.0, *) {
+            button.buttonStyle(.glassProminent)
+        } else {
+            button.buttonStyle(.borderedProminent)
+        }
+    }
+
+    @ViewBuilder
+    private func secondary(_ button: some View) -> some View {
+        if #available(iOS 26.0, *) {
+            button.buttonStyle(.glass)
+        } else {
+            button.buttonStyle(.bordered)
+        }
+    }
+
+    private func directionsURL(_ stop: LoadDetail.Stop) -> URL? {
+        let address = [stop.facility, stop.location].compactMap { $0 }.joined(separator: ", ")
+        var components = URLComponents(string: "https://maps.apple.com/")
+        components?.queryItems = [URLQueryItem(name: "daddr", value: address)]
+        return components?.url
     }
 
     /// The first stop the driver hasn't left yet, counting taps still queued.
