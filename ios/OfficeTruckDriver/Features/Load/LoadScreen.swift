@@ -128,32 +128,44 @@ struct LoadScreen: View {
         _ event: StopEvent, time: Date?, actionable: Bool, stop: LoadDetail.Stop, load: LoadDetail
     ) -> some View {
         let action = event == .arrived ? "Check in" : "Check out"
+        let start = { startCheckIn(event, stop: stop, load: load) }
         return LabeledContent(event == .arrived ? "Arrived" : "Departed") {
             if let time {
                 Text(time.formatted(date: .omitted, time: .shortened))
             } else if actionable {
-                Text("\(Image(systemName: "chevron.left.2")) Swipe to \(action.lowercased())")
-                    .foregroundStyle(.tint)
+                if #available(iOS 26.0, *) {
+                    Button(action, action: start)
+                        .buttonStyle(.glassProminent)
+                        .controlSize(.large)
+                } else {
+                    Button(action, action: start)
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                }
             } else {
                 Text("—")
             }
         }
+        // The same check-in as a shortcut: swipe left on the row.
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             if actionable {
-                Button(action, systemImage: event == .arrived ? "mappin.and.ellipse" : "arrow.right.circle.fill") {
-                    odometer = ""
-                    checkIn = CheckInRequest(
-                        loadID: load.id,
-                        stopID: stop.id,
-                        event: event,
-                        place: stop.facility ?? stop.location,
-                        asksOdometer: (event == .arrived && stop.position == load.stops.first?.position)
-                            || (event == .departed && stop.position == load.stops.last?.position)
-                    )
-                }
-                .tint(.accentColor)
+                Button(action, systemImage: event == .arrived ? "mappin.and.ellipse" : "arrow.right.circle.fill", action: start)
+                    .tint(.accentColor)
             }
         }
+    }
+
+    /// Opens the confirmation alert for a check-in.
+    private func startCheckIn(_ event: StopEvent, stop: LoadDetail.Stop, load: LoadDetail) {
+        odometer = ""
+        checkIn = CheckInRequest(
+            loadID: load.id,
+            stopID: stop.id,
+            event: event,
+            place: stop.facility ?? stop.location,
+            asksOdometer: (event == .arrived && stop.position == load.stops.first?.position)
+                || (event == .departed && stop.position == load.stops.last?.position)
+        )
     }
 
     /// The first stop the driver hasn't left yet, counting taps still queued.
