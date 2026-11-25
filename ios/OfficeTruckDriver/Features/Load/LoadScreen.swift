@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 
 /// One load: its details, stops and paperwork. On a load that's on the road,
@@ -8,6 +9,12 @@ struct LoadScreen: View {
     @State private var load: Loadable<LoadDetail> = .loading
     @State private var checkIn: CheckInRequest?
     @State private var odometer = ""
+    /// Paperwork being added: the kind picked, then how.
+    @State private var addKind: DocumentKind?
+    @State private var scanKind: DocumentKind?
+    @State private var photoKind: DocumentKind?
+    @State private var choosingPhotos = false
+    @State private var photoItems: [PhotosPickerItem] = []
     private let queue = OfflineQueue.shared
     private let api = DriverAPI()
 
@@ -45,12 +52,12 @@ struct LoadScreen: View {
             Text("This records \(Date.now.formatted(date: .omitted, time: .shortened)). Only dispatch can change it after.")
         }
         .alert(
-            "Check-in not saved",
+            "Not saved",
             isPresented: Binding(get: { !queue.rejections.isEmpty }, set: { if !$0 { queue.rejections.removeAll() } })
         ) {
             Button("OK") {}
         } message: {
-            Text((queue.rejections.first ?? "") + " Call dispatch to fix the time.")
+            Text((queue.rejections.first ?? "") + " Call dispatch to sort it out.")
         }
     }
 
@@ -112,15 +119,69 @@ struct LoadScreen: View {
             }
 
             Section("Paperwork") {
-                if load.documents.isEmpty {
+                let waitingDocuments = queue.documents(for: load.id)
+                if load.documents.isEmpty && waitingDocuments.isEmpty {
                     Text("No paperwork yet").foregroundStyle(.secondary)
                 }
                 ForEach(load.documents) { doc in
-                    Label(doc.kind.documentLabel, systemImage: "doc.text")
+                    LabeledContent(doc.kind.documentLabel, value: doc.createdAt.formatted(date: .abbreviated, time: .shortened))
+                }
+                ForEach(waitingDocuments) { doc in
+                    LabeledContent(doc.kind.label) {
+                        Text("Not sent yet").foregroundStyle(.orange)
+                    }
+                }
+                if load.canEdit {
+                    Menu {
+                        ForEach(DocumentKind.allCases) { kind in
+                            Button(kind.label) { addKind = kind }
+                        }
+                    } label: {
+                        Label("Add paperwork", systemImage: "doc.viewfinder")
+                    }
                 }
             }
         }
         .refreshable { await fetch() }
+        .confirmationDialog(
+            addKind.map { "Add \($0.label)" } ?? "",
+            isPresented: Binding(get: { addKind != nil }, set: { if !$0 { addKind = nil } }),
+            titleVisibility: .visible,
+            presenting: addKind
+        ) { kind in
+            if DocumentScanner.isAvailable {
+                Button("Scan") { scanKind = kind }
+            }
+            Button("Choose from Photos") {
+                photoKind = kind
+                choosingPhotos = true
+            }
+        }
+        .fullScreenCover(item: $scanKind) { kind in
+            DocumentScanner(
+                onScan: { pages in
+                    scanKind = nil
+                    addPaperwork(pages, kind: kind, to: load)
+                },
+                onCancel: { scanKind = nil }
+            )
+            .ignoresSafeArea()
+        }
+        .photosPicker(isPresented: $choosingPhotos, selection: $photoItems, maxSelectionCount: 10, matching: .images)
+        .onChange(of: photoItems) { _, items in
+            guard !items.isEmpty, let kind = photoKind else { return }
+            photoItems = []
+            photoKind = nil
+            Task {
+                var pages: [UIImage] = []
+                for item in items {
+                    if let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) {
+                        pages.append(image)
+                    }
+                }
+                addPaperwork(pages, kind: kind, to: load)
+            }
+        }
     }
 
     /// The Arrived or Departed row. Its time once recorded; on the row
@@ -172,6 +233,12 @@ struct LoadScreen: View {
         case "window": "\(WallClock.format(stop.appointmentStart)) – \(stop.appointmentEnd.map(WallClock.format) ?? "")"
         default: WallClock.format(stop.appointmentStart)
         }
+    }
+
+    /// Makes one PDF of the pages and queues it for upload.
+    private func addPaperwork(_ pages: [UIImage], kind: DocumentKind, to load: LoadDetail) {
+        guard let pdf = DocumentPDF.make(from: pages) else { return }
+        queue.enqueueDocument(loadID: load.id, organizationID: load.organization.id, kind: kind, pdf: pdf)
     }
 
     private func record(_ request: CheckInRequest) {

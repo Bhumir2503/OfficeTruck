@@ -66,6 +66,41 @@ struct DriverAPI: Sendable {
         try await client.rpc("record_my_stop_event", params: params).execute()
     }
 
+    /// Uploads a scanned PDF to the load's folder, then adds it to the load.
+    /// Safe to retry: a file already uploaded (409) moves on, and the server
+    /// returns the same document for the same path.
+    func uploadDocument(_ document: PendingDocument, file: URL) async throws {
+        #if DEBUG
+        if DemoBackend.isOn { return DemoBackend.addDocument(document) }
+        #endif
+        do {
+            try await client.storage.from("load-documents").upload(
+                document.storagePath,
+                fileURL: file,
+                options: FileOptions(contentType: "application/pdf", upsert: false)
+            )
+        } catch let error as StorageError where error.statusCode == "409" {
+            // Uploaded on an earlier try that lost its connection.
+        }
+
+        struct Params: Encodable {
+            let target_load: UUID
+            let kind: String
+            let path: String
+            let file_name: String
+            let content_type: String
+            let size_bytes: Int
+        }
+        try await client.rpc("add_my_load_document", params: Params(
+            target_load: document.loadID,
+            kind: document.kind.rawValue,
+            path: document.storagePath,
+            file_name: document.fileName,
+            content_type: "application/pdf",
+            size_bytes: document.sizeBytes
+        )).execute()
+    }
+
     func mySettlements() async throws -> [SettlementSummary] {
         #if DEBUG
         if DemoBackend.isOn { return try decode(Data(DemoBackend.settlementsJSON.utf8)) }

@@ -8,11 +8,13 @@
 
 /* Begin PBXBuildFile section */
 		0EC8662B29794A6EF7FEF63C /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 7EF643A8DF3C1F5499FA9EA7 /* Supabase */; };
+		12F334A72B4DCDD1E7DB096E /* DocumentPDF.swift in Sources */ = {isa = PBXBuildFile; fileRef = 021061EA99F776A5A93FEE86 /* DocumentPDF.swift */; };
 		26B377CAAA789602B802D4F7 /* Loadable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 680583ECF92D2581225039F2 /* Loadable.swift */; };
 		2AB6951E30D0DA8C0EC247E7 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FD62A3A84301E2E9A003FA80 /* Assets.xcassets */; };
 		3B8833A185ED584A608CA770 /* MeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 681C7128317562FAE0DCAF44 /* MeView.swift */; };
 		5843AE3CACAC6BDABAAA03B9 /* LoadScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09E096561EA73F55E3E4E080 /* LoadScreen.swift */; };
 		58459F41E09747B089BF84E1 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4465669BC99F25D70CB2C06A /* Models.swift */; };
+		607E7E9383137DEBB001F845 /* DocumentScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89D9DA8125ED34204F5BC2D0 /* DocumentScanner.swift */; };
 		6409E7F395EC452A25F0B74B /* SupabaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0CF3C4F008D37C87E5C9E69 /* SupabaseService.swift */; };
 		65B9CBB505B87FB4FC44BF76 /* DriverAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41D4D9559A6CF9472D0D8B50 /* DriverAPI.swift */; };
 		6CA7C11F3FDAE248043F162B /* SignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E5B25A2A3A5697B78345E34 /* SignInView.swift */; };
@@ -27,6 +29,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		021061EA99F776A5A93FEE86 /* DocumentPDF.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentPDF.swift; sourceTree = "<group>"; };
 		0912BE344D8291D20D8C5796 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		09E096561EA73F55E3E4E080 /* LoadScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadScreen.swift; sourceTree = "<group>"; };
 		2F9DB45DF976678E1563E191 /* App.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = App.xcconfig; sourceTree = "<group>"; };
@@ -39,6 +42,7 @@
 		6AF0644B7B43B60685913422 /* SessionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionModel.swift; sourceTree = "<group>"; };
 		6E5B25A2A3A5697B78345E34 /* SignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInView.swift; sourceTree = "<group>"; };
 		82F6D77869384EB21AE9BC6D /* OfficeTruckDriverApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfficeTruckDriverApp.swift; sourceTree = "<group>"; };
+		89D9DA8125ED34204F5BC2D0 /* DocumentScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentScanner.swift; sourceTree = "<group>"; };
 		8AF622169B6092F4E7FD1E32 /* OfflineQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineQueue.swift; sourceTree = "<group>"; };
 		9A3E872C0629148E4766F4D2 /* PayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PayView.swift; sourceTree = "<group>"; };
 		B64C94BD588CA035C8E2C16C /* OfficeTruckDriver.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = OfficeTruckDriver.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -72,6 +76,7 @@
 			isa = PBXGroup;
 			children = (
 				E15EF71456FC3381797FDB3C /* CurrentLoadView.swift */,
+				89D9DA8125ED34204F5BC2D0 /* DocumentScanner.swift */,
 				09E096561EA73F55E3E4E080 /* LoadScreen.swift */,
 			);
 			path = Load;
@@ -143,6 +148,7 @@
 			isa = PBXGroup;
 			children = (
 				6A4FF66F8728F85F6F28FF96 /* DemoBackend.swift */,
+				021061EA99F776A5A93FEE86 /* DocumentPDF.swift */,
 				41D4D9559A6CF9472D0D8B50 /* DriverAPI.swift */,
 				39366105CA8CCF401D6F513D /* Formatting.swift */,
 				680583ECF92D2581225039F2 /* Loadable.swift */,
@@ -259,6 +265,8 @@
 			files = (
 				DDA0690E58D1ACA8C6DF8D7D /* CurrentLoadView.swift in Sources */,
 				7CDA828000B16030E1F9C6E5 /* DemoBackend.swift in Sources */,
+				12F334A72B4DCDD1E7DB096E /* DocumentPDF.swift in Sources */,
+				607E7E9383137DEBB001F845 /* DocumentScanner.swift in Sources */,
 				65B9CBB505B87FB4FC44BF76 /* DriverAPI.swift in Sources */,
 				B821E67C97468CFDE1BD71D8 /* Formatting.swift in Sources */,
 				5843AE3CACAC6BDABAAA03B9 /* LoadScreen.swift in Sources */,
@@ -290,6 +298,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = OfficeTruckDriver/Resources/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = OfficeTruck;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Scan BOLs, PODs and receipts for your loads.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
@@ -438,6 +447,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = OfficeTruckDriver/Resources/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = OfficeTruck;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Scan BOLs, PODs and receipts for your loads.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;

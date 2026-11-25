@@ -133,3 +133,21 @@ enum LoadStatus: String, Decodable, Sendable {
         }
     }
 }
+
+/// Paperwork a driver can add to a load. Rate cons come from the office.
+enum DocumentKind: String, Codable, CaseIterable, Identifiable, Sendable {
+    case bol, pod
+    case lumperReceipt = "lumper_receipt"
+    case other
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .bol: "BOL"
+        case .pod: "POD"
+        case .lumperReceipt: "Lumper receipt"
+        case .other: "Other"
+        }
+    }
+}
