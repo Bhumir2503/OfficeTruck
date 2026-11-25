@@ -23,7 +23,7 @@ export async function acceptInvitation(token: string) {
   if (error) {
     return { error: invitationErrorMessage(error) }
   }
-  redirect(`/org/${slug as string}/loads`)
+  redirect(`/org/${slug as string}`)
 }
 
 export async function declineInvitation(token: string) {

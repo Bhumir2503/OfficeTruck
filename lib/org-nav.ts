@@ -5,6 +5,7 @@ import {
   FolderOpenIcon,
   HandshakeIcon,
   IdCardIcon,
+  LayoutDashboardIcon,
   LifeBuoyIcon,
   PackageIcon,
   ReceiptTextIcon,
@@ -16,18 +17,25 @@ import {
 
 export type OrgSection = {
   title: string
-  /** Path below /org/<slug>. */
+  /** Path below /org/<slug>. Empty for the dashboard. */
   path: string
   icon: LucideIcon
   description: string
 }
 
-// The sidebar follows an owner's day: the loads and the money they bring in, then the fleet, then compliance. Add new items to
+// The sidebar follows an owner's day: what needs attention, the loads and
+// the money they bring in, then the fleet, then compliance. Add new items to
 // the group they belong to.
 export const ORG_NAV: { label?: string; items: OrgSection[] }[] = [
   {
     label: "Overview",
     items: [
+      {
+        title: "Dashboard",
+        path: "",
+        icon: LayoutDashboardIcon,
+        description: "What needs action today.",
+      },
       {
         title: "Loads",
         path: "loads",
