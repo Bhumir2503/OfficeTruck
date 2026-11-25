@@ -22,6 +22,6 @@ export default async function Page() {
     }
   }
   redirect(
-    organizations.length === 1 ? `/org/${organizations[0].slug}` : "/org"
+    organizations.length === 1 ? `/org/${organizations[0].slug}/loads` : "/org"
   )
 }

@@ -288,7 +288,7 @@ export type LastService = { done_on: string; odometer: number | null }
 
 /**
  * Each truck's most recent preventive service, by truck id, for maintenance
- * reminders on the trucks list, dashboard and Compliance page.
+ * reminders on the trucks list and Compliance page.
  */
 export async function getLastServiceByTruck(
   organizationId: string

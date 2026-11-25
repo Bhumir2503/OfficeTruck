@@ -25,7 +25,7 @@ type FleetItem = DqItem & {
   file_type: "dq" | "investigation" | "drug_alcohol"
 }
 
-// Cached for the request: the drivers page and dashboard read it twice.
+// Cached for the request: the drivers page reads it twice.
 const loadOrganizationItems = cache(async (organizationId: string) => {
   const supabase = await createClient()
   const [items, documents, signatures, templates] = await Promise.all([
@@ -147,7 +147,7 @@ export async function getDqCalendar(
 
 /**
  * Each driver's qualification file dates (medical proof, annual review,
- * Clearinghouse query), for the side panel, drivers list and dashboard.
+ * Clearinghouse query), for the side panel, drivers list.
  * Drivers whose file isn't set up have no entry.
  */
 export async function getDqDatesByDriver(

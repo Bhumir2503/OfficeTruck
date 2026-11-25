@@ -47,7 +47,7 @@ export default async function OrganizationPickerPage() {
               {organizations.map((org) => (
                 <li key={org.id}>
                   <Link
-                    href={`/org/${org.slug}`}
+                    href={`/org/${org.slug}/loads`}
                     className="flex items-center gap-3 px-4 py-3 transition-colors outline-none first:rounded-t-xl hover:bg-muted/60 focus-visible:bg-muted/60"
                   >
                     <OrganizationAvatar

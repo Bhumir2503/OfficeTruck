@@ -19,8 +19,7 @@ export function SiteHeader({ slug }: { slug: string }) {
           className="mx-2 h-4 data-vertical:self-auto"
         />
         <h1 className="text-base font-medium">
-          {(findSection(path) ?? findSection(path.split("/")[0]))?.title ??
-            "Dashboard"}
+          {(findSection(path) ?? findSection(path.split("/")[0]))?.title}
         </h1>
       </div>
     </header>
