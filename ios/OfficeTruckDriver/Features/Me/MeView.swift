@@ -3,33 +3,25 @@ import SwiftUI
 /// The driver's profile, opened from Trips. The DQ file, CDL and medical
 /// card come here next.
 struct MeView: View {
-    @Environment(\.dismiss) private var dismiss
     @Environment(SessionModel.self) private var session
     @State private var confirmingSignOut = false
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section("Signed in as") {
-                    if case .signedIn(let phone) = session.state {
-                        Text(phone.isEmpty ? "—" : phone.formattedPhone)
-                            .font(.title3.monospacedDigit())
-                    }
-                }
-                Section {
-                    Button("Sign out", role: .destructive) { confirmingSignOut = true }
-                        .frame(maxWidth: .infinity, minHeight: 44)
+        List {
+            Section("Signed in as") {
+                if case .signedIn(let phone) = session.state {
+                    Text(phone.isEmpty ? "—" : phone.formattedPhone)
+                        .font(.title3.monospacedDigit())
                 }
             }
-            .navigationTitle("Profile")
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
+            Section {
+                Button("Sign out", role: .destructive) { confirmingSignOut = true }
+                    .frame(maxWidth: .infinity, minHeight: 44)
             }
-            .confirmationDialog("Sign out of OfficeTruck?", isPresented: $confirmingSignOut, titleVisibility: .visible) {
-                Button("Sign out", role: .destructive) { Task { await session.signOut() } }
-            }
+        }
+        .navigationTitle("Profile")
+        .confirmationDialog("Sign out of OfficeTruck?", isPresented: $confirmingSignOut, titleVisibility: .visible) {
+            Button("Sign out", role: .destructive) { Task { await session.signOut() } }
         }
     }
 }

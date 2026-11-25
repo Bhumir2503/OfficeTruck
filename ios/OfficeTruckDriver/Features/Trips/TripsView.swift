@@ -1,12 +1,10 @@
 import SwiftUI
 
 /// The app's one main screen: every load sent to the driver, the ones on
-/// the road first. Tap a trip to work it. Profile and Pay open from the
-/// toolbar.
+/// the road first. Tap a trip to work it. Pay and Profile open as pages
+/// from the toolbar.
 struct TripsView: View {
     @State private var loads: Loadable<[LoadSummary]> = .loading
-    @State private var showingProfile = false
-    @State private var showingPay = false
     private let queue = OfflineQueue.shared
     private let api = DriverAPI()
 
@@ -55,15 +53,15 @@ struct TripsView: View {
                 LoadScreen(loadID: id)
             }
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Profile", systemImage: "person.crop.circle") { showingProfile = true }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Pay", systemImage: "dollarsign.circle") { showingPay = true }
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    NavigationLink { PayView() } label: {
+                        Label("Pay", systemImage: "dollarsign")
+                    }
+                    NavigationLink { MeView() } label: {
+                        Label("Profile", systemImage: "person")
+                    }
                 }
             }
-            .sheet(isPresented: $showingProfile) { MeView() }
-            .sheet(isPresented: $showingPay) { PayView() }
             .task(id: queue.deliveredCount) { await fetch() }
         }
     }
