@@ -48,3 +48,7 @@ DerivedData/
 *.ipa
 *.dSYM.zip
 *.dSYM
+
+# ios secrets (copy ios/Config/Secrets.example.xcconfig)
+ios/Config/Secrets.xcconfig
+ios/build/
