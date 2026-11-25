@@ -2,11 +2,10 @@ import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
 import { LoadsTable } from "@/components/loads/loads-table"
-import { OnboardingDialog } from "@/components/onboarding-dialog"
 import { getDriverOptions } from "@/lib/drivers"
 import { getLoadInvoices } from "@/lib/invoices"
 import { getLoads, getPaymentsDue } from "@/lib/loads"
-import { canManage, getOrganization } from "@/lib/organizations"
+import { getOrganization } from "@/lib/organizations"
 import { createClient } from "@/lib/supabase/server"
 import { getTruckOptions } from "@/lib/trucks"
 
@@ -14,10 +13,8 @@ export const metadata: Metadata = { title: "Loads" }
 
 export default async function LoadsPage({
   params,
-  searchParams,
 }: PageProps<"/org/[slug]/loads">) {
   const organization = await getOrganization((await params).slug)
-  const { welcome } = await searchParams
   if (!organization) {
     notFound()
   }
@@ -55,13 +52,6 @@ export default async function LoadsPage({
           base={base}
         />
       </div>
-      {/* Set when the organization was just created. */}
-      {welcome && canManage(organization) && (
-        <OnboardingDialog
-          organizationId={organization.id}
-          organizationName={organization.name}
-        />
-      )}
     </div>
   )
 }

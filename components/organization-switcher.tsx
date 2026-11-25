@@ -64,7 +64,7 @@ export function OrganizationSwitcher({
               <DropdownMenuItem
                 key={org.id}
                 className="gap-2 p-2"
-                render={<Link href={`/org/${org.slug}/loads`} />}
+                render={<Link href={`/org/${org.slug}`} />}
               >
                 <OrganizationAvatar
                   name={org.name}
