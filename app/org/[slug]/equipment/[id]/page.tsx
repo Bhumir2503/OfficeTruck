@@ -4,6 +4,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 
 import { TruckStatusBadge } from "@/components/trucks/truck-badges"
+import { TruckCostsBox } from "@/components/trucks/truck-costs-box"
 import { TruckDocuments } from "@/components/trucks/truck-documents"
 import { TruckForm } from "@/components/trucks/truck-form"
 import { TruckMaintenance } from "@/components/trucks/truck-maintenance"
@@ -169,13 +170,19 @@ export default async function TruckPage({
             >
               {tab === "overview" &&
                 (manager ? (
-                  <TruckForm
-                    organizationId={organization.id}
-                    base={base}
-                    drivers={drivers}
-                    truck={truck}
-                    cards={["details", "plate", "ownership"]}
-                  />
+                  <>
+                    <TruckForm
+                      organizationId={organization.id}
+                      base={base}
+                      drivers={drivers}
+                      truck={truck}
+                      cards={["details", "plate", "ownership"]}
+                    />
+                    <TruckCostsBox
+                      organizationId={organization.id}
+                      truck={truck}
+                    />
+                  </>
                 ) : (
                   <TruckSummary
                     truck={truck}
@@ -266,6 +273,7 @@ const TRUCK_TAB_SKELETONS = {
       <FieldsCardSkeleton title="Truck details" fields={6} />
       <FieldsCardSkeleton title="Plate and compliance" />
       <FieldsCardSkeleton title="Ownership and driver" fields={2} />
+      <FieldsCardSkeleton title="Monthly fixed costs" fields={3} />
     </TabSkeleton>
   ),
   maintenance: (

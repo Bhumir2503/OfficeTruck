@@ -55,7 +55,10 @@ const SOURCE_LABELS: Record<StopTimeSource, string> = {
 
 type TimeEvent = "arrived" | "departed"
 
-/** The office entering (or fixing its own) arrival or departure, with a reason. */
+/** Saved with a time the office enters without a note of its own. */
+const OFFICE_NOTE = "Entered by the office"
+
+/** The office entering (or fixing) an arrival or departure, with an optional note. */
 function StopTimeForm({
   organizationId,
   stop,
@@ -74,9 +77,10 @@ function StopTimeForm({
   const [when, setWhen] = useState(() =>
     format(current ? new Date(current) : new Date(), "yyyy-MM-dd'T'HH:mm")
   )
-  const [reason, setReason] = useState(
-    (event === "arrived" ? stop.arrived_note : stop.departed_note) ?? ""
-  )
+  const [reason, setReason] = useState(() => {
+    const note = event === "arrived" ? stop.arrived_note : stop.departed_note
+    return note === OFFICE_NOTE ? "" : (note ?? "")
+  })
   const currentReading =
     event === "arrived" ? stop.arrived_odometer : stop.departed_odometer
   const [odometer, setOdometer] = useState(
@@ -89,10 +93,6 @@ function StopTimeForm({
     formEvent.preventDefault()
     if (!when) {
       setError("Enter the date and time.")
-      return
-    }
-    if (!reason.trim()) {
-      setError('Say why, e.g. "Driver called it in".')
       return
     }
     const reading = odometer.trim()
@@ -110,7 +110,8 @@ function StopTimeForm({
       stop.id,
       event,
       new Date(when).toISOString(),
-      reason
+      // The record needs a note; most times are simply what the driver said.
+      reason.trim() || OFFICE_NOTE
     )
     if ("error" in result) {
       setPending(false)
@@ -159,7 +160,7 @@ function StopTimeForm({
       </div>
       <div className="flex flex-col gap-2">
         <label htmlFor="stop-time-reason" className="text-sm font-medium">
-          Why it&apos;s being entered
+          Note (optional)
         </label>
         <input
           id="stop-time-reason"
@@ -170,7 +171,7 @@ function StopTimeForm({
           className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
         />
         <p className="text-sm text-muted-foreground">
-          Kept with the time and in the load&apos;s history.
+          Kept with the time in the load&apos;s history.
         </p>
       </div>
       {askOdometer && (
@@ -222,7 +223,9 @@ function StopTime({
   const at = event === "arrived" ? stop.arrived_at : stop.departed_at
   const source =
     event === "arrived" ? stop.arrived_source : stop.departed_source
-  const note = event === "arrived" ? stop.arrived_note : stop.departed_note
+  const saved = event === "arrived" ? stop.arrived_note : stop.departed_note
+  // The default note says no more than the "Office" tag beside it.
+  const note = saved === OFFICE_NOTE ? null : saved
   const Icon = event === "arrived" ? LogIn : LogOut
   const word = event === "arrived" ? "In" : "Out"
 
@@ -728,8 +731,8 @@ export function LoadStopsCard({
                 : "Stop time"}
             </DialogTitle>
             <DialogDescription>
-              For when the driver couldn&apos;t record it. It&apos;s marked as
-              entered by the office.
+              When the driver got there or left, as they report it. It&apos;s
+              the proof for detention.
             </DialogDescription>
           </DialogHeader>
           {entering && (
@@ -758,8 +761,8 @@ export function LoadStopsCard({
                 : "Odometer"}
             </DialogTitle>
             <DialogDescription>
-              For when the driver skipped it or got it wrong. A higher reading
-              also moves the truck&apos;s odometer up.
+              As the driver reports it. A higher reading also moves the
+              truck&apos;s odometer up.
             </DialogDescription>
           </DialogHeader>
           {reading && (

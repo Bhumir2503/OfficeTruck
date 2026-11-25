@@ -44,7 +44,11 @@ import { getDriver, getDriverLoads, getDriverDocuments } from "@/lib/drivers"
 import { canManage, getOrganization } from "@/lib/organizations"
 import { formatPhone } from "@/lib/phone"
 import { parsePeriod, periodOf, shiftPeriod } from "@/lib/settlement-format"
-import { getPaidWeeks, getSettlement } from "@/lib/settlements"
+import {
+  getOldestUnpaidDay,
+  getPaidWeeks,
+  getSettlement,
+} from "@/lib/settlements"
 
 async function driverFor(
   params: PageProps<"/org/[slug]/drivers/[id]">["params"]
@@ -83,14 +87,23 @@ export default async function DriverPage({
   const loadsBase = `/org/${organization.slug}/loads`
   const currentRate = formatPay(driver.pay_type, driver.pay_rate)
   // Payment: the statement covers the driver's pay period (a week, 2 weeks
-  // or a month), the last full one by default, the one payroll usually
-  // covers.
+  // or a month). By default, the oldest one with delivered loads still
+  // unpaid (the current one included), so money owed isn't missed; else
+  // the last full one, the one payroll usually covers.
   const period = driver.pay_period
   const thisWeek = periodOf(today, period)
-  const week =
-    parsePeriod(query.week, period) ?? shiftPeriod(thisWeek, period, -1)
   const payHref = `${driverHref}?tab=pay`
   const onPayment = tab === "pay"
+  const chosen = parsePeriod(query.week, period)
+  const unpaidSince =
+    onPayment && !chosen
+      ? await getOldestUnpaidDay(organization.id, driver.id, today)
+      : null
+  const week =
+    chosen ??
+    (unpaidSince
+      ? periodOf(unpaidSince, period)
+      : shiftPeriod(thisWeek, period, -1))
   const [loads, documents, dqFile, settlement, paidWeeks] = await Promise.all([
     getDriverLoads(organization.id, driver.id),
     getDriverDocuments(organization.id, driver.id),

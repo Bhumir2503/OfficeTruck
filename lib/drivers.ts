@@ -7,7 +7,12 @@ import type {
   DriverStatus,
   PayType,
 } from "@/lib/schemas/driver"
-import { LAST_DELIVERY_DAYS } from "@/lib/driver-format"
+import {
+  type AssignmentDate,
+  assignmentDates,
+} from "@/lib/assignment-compliance"
+import { complianceItems, LAST_DELIVERY_DAYS, today } from "@/lib/driver-format"
+import { getDqDatesByDriver } from "@/lib/dq/fleet"
 import { cityState } from "@/lib/report-format"
 import { createClient } from "@/lib/supabase/server"
 
@@ -103,22 +108,39 @@ export type DriverOption = {
   /** Their rate today, which is locked onto a load when they're assigned. */
   pay_type: PayType | null
   pay_rate: number | null
+  /** CDL, medical card and yearly checks, to warn before they're assigned. */
+  compliance: AssignmentDate[]
 }
 
 export async function getDriverOptions(
   organizationId: string
 ): Promise<DriverOption[]> {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("drivers")
-    .select("id, full_name, status, email, pay_type, pay_rate")
-    .eq("organization_id", organizationId)
-    .order("full_name")
+  const [{ data, error }, dq] = await Promise.all([
+    supabase
+      .from("drivers")
+      .select(
+        "id, full_name, status, email, pay_type, pay_rate, cdl_expires_on, medical_card_expires_on"
+      )
+      .eq("organization_id", organizationId)
+      .order("full_name"),
+    getDqDatesByDriver(organizationId),
+  ])
 
   if (error) {
     throw error
   }
-  return data as DriverOption[]
+  const now = today()
+  return data.map(({ cdl_expires_on, medical_card_expires_on, ...driver }) => ({
+    ...(driver as Omit<DriverOption, "compliance">),
+    compliance: assignmentDates(
+      complianceItems(
+        { cdl_expires_on, medical_card_expires_on },
+        dq[driver.id],
+        now
+      )
+    ),
+  }))
 }
 
 export type DriverLoad = {
@@ -129,6 +151,8 @@ export type DriverLoad = {
   pickup_start: string
   delivery_start: string
   delivery_end: string | null
+  /** The day it was really delivered, once it is. */
+  delivered_on: string | null
   rate: number
   miles: number | null
   status: LoadStatus
@@ -146,7 +170,7 @@ export async function getDriverLoads(
   const { data, error } = await supabase
     .from("loads")
     .select(
-      "id, reference, pickup_location, delivery_location, pickup_start, delivery_start, delivery_end, rate, miles, status, driver_pay_type, driver_pay_rate"
+      "id, reference, pickup_location, delivery_location, pickup_start, delivery_start, delivery_end, delivered_on, rate, miles, status, driver_pay_type, driver_pay_rate"
     )
     .eq("organization_id", organizationId)
     .eq("driver_id", driverId)
@@ -187,47 +211,6 @@ export type DriverNow = {
 
 // A load counts as delivered from here on in the flow.
 const DELIVERED = ["delivered", "invoiced", "paid", "factored"] as const
-
-/** A timestamp's calendar day on the server, as today() counts days. */
-function dayOf(timestamp: string) {
-  const date = new Date(timestamp)
-  const pad = (n: number) => String(n).padStart(2, "0")
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-}
-
-/**
- * The day a load was actually delivered: when the driver checked out (or
- * in) at the last delivery, else the scheduled delivery day. A load marked
- * complete before its scheduled day counts on the day it was marked.
- */
-function deliveredOn(
-  row: {
-    delivery_start: string
-    completed_at: string | null
-    load_stops:
-      | {
-          kind: string
-          position: number
-          arrived_at: string | null
-          departed_at: string | null
-        }[]
-      | null
-  },
-  today: string
-) {
-  const last = (row.load_stops ?? [])
-    .filter((stop) => stop.kind === "delivery")
-    .sort((a, b) => b.position - a.position)[0]
-  const checkedIn = last?.departed_at ?? last?.arrived_at
-  if (checkedIn) {
-    return dayOf(checkedIn)
-  }
-  const scheduled = row.delivery_start.slice(0, 10)
-  if (scheduled > today && row.completed_at) {
-    return dayOf(row.completed_at)
-  }
-  return scheduled
-}
 
 /**
  * What each driver is doing, for the drivers list: the load they're on
@@ -271,12 +254,12 @@ export async function getLoadsNow(
     supabase
       .from("loads")
       .select(
-        "id, driver_id, truck_id, reference, delivery_location, delivery_start, completed_at, load_stops(kind, position, arrived_at, departed_at)"
+        "id, driver_id, truck_id, reference, delivery_location, delivered_on"
       )
       .eq("organization_id", organizationId)
       .not(by, "is", null)
       .in("status", DELIVERED)
-      .gte("delivery_start", since.toISOString().slice(0, 10)),
+      .gte("delivered_on", since.toISOString().slice(0, 10)),
   ])
 
   if (open.error) {
@@ -290,7 +273,8 @@ export async function getLoadsNow(
     (byDriver[driverId] ??= { current: null, next: null, last: null })
   for (const row of delivered.data) {
     const entry = entryOf(row[by]!)
-    const on = deliveredOn(row, today)
+    // Set by the database on every delivered load.
+    const on = row.delivered_on!
     if (!entry.last || on > entry.last.delivered_on) {
       entry.last = {
         id: row.id,

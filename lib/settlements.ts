@@ -36,6 +36,7 @@ type LoadRow = {
   reference: string
   driver_id: string | null
   delivery_start: string
+  delivered_on: string | null
   rate: number | string
   miles: number | null
   driver_pay_type: PayType | null
@@ -45,7 +46,7 @@ type LoadRow = {
 }
 
 const LOAD_COLUMNS =
-  "id, reference, driver_id, delivery_start, rate, miles, driver_pay_type, driver_pay_rate, pickup_location, delivery_location"
+  "id, reference, driver_id, delivery_start, delivered_on, rate, miles, driver_pay_type, driver_pay_rate, pickup_location, delivery_location"
 
 /** The day after `day` ("YYYY-MM-DD"). */
 const dayAfter = (day: string) =>
@@ -59,6 +60,7 @@ function toLoad(row: LoadRow): SettlementLoad {
     id: row.id,
     reference: row.reference,
     delivery_start: row.delivery_start,
+    delivered_on: row.delivered_on,
     rate,
     miles: row.miles,
     pay: loadDriverPay({
@@ -135,7 +137,8 @@ export async function getSettlement(
   const supabase = await createClient()
   const end =
     endOverride && endOverride >= start ? endOverride : periodEnd(start, period)
-  // Loads delivered from the first day up to the end of the last.
+  // Loads delivered (the day they really were) from the first day up to
+  // the end of the last.
   const from = start
   const to = dayAfter(end)
   const [driver, loads, settlements] = await Promise.all([
@@ -151,9 +154,9 @@ export async function getSettlement(
       .eq("organization_id", organizationId)
       .eq("driver_id", driverId)
       .in("status", PAYABLE_STATUSES)
-      .gte("delivery_start", `${from}T00:00:00`)
-      .lt("delivery_start", `${to}T00:00:00`)
-      .order("delivery_start"),
+      .gte("delivered_on", from)
+      .lt("delivered_on", to)
+      .order("delivered_on"),
     supabase
       .from("driver_settlements")
       .select(
@@ -322,4 +325,45 @@ export async function getPaidWeeks(
     adjustments: Number(row.adjustments ?? 0),
     net: Number(row.net_pay ?? 0),
   }))
+}
+
+/**
+ * The earliest day, up to `through`, that the driver delivered a load not
+ * yet on a paid statement: where the pay tab opens, so money owed isn't
+ * hidden behind an empty period. Null when it's all paid.
+ */
+export async function getOldestUnpaidDay(
+  organizationId: string,
+  driverId: string,
+  /** "YYYY-MM-DD", usually today. */
+  through: string
+): Promise<string | null> {
+  const supabase = await createClient()
+  const [loads, paid] = await Promise.all([
+    supabase
+      .from("loads")
+      .select("id, delivered_on")
+      .eq("organization_id", organizationId)
+      .eq("driver_id", driverId)
+      .in("status", PAYABLE_STATUSES)
+      .lte("delivered_on", through)
+      .order("delivered_on"),
+    supabase
+      .from("driver_settlements")
+      .select("load_ids")
+      .eq("organization_id", organizationId)
+      .eq("driver_id", driverId)
+      .eq("status", "paid"),
+  ])
+  if (loads.error) throw loads.error
+  if (paid.error) throw paid.error
+  const done = new Set(
+    (paid.data as { load_ids: string[] | null }[]).flatMap(
+      (row) => row.load_ids ?? []
+    )
+  )
+  const first = (loads.data as { id: string; delivered_on: string }[]).find(
+    (load) => !done.has(load.id)
+  )
+  return first?.delivered_on ?? null
 }

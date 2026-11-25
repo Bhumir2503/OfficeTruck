@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { assignmentProblems, problemShort } from "@/lib/assignment-compliance"
 import type { DriverOption } from "@/lib/drivers"
 
 const NONE = "none"
@@ -17,7 +18,8 @@ const NONE = "none"
  * A driver picker that fills a hidden `driver_id` input ("" for no driver).
  * Lists active drivers, plus the current one if they've since gone inactive.
  * `onUpdate` runs with the form after a change, since a value set from state
- * doesn't fire the form's change event.
+ * doesn't fire the form's change event. A driver whose CDL, medical card or
+ * yearly checks are past, or run out before `until`, says so in red.
  */
 export function DriverSelect({
   id,
@@ -28,6 +30,7 @@ export function DriverSelect({
   onValueChange,
   invalid,
   onUpdate,
+  until = null,
 }: {
   id: string
   /** The hidden input's name. */
@@ -39,6 +42,8 @@ export function DriverSelect({
   onValueChange?: (value: string | null) => void
   invalid?: boolean
   onUpdate: (form: HTMLFormElement | null) => void
+  /** The load's last day, "YYYY-MM-DD", to flag dates that run out by then. */
+  until?: string | null
 }) {
   const [own, setOwn] = useState(defaultValue ?? NONE)
   const value = controlled !== undefined ? (controlled ?? NONE) : own
@@ -93,15 +98,30 @@ export function DriverSelect({
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {items.map((item) => (
-            <SelectItem key={item.value} value={item.value}>
-              {item.value === NONE ? (
-                <span className="text-muted-foreground">{item.label}</span>
-              ) : (
-                item.label
-              )}
-            </SelectItem>
-          ))}
+          {items.map((item) => {
+            const driver = options.find((option) => option.id === item.value)
+            const problems = driver
+              ? assignmentProblems(driver.compliance, until)
+              : []
+            return (
+              <SelectItem key={item.value} value={item.value}>
+                {item.value === NONE ? (
+                  <span className="text-muted-foreground">{item.label}</span>
+                ) : problems.length ? (
+                  <span className="flex flex-col items-start gap-0.5">
+                    <span>{item.label}</span>
+                    <span className="text-xs text-destructive">
+                      {problemShort(problems[0])}
+                      {problems.length > 1 &&
+                        ` and ${problems.length - 1} more`}
+                    </span>
+                  </span>
+                ) : (
+                  item.label
+                )}
+              </SelectItem>
+            )
+          })}
         </SelectContent>
       </Select>
     </>

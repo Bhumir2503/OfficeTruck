@@ -5,7 +5,13 @@ import type {
   Ownership,
   TruckStatus,
 } from "@/lib/schemas/truck"
+import {
+  type AssignmentDate,
+  assignmentDates,
+} from "@/lib/assignment-compliance"
+import { today } from "@/lib/driver-format"
 import { type DriverNow, getLoadsNow } from "@/lib/drivers"
+import { truckComplianceItems } from "@/lib/truck-format"
 import type { TruckDocumentKind } from "@/lib/truck-document-format"
 import { createClient } from "@/lib/supabase/server"
 
@@ -99,6 +105,8 @@ export type TruckOption = {
   unit_number: string
   status: TruckStatus
   default_driver_id: string | null
+  /** Annual inspection, registration and plate, to warn before it's assigned. */
+  compliance: AssignmentDate[]
 }
 
 export async function getTruckOptions(
@@ -107,14 +115,32 @@ export async function getTruckOptions(
   const supabase = await createClient()
   const { data, error } = await supabase
     .from("trucks")
-    .select("id, unit_number, status, default_driver_id")
+    .select(
+      "id, unit_number, status, default_driver_id, annual_inspection_on, registration_expires_on, plate_expires_on"
+    )
     .eq("organization_id", organizationId)
     .order("unit_number")
 
   if (error) {
     throw error
   }
-  return data as TruckOption[]
+  const now = today()
+  return data.map(
+    ({
+      annual_inspection_on,
+      registration_expires_on,
+      plate_expires_on,
+      ...truck
+    }) => ({
+      ...(truck as Omit<TruckOption, "compliance">),
+      compliance: assignmentDates(
+        truckComplianceItems(
+          { annual_inspection_on, registration_expires_on, plate_expires_on },
+          now
+        )
+      ),
+    })
+  )
 }
 
 export type TruckLoad = {
@@ -336,26 +362,31 @@ export async function getMilesSinceReading(
   const supabase = await createClient()
   const { data, error } = await supabase
     .from("loads")
-    .select("truck_id, miles, empty_miles, delivery_start")
+    .select("id, truck_id, miles, empty_miles, delivered_on")
     .eq("organization_id", organizationId)
     .in(
       "truck_id",
       read.map((truck) => truck.id)
     )
     .in("status", RUN)
-    .gt("delivery_start", `${since}T23:59:59`)
+    // The day each load really finished: one that already ran (and whose
+    // odometer may be the reading itself) mustn't be counted on top of it.
+    .gt("delivered_on", since)
   if (error) {
     throw error
   }
-  const readOn = new Map(read.map((truck) => [truck.id, truck.odometer_on!]))
-  const byTruck: Record<string, MilesSinceReading> = {}
-  for (const row of data as {
+  const rows = data as {
+    id: string
     truck_id: string
     miles: number | null
     empty_miles: number | null
-    delivery_start: string
-  }[]) {
-    if (row.delivery_start.slice(0, 10) <= readOn.get(row.truck_id)!) continue
+    delivered_on: string
+  }[]
+
+  const readOn = new Map(read.map((truck) => [truck.id, truck.odometer_on!]))
+  const byTruck: Record<string, MilesSinceReading> = {}
+  for (const row of rows) {
+    if (row.delivered_on <= readOn.get(row.truck_id)!) continue
     const entry = (byTruck[row.truck_id] ??= { miles: 0, loads: 0 })
     entry.miles += (row.miles ?? 0) + (row.empty_miles ?? 0)
     entry.loads += 1

@@ -101,6 +101,131 @@ export async function estimateEmptyMiles({
   return { ok: true, miles: route.miles, from: shortPlace(origin), afterLoad }
 }
 
+/** Where one truck would start a load from, for the truck picker. */
+export type TruckStartingPoint = {
+  truckId: string
+  /** "Indianapolis, IN"; null with no earlier load and no home base. */
+  from: string | null
+  /** The load it's coming off, or null when it starts from home base. */
+  afterLoad: string | null
+  /** When that load delivers, wall-clock "YYYY-MM-DDTHH:mm"; null for home base. */
+  freeAt: string | null
+  /** Empty miles to the pickup; null when they couldn't be worked out. */
+  emptyMiles: number | null
+  /** Another scheduled load on this truck at the same time, if any. */
+  busyWith: string | null
+}
+
+/**
+ * For every active truck: where it would start this load from (the delivery
+ * of its last load before the pickup, or its home base), the empty miles
+ * from there, and any load it's already on at the same time. Routes through
+ * Google Maps once per distinct starting place.
+ */
+export async function truckStartingPoints({
+  organizationId,
+  pickupLocation,
+  pickupStart,
+  deliveryEnd,
+  excludeLoadId,
+}: {
+  organizationId: string
+  pickupLocation: string
+  /** Wall-clock time of the first pickup; now if unknown. */
+  pickupStart: string | null
+  /** Wall-clock end of the last stop, for overlaps; the pickup if unknown. */
+  deliveryEnd: string | null
+  excludeLoadId?: string
+}): Promise<TruckStartingPoint[]> {
+  const supabase = await createClient()
+  const start =
+    pickupStart && /^\d{4}-\d{2}-\d{2}T/.test(pickupStart)
+      ? pickupStart.slice(0, 16)
+      : new Date().toISOString().slice(0, 16)
+  const end =
+    deliveryEnd && /^\d{4}-\d{2}-\d{2}T/.test(deliveryEnd)
+      ? deliveryEnd.slice(0, 16)
+      : start
+
+  const { data: trucks } = await supabase
+    .from("trucks")
+    .select("id, home_base")
+    .eq("organization_id", organizationId)
+    .eq("status", "active")
+  if (!trucks?.length) return []
+
+  let query = supabase
+    .from("loads")
+    .select(
+      "id, reference, truck_id, status, pickup_start, delivery_start, delivery_end, delivery_location"
+    )
+    .eq("organization_id", organizationId)
+    .in(
+      "truck_id",
+      trucks.map((truck) => truck.id)
+    )
+    .not("status", "in", "(cancelled,tonu)")
+    .order("delivery_start", { ascending: false })
+  if (excludeLoadId) query = query.neq("id", excludeLoadId)
+  const { data: loads } = await query
+
+  const points = trucks.map((truck) => {
+    const mine = (loads ?? []).filter((load) => load.truck_id === truck.id)
+    const previous = mine.find(
+      (load) => (load.delivery_start as string).slice(0, 16) <= start
+    )
+    const busy = mine.find((load) => {
+      if (!["booked", "dispatched", "loaded"].includes(load.status)) {
+        return false
+      }
+      const loadStart = (load.pickup_start as string).slice(0, 16)
+      const loadEnd = (
+        (load.delivery_end ?? load.delivery_start) as string
+      ).slice(0, 16)
+      // A new load with no delivery time yet is just its pickup moment.
+      const startsBefore = end > start ? loadStart < end : loadStart <= start
+      return startsBefore && start < loadEnd
+    })
+    const origin: string | null =
+      previous?.delivery_location ?? truck.home_base ?? null
+    return {
+      truckId: truck.id as string,
+      origin,
+      afterLoad: previous ? (previous.reference as string) : null,
+      freeAt: previous
+        ? ((previous.delivery_end ?? previous.delivery_start) as string).slice(
+            0,
+            16
+          )
+        : null,
+      busyWith: busy ? (busy.reference as string) : null,
+    }
+  })
+
+  // Route each distinct starting place once.
+  const pickup = pickupLocation.trim()
+  const origins = [
+    ...new Set(points.map((point) => point.origin).filter(Boolean)),
+  ] as string[]
+  const miles = new Map<string, number | null>()
+  await Promise.all(
+    origins.map(async (origin) => {
+      if (!pickup) return miles.set(origin, null)
+      if (origin.trim().toLowerCase() === pickup.toLowerCase()) {
+        return miles.set(origin, 0)
+      }
+      const route = await routeMiles([origin, pickup]).catch(() => null)
+      miles.set(origin, route?.ok ? route.miles : null)
+    })
+  )
+
+  return points.map(({ origin, ...point }) => ({
+    ...point,
+    from: origin ? shortPlace(origin) : null,
+    emptyMiles: origin ? (miles.get(origin) ?? null) : null,
+  }))
+}
+
 /** "Kroger DC, 2500 Main St, Dallas, TX 75201" → "Dallas, TX" */
 function shortPlace(address: string) {
   const parts = address

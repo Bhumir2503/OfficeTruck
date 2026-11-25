@@ -308,6 +308,8 @@ export type DriverPayLoad = LockedPay & {
   status: LoadStatus
   /** Wall-clock time at the last stop, "YYYY-MM-DDTHH:mm:ss". */
   delivery_start: string
+  /** The day it was really delivered, once it is. */
+  delivered_on?: string | null
 }
 
 /** Delivered (or further along): the driver has earned the pay. */
@@ -349,7 +351,12 @@ function total(loads: DriverPayLoad[]): PayTotal {
 export function driverEarnings(loads: DriverPayLoad[], today: string) {
   const earned = loads.filter((load) => EARNED.includes(load.status))
   const since = (start: string) =>
-    total(earned.filter((load) => load.delivery_start.slice(0, 10) >= start))
+    total(
+      earned.filter(
+        (load) =>
+          (load.delivered_on ?? load.delivery_start.slice(0, 10)) >= start
+      )
+    )
   return {
     week: since(weekStart(today)),
     month: since(`${today.slice(0, 7)}-01`),

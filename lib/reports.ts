@@ -13,6 +13,8 @@ type Row = {
   reference: string
   status: LoadStatus
   delivery_start: string
+  /** The day it was really delivered, set by the database. */
+  delivered_on: string | null
   rate: number | string
   miles: number | null
   empty_miles: number | null
@@ -32,7 +34,7 @@ type Row = {
 }
 
 const COLUMNS =
-  "id, reference, status, delivery_start, rate, miles, empty_miles, driver_pay_type, driver_pay_rate, pickup_location, delivery_location, broker_name, broker_id, broker:brokers!loads_broker_fkey (legal_name), driver_name, driver_id, driver:drivers!loads_driver_fkey (full_name), truck, truck_id, truck_link:trucks!loads_truck_fkey (unit_number)"
+  "id, reference, status, delivery_start, delivered_on, rate, miles, empty_miles, driver_pay_type, driver_pay_rate, pickup_location, delivery_location, broker_name, broker_id, broker:brokers!loads_broker_fkey (legal_name), driver_name, driver_id, driver:drivers!loads_driver_fkey (full_name), truck, truck_id, truck_link:trucks!loads_truck_fkey (unit_number)"
 
 /** Every delivered (or further along) load, with its pay and expenses totalled. */
 export async function getReportLoads(
@@ -44,7 +46,7 @@ export async function getReportLoads(
     .select(COLUMNS)
     .eq("organization_id", organizationId)
     .in("status", REPORTED_STATUSES)
-    .order("delivery_start", { ascending: false })
+    .order("delivered_on", { ascending: false })
   if (error) {
     throw error
   }
@@ -86,7 +88,7 @@ export async function getReportLoads(
       id: row.id,
       reference: row.reference,
       status: row.status,
-      delivered_on: row.delivery_start.slice(0, 10),
+      delivered_on: row.delivered_on ?? row.delivery_start.slice(0, 10),
       rate,
       miles: row.miles,
       empty_miles: row.empty_miles,

@@ -25,9 +25,11 @@ import {
 } from "@/app/org/[slug]/loads/actions"
 import { createInvoice } from "@/app/org/[slug]/invoices/actions"
 import { AssignDialog } from "@/components/loads/assign-dialog"
+import { ComplianceWarning } from "@/components/loads/compliance-warning"
 import { DocumentLink } from "@/components/loads/document-viewer"
 import { MoneyLine, Panel } from "@/components/side-panel"
 import { Button } from "@/components/ui/button"
+import { loadUntil } from "@/lib/assignment-compliance"
 import { formatInvoiceDate, INVOICE_STATE_LABELS } from "@/lib/invoice-format"
 import type { LoadInvoice } from "@/lib/invoices"
 import type { DriverOption } from "@/lib/drivers"
@@ -440,6 +442,17 @@ export function LoadSidePanel({
             {step.title}
           </h4>
           <p className="mt-1 text-sm text-muted-foreground">{step.detail}</p>
+          {action?.type === "dispatch" && (
+            <div className="mt-4">
+              <ComplianceWarning
+                driver={drivers.find((d) => d.id === load.driver_id)}
+                truck={trucks.find((t) => t.id === load.truck_id)}
+                until={loadUntil(load)}
+                driversBase={driversBase}
+                trucksBase={trucksBase}
+              />
+            </div>
+          )}
           {action && (
             <div className="mt-4 flex flex-col gap-2">
               {action.type === "assign" ? (

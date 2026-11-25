@@ -114,6 +114,8 @@ export type ReadyLoad = {
   rate: number
   status: LoadStatus
   delivery_start: string
+  /** The day it was really delivered; null for TONU. */
+  delivered_on: string | null
   /** Required documents still missing, in checklist order. */
   missing: DocumentKind[]
 }
@@ -126,7 +128,9 @@ export async function getLoadsToInvoice(
   const [loads, invoiced] = await Promise.all([
     supabase
       .from("loads")
-      .select("id, reference, broker_name, rate, status, delivery_start")
+      .select(
+        "id, reference, broker_name, rate, status, delivery_start, delivered_on"
+      )
       .eq("organization_id", organizationId)
       .in("status", ["delivered", "tonu"])
       .order("delivery_start"),

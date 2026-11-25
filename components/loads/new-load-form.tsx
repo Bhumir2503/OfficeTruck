@@ -29,6 +29,7 @@ import { RouteMilesField } from "@/components/loads/route-miles-field"
 import { StopsEditor } from "@/components/loads/stops-editor"
 import { TruckSelect } from "@/components/loads/truck-select"
 import { DriverSelect } from "@/components/loads/driver-select"
+import { ComplianceWarning } from "@/components/loads/compliance-warning"
 import { useZodForm } from "@/hooks/use-zod-form"
 import type { BrokerOption } from "@/lib/brokers"
 import type { DriverOption } from "@/lib/drivers"
@@ -60,6 +61,19 @@ const BROKER_FIELDS: FilledField[] = ["broker", "rate_con_from"]
 const CHARGE_FIELDS: FilledField[] = ["charges", "detention"]
 
 /** The person's local date, "YYYY-MM-DD", for rate con dates with no year. */
+/** The latest day among the form's stop appointments, "YYYY-MM-DD". */
+function lastStopDay(form: HTMLFormElement | null) {
+  const days = Array.from(
+    form?.querySelectorAll<HTMLInputElement>(
+      'input[name^="stops."][name$=".appointment_start"], input[name^="stops."][name$=".appointment_end"]'
+    ) ?? []
+  )
+    .map((input) => input.value.slice(0, 10))
+    .filter((day) => /^\d{4}-\d{2}-\d{2}$/.test(day))
+    .sort()
+  return days.at(-1) ?? null
+}
+
 function localToday() {
   const now = new Date()
   const pad = (value: number) => String(value).padStart(2, "0")
@@ -114,6 +128,9 @@ export function NewLoadForm({
   const [driverId, setDriverId] = useState<string | null>(null)
   const [truckId, setTruckId] = useState<string | null>(null)
   const [driverPicked, setDriverPicked] = useState(false)
+  // The last stop's day, to warn about a CDL or medical card that runs out
+  // before the load is done.
+  const [until, setUntil] = useState<string | null>(null)
   // The rate con, held here until the load is saved, and a local link to
   // open it while filling in the form.
   const [rateCon, setRateCon] = useState<File | null>(null)
@@ -283,12 +300,13 @@ export function NewLoadForm({
   // event, so they call this to re-check the form.
   function update(form: HTMLFormElement | null) {
     revalidate(form)
+    setUntil(lastStopDay(form))
   }
 
   // After a fill remounts the editors, re-check the form with the new values.
   useEffect(() => {
     if (fillKey === 0) return
-    revalidate(formRef.current)
+    update(formRef.current)
     // Only when a new fill lands; revalidate is a new function every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fillKey])
@@ -407,6 +425,9 @@ export function NewLoadForm({
                 <TruckSelect
                   id="load-truck-id"
                   trucks={trucks}
+                  organizationId={organizationId}
+                  load={{ pickup: firstPickup }}
+                  until={until}
                   invalid={!!errors.truck_id}
                   onPick={(truck) => {
                     setTruckId(truck?.id ?? null)
@@ -435,6 +456,7 @@ export function NewLoadForm({
                 <DriverSelect
                   id="load-driver-id"
                   drivers={drivers}
+                  until={until}
                   value={driverId}
                   onValueChange={(value) => {
                     setDriverId(value)
@@ -456,6 +478,15 @@ export function NewLoadForm({
                   )
                 )}
               </Field>
+              <div className="empty:hidden sm:col-span-2">
+                <ComplianceWarning
+                  driver={drivers.find((driver) => driver.id === driverId)}
+                  truck={trucks.find((truck) => truck.id === truckId)}
+                  until={until}
+                  driversBase={driversHref}
+                  trucksBase={trucksHref}
+                />
+              </div>
               <RouteMilesField
                 organizationId={organizationId}
                 addresses={stopAddresses}
