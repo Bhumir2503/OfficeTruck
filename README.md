@@ -1,26 +1,12 @@
-# Next.js template
+# OfficeTruck
 
-This is a Next.js template with shadcn/ui.
+Trucking office software: a web app for dispatch, plus a native iOS app for drivers. Both share one Supabase backend.
 
-## Supabase auth
+- **`web/`**: Next.js office app. `cd web && npm install && npm run dev`. See [web/README.md](web/README.md).
+- **`ios/`**: SwiftUI driver app. Open `ios/` in Xcode.
+- **`supabase/`**: migrations, RLS and RPCs shared by both apps.
+- **`docs/`**: product and integration notes.
 
-1. Copy `.env.example` to `.env.local` and fill in your project's URL and publishable key.
-2. In the Supabase dashboard under Authentication > URL Configuration, set the Site URL and add `http://localhost:3000/**` (plus your production URL) to the Redirect URLs.
+## Deploy
 
-## Adding components
-
-To add components to your app, run the following command:
-
-```bash
-npx shadcn@latest add button
-```
-
-This will place the ui components in the `components` directory.
-
-## Using components
-
-To use the components in your app, import them as follows:
-
-```tsx
-import { Button } from "@/components/ui/button";
-```
+On Vercel, the project's **Root Directory** must be `web`.
