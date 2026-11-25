@@ -124,31 +124,24 @@ struct LoadScreen: View {
     }
 
     /// The Arrived or Departed row. Its time once recorded; on the row
-    /// waiting on the driver, swipe left to check in or out.
+    /// waiting on the driver, a Check in or Check out button.
     private func checkInRow(
         _ event: StopEvent, time: Date?, actionable: Bool, stop: LoadDetail.Stop, load: LoadDetail
     ) -> some View {
-        let action = event == .arrived ? "Check in" : "Check out"
-        let start = { startCheckIn(event, stop: stop, load: load) }
-        return LabeledContent(event == .arrived ? "Arrived" : "Departed") {
+        LabeledContent(event == .arrived ? "Arrived" : "Departed") {
             if let time {
                 Text(time.formatted(date: .omitted, time: .shortened))
             } else if actionable {
                 // Small and tinted, like a compact DatePicker, so the row
                 // keeps its normal height.
-                Button(action, action: start)
-                    .buttonStyle(.bordered)
-                    .buttonBorderShape(.roundedRectangle)
-                    .tint(.accentColor)
+                Button(event == .arrived ? "Check in" : "Check out") {
+                    startCheckIn(event, stop: stop, load: load)
+                }
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.capsule)
+                .tint(.accentColor)
             } else {
                 Text("—")
-            }
-        }
-        // The same check-in as a shortcut: swipe left on the row.
-        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            if actionable {
-                Button(action, systemImage: event == .arrived ? "mappin.and.ellipse" : "arrow.right.circle.fill", action: start)
-                    .tint(.accentColor)
             }
         }
     }
