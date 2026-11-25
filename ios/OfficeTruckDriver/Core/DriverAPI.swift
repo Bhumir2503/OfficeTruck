@@ -30,6 +30,15 @@ struct DriverAPI: Sendable {
         try await client.rpc("claim_driver_logins").execute()
     }
 
+    /// Copies the login's verified phone number to the driver records, so
+    /// the office app shows it. Does nothing when they already match.
+    func updateMyPhone() async throws {
+        #if DEBUG
+        if DemoBackend.isOn { return }
+        #endif
+        try await client.rpc("update_my_phone").execute()
+    }
+
     func myLoads() async throws -> [LoadSummary] {
         #if DEBUG
         if DemoBackend.isOn { return try decode(DemoBackend.loadsJSON()) }

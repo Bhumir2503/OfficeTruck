@@ -1,3 +1,4 @@
+import Supabase
 import SwiftUI
 
 /// The driver's profile, opened from Trips: who they are, their CDL and
@@ -7,6 +8,12 @@ struct MeView: View {
     @Environment(SessionModel.self) private var session
     @State private var profiles: Loadable<[DriverProfile]> = .loading
     @State private var confirmingSignOut = false
+    @State private var changingPhone = false
+    @State private var newPhone = ""
+    @State private var enteringCode = false
+    @State private var code = ""
+    @State private var pendingPhone = ""
+    @State private var changeError: String?
     private let api = DriverAPI()
 
     var body: some View {
@@ -34,11 +41,17 @@ struct MeView: View {
 
             Section {
                 if case .signedIn(let phone) = session.state, !phone.isEmpty {
-                    LabeledContent("Signed in as", value: phone.formattedPhone)
+                    LabeledContent("Phone", value: phone.formattedPhone)
+                }
+                Button("Change phone number") {
+                    newPhone = ""
+                    changingPhone = true
                 }
                 Button("Sign out", role: .destructive) { confirmingSignOut = true }
+            } header: {
+                Text("Account")
             } footer: {
-                Text(appVersion)
+                Text("You sign in with this number. Changing it updates it for dispatch too.\n\n\(appVersion)")
             }
         }
         .navigationTitle("Profile")
@@ -48,13 +61,48 @@ struct MeView: View {
         .confirmationDialog("Sign out of OfficeTruck?", isPresented: $confirmingSignOut, titleVisibility: .visible) {
             Button("Sign out", role: .destructive) { Task { await session.signOut() } }
         }
+        .alert("Change phone number", isPresented: $changingPhone) {
+            TextField("New number", text: $newPhone)
+                .keyboardType(.phonePad)
+                .textContentType(.telephoneNumber)
+            Button("Send code") { Task { await sendChangeCode() } }
+                .keyboardShortcut(.defaultAction)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("We'll text a code to your new number.")
+        }
+        .alert("Enter the code", isPresented: $enteringCode) {
+            TextField("6-digit code", text: $code)
+                .keyboardType(.numberPad)
+                .textContentType(.oneTimeCode)
+            Button("Confirm") { Task { await confirmChange() } }
+                .keyboardShortcut(.defaultAction)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("We texted it to \(pendingPhone.formattedPhone).")
+        }
+        .alert("Number not changed", isPresented: Binding(
+            get: { changeError != nil },
+            set: { if !$0 { changeError = nil } }
+        )) {
+            Button("OK") {}
+        } message: {
+            Text(changeError ?? "")
+        }
     }
 
     @ViewBuilder
     private func details(_ profile: DriverProfile, showsCompanyHeader: Bool) -> some View {
+        // With two carriers, every section says whose copy it is: each
+        // carrier keeps its own driver file, and the dates can differ.
+        let header = { (title: String) in
+            showsCompanyHeader ? "\(title) · \(profile.organization.name)" : title
+        }
         Section {
             LabeledContent("Name", value: profile.fullName)
-            LabeledContent("Company", value: profile.organization.name)
+            if !showsCompanyHeader {
+                LabeledContent("Company", value: profile.organization.name)
+            }
             if let start = profile.startDate {
                 LabeledContent("Driving since", value: WallClock.fullDay(start))
             }
@@ -68,7 +116,7 @@ struct MeView: View {
             if showsCompanyHeader { Text(profile.organization.name) }
         }
 
-        Section("License") {
+        Section(header("License")) {
             LabeledContent("Type", value: [profile.licenseLabel, profile.cdlClass.map { "Class \($0)" }]
                 .compactMap { $0 }.joined(separator: " · "))
             if profile.cdlState != nil || profile.cdlNumberLast4 != nil {
@@ -84,7 +132,7 @@ struct MeView: View {
             expiryRows(profile.cdlExpiresOn, what: "Your CDL")
         }
 
-        Section("Medical card") {
+        Section(header("Medical card")) {
             expiryRows(profile.medicalCardExpiresOn, what: "Your medical card")
             if profile.holdsMedicalVariance {
                 Text("Medical variance on file").foregroundStyle(.secondary)
@@ -92,7 +140,7 @@ struct MeView: View {
         }
 
         if let truck = profile.truck {
-            Section("Truck") {
+            Section(header("Truck")) {
                 LabeledContent("Unit", value: truck.unitNumber)
                 let vehicle = [truck.year.map(String.init), truck.make, truck.model].compactMap { $0 }
                 if !vehicle.isEmpty {
@@ -102,7 +150,7 @@ struct MeView: View {
         }
 
         if let pay = profile.payLabel {
-            Section("Pay") {
+            Section(header("Pay")) {
                 LabeledContent("Rate", value: pay)
                 LabeledContent("Paid", value: profile.payPeriodLabel)
             }
@@ -134,6 +182,48 @@ struct MeView: View {
         let version = info?["CFBundleShortVersionString"] as? String ?? "?"
         let build = info?["CFBundleVersion"] as? String ?? "?"
         return "OfficeTruck \(version) (\(build))"
+    }
+
+    private func sendChangeCode() async {
+        guard let number = PhoneNumber.e164(newPhone) else {
+            await showChangeError("Enter a 10-digit US phone number.")
+            return
+        }
+        if case .signedIn(let current) = session.state, PhoneNumber.e164(current) == number {
+            await showChangeError("That's already your number.")
+            return
+        }
+        do {
+            try await session.sendChangeCode(to: number)
+        } catch {
+            await showChangeError("We couldn't send a code to that number. If it's already used to sign in to OfficeTruck, ask dispatch for help.")
+            return
+        }
+        pendingPhone = number
+        code = ""
+        // Let the first alert finish closing before the next one opens.
+        try? await Task.sleep(for: .milliseconds(350))
+        enteringCode = true
+    }
+
+    private func confirmChange() async {
+        do {
+            try await session.confirmChange(phone: pendingPhone, code: code.filter(\.isNumber))
+        } catch is AuthError {
+            await showChangeError("That code didn't work. Try changing your number again.")
+            return
+        } catch {
+            // The login has the new number; the next app launch retries
+            // copying it to the driver records.
+            await showChangeError(error.driverMessage)
+            return
+        }
+        await fetch()
+    }
+
+    private func showChangeError(_ message: String) async {
+        try? await Task.sleep(for: .milliseconds(350))
+        changeError = message
     }
 
     private func fetch() async {

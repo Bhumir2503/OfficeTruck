@@ -20,4 +20,4 @@ Native driver app: Swift 6, SwiftUI, iOS 17+. Backend is the shared Supabase pro
 - UI for drivers: big tap targets (≥ 44pt, prefer 56pt for primary actions), high contrast, Dynamic Type, system light/dark mode.
 - Writes made with no signal (stop check-ins, document uploads, expenses) go through the offline queue and retry later.
 - Verify in the iOS Simulator on the latest iOS 26 runtime (iPhone 17 Pro): build, launch, take a screenshot and tap through the flow.
-- Demo mode (Debug builds): launch with `-demo` (`xcrun simctl launch <device> com.officetruck.driver -demo`) to sign in with sample data from `Core/DemoBackend.swift`, with no SMS or server.
+- Demo mode (Debug builds): launch with `-demo` (`xcrun simctl launch <device> com.officetruck.driver -demo`) to sign in with sample data from `Core/DemoBackend.swift`, with no SMS or server. Add `-two-carriers` to see a driver who drives for two companies.
