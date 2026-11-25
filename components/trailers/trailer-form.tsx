@@ -181,14 +181,14 @@ export function TrailerForm({
             ? "flex flex-col gap-6"
             : // Adding: the cards, with what's filled in and saving beside
               // them, as on Add truck and Add driver.
-              "grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]"
+              "grid items-start gap-6 @4xl/main:grid-cols-[minmax(0,1fr)_20rem] @6xl/main:grid-cols-[minmax(0,1fr)_24rem]"
         }
       >
         <div
           className={
             trailer
               ? "contents"
-              : "flex min-w-0 flex-col gap-6 lg:col-start-1 lg:row-start-1"
+              : "flex min-w-0 flex-col gap-6 @4xl/main:col-start-1 @4xl/main:row-start-1"
           }
         >
           <SettingsCard
@@ -368,7 +368,7 @@ export function TrailerForm({
         {!trailer && (
           // Beside the cards, what's filled in and saving stay in view; on a
           // phone they come after them.
-          <aside className="lg:sticky lg:top-6 lg:col-start-2 lg:row-start-1">
+          <aside className="@4xl/main:sticky @4xl/main:top-6 @4xl/main:col-start-2 @4xl/main:row-start-1">
             <AddRecordPanel
               eyebrow="New trailer"
               placeholderTitle="Add a trailer"

@@ -161,7 +161,7 @@ export default async function TruckPage({
               href: truckTabHref(truckHref, t),
             }))}
           />
-          <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
+          <div className="grid items-start gap-6 @4xl/main:grid-cols-[minmax(0,1fr)_20rem] @6xl/main:grid-cols-[minmax(0,1fr)_24rem]">
             <PageTabPanel
               active={tab}
               className="flex min-w-0 flex-col gap-4"
@@ -232,7 +232,7 @@ export default async function TruckPage({
             </PageTabPanel>
             {/* Beside the cards, what's due and the truck's setup stay in
               view; on a phone they come first. */}
-            <aside className="order-first flex flex-col gap-4 lg:sticky lg:top-6 lg:order-none lg:max-h-[calc(100svh-3rem)] lg:overflow-y-auto">
+            <aside className="order-first flex flex-col gap-4 @4xl/main:sticky @4xl/main:top-6 @4xl/main:order-none @4xl/main:max-h-[calc(100svh-3rem)] @4xl/main:overflow-y-auto">
               <TruckNextAction
                 status={truck.status}
                 outOfService={{

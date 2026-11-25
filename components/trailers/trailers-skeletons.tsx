@@ -50,8 +50,8 @@ export function NewTrailerSkeleton() {
     <div className="px-4 py-6 lg:px-6 lg:py-8">
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
         <Skeleton className="h-8 w-28 rounded-md" />
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
-          <div className="flex min-w-0 flex-col gap-6 lg:col-start-1 lg:row-start-1">
+        <div className="grid items-start gap-6 @4xl/main:grid-cols-[minmax(0,1fr)_20rem] @6xl/main:grid-cols-[minmax(0,1fr)_24rem]">
+          <div className="flex min-w-0 flex-col gap-6 @4xl/main:col-start-1 @4xl/main:row-start-1">
             <SettingsCard title="Trailer">
               <Skeleton className="h-32 w-full" />
             </SettingsCard>
@@ -59,7 +59,7 @@ export function NewTrailerSkeleton() {
               <Skeleton className="h-32 w-full" />
             </SettingsCard>
           </div>
-          <aside className="lg:col-start-2 lg:row-start-1">
+          <aside className="@4xl/main:col-start-2 @4xl/main:row-start-1">
             <AddRecordPanelSkeleton
               eyebrow="New trailer"
               placeholderTitle="Add a trailer"

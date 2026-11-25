@@ -8,7 +8,6 @@ import { AllCurrent, ExpiryBadge } from "@/components/drivers/driver-badges"
 import {
   SettingsCard,
   SettingsCardFooter,
-  SettingsEmptyState,
 } from "@/components/settings/settings-card"
 import { LastDeliveryCell, NowCell, NowLine } from "@/components/now-cells"
 import { TruckStatusBadge } from "@/components/trucks/truck-badges"
@@ -198,21 +197,6 @@ export function TrucksTable({
       </Link>
     )
 
-  if (trucks.length === 0) {
-    return (
-      <SettingsCard title="Trucks">
-        <SettingsEmptyState icon={TruckIcon} title="No trucks yet">
-          {canManage
-            ? "Add your trucks to track inspections and registrations, and see cost per mile and profit for each."
-            : "Owners and admins can add trucks. Once they do, you'll see them here."}
-        </SettingsEmptyState>
-        {canManage && (
-          <div className="mt-4 flex justify-center">{addButton("default")}</div>
-        )}
-      </SettingsCard>
-    )
-  }
-
   // The status filter's choices, each with how many trucks it shows.
   const filterOptions: {
     value: Filter
@@ -232,10 +216,13 @@ export function TrucksTable({
     label: `${option.name} (${option.count})`,
   }))
 
+  const empty = trucks.length === 0
   const filtering = search.trim() !== "" || filter !== "all"
-  const count = filtering
-    ? `Showing ${filtered.length} of ${plural(trucks.length, "truck")}`
-    : plural(trucks.length, "truck")
+  const count = empty
+    ? "No trucks"
+    : filtering
+      ? `Showing ${filtered.length} of ${plural(trucks.length, "truck")}`
+      : plural(trucks.length, "truck")
   const notes = [
     attention > 0 &&
       `${plural(attention, "active truck")} with something due in the next 60 days`,
@@ -271,6 +258,7 @@ export function TrucksTable({
             aria-label="Search trucks"
             className="pl-7"
             value={search}
+            disabled={empty}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
@@ -280,6 +268,7 @@ export function TrucksTable({
             setFilter((value as Filter | null) ?? "all")
           }
           items={filterOptions}
+          disabled={empty}
         >
           <SelectTrigger
             aria-label="Filter by status"
@@ -313,7 +302,26 @@ export function TrucksTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {filtered.length === 0 && (
+          {empty && (
+            // The same table as when there are trucks, so the page matches
+            // its loading skeleton; the body says how to get started.
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={6} className="py-10 whitespace-normal">
+                <div className="flex flex-col items-center gap-2 text-center">
+                  <div className="flex size-10 items-center justify-center rounded-lg bg-muted">
+                    <TruckIcon className="size-5 text-muted-foreground" />
+                  </div>
+                  <p className="font-medium">No trucks yet</p>
+                  <p className="max-w-sm text-sm text-balance text-muted-foreground">
+                    {canManage
+                      ? "Add your trucks to track inspections and registrations, and see cost per mile and profit for each."
+                      : "Owners and admins can add trucks. Once they do, you'll see them here."}
+                  </p>
+                </div>
+              </TableCell>
+            </TableRow>
+          )}
+          {!empty && filtered.length === 0 && (
             <TableRow>
               <TableCell
                 colSpan={6}
