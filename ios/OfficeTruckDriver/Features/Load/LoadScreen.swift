@@ -85,15 +85,8 @@ struct LoadScreen: View {
                         LabeledContent("Phone") { Link(phone, destination: url) }
                     }
                     if let notes = stop.notes { Text(notes).foregroundStyle(.secondary) }
-                    checkInRow(.arrived, time: arrived, actionable: isNext && arrived == nil, stop: stop, load: load)
-                    checkInRow(.departed, time: departed, actionable: isNext && arrived != nil && departed == nil, stop: stop, load: load)
-                    // Paperwork is added where it's handed over, so the
-                    // driver doesn't scroll away from the stop.
-                    if isNext {
-                        LabeledContent("Paperwork") {
-                            addPaperworkMenu(first: stop.isPickup ? .bol : .pod)
-                        }
-                    }
+                    LabeledContent("Arrived", value: arrived?.formatted(date: .omitted, time: .shortened) ?? "—")
+                    LabeledContent("Departed", value: departed?.formatted(date: .omitted, time: .shortened) ?? "—")
                     if let reading = stop.departedOdometer ?? stop.arrivedOdometer {
                         LabeledContent("Odometer", value: "\(reading.formatted()) mi")
                     }
@@ -138,16 +131,34 @@ struct LoadScreen: View {
                         Text("Not sent yet").foregroundStyle(.orange)
                     }
                 }
-                // After the last stop, paperwork is still added here (a
-                // POD or receipt the driver didn't get to at the stop).
-                if load.canEdit && next == nil {
-                    LabeledContent("Add more") {
-                        addPaperworkMenu(first: .pod)
-                    }
-                }
             }
         }
         .refreshable { await fetch() }
+        // The next step stays in the navigation bar, so it's one tap away
+        // wherever the driver has scrolled: add paperwork, check in or out.
+        .toolbar {
+            if load.canEdit {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        let first: DocumentKind = (next ?? load.stops.last)?.isPickup == true ? .bol : .pod
+                        ForEach([first] + DocumentKind.allCases.filter { $0 != first }) { kind in
+                            Button(kind.label) { addKind = kind }
+                        }
+                    } label: {
+                        Label("Add paperwork", systemImage: "doc.badge.plus")
+                    }
+                }
+            }
+            if load.canEdit, let next {
+                let arrived = next.arrivedAt != nil || pending.contains { $0.stopID == next.id && $0.event == .arrived }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(arrived ? "Check out" : "Check in") {
+                        startCheckIn(arrived ? .departed : .arrived, stop: next, load: load)
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+        }
         .confirmationDialog(
             addKind.map { "Add \($0.label)" } ?? "",
             isPresented: Binding(get: { addKind != nil }, set: { if !$0 { addKind = nil } }),
@@ -185,42 +196,6 @@ struct LoadScreen: View {
                     }
                 }
                 addPaperwork(pages, kind: kind, to: load)
-            }
-        }
-    }
-
-    /// The Add menu: BOL, POD, lumper receipt, other, with the kind the
-    /// stop usually needs listed first.
-    private func addPaperworkMenu(first: DocumentKind) -> some View {
-        Menu("Add") {
-            ForEach([first] + DocumentKind.allCases.filter { $0 != first }) { kind in
-                Button(kind.label) { addKind = kind }
-            }
-        }
-        .buttonStyle(.bordered)
-        .buttonBorderShape(.capsule)
-        .tint(.accentColor)
-    }
-
-    /// The Arrived or Departed row. Its time once recorded; on the row
-    /// waiting on the driver, a Check in or Check out button.
-    private func checkInRow(
-        _ event: StopEvent, time: Date?, actionable: Bool, stop: LoadDetail.Stop, load: LoadDetail
-    ) -> some View {
-        LabeledContent(event == .arrived ? "Arrived" : "Departed") {
-            if let time {
-                Text(time.formatted(date: .omitted, time: .shortened))
-            } else if actionable {
-                // Small and tinted, like a compact DatePicker, so the row
-                // keeps its normal height.
-                Button(event == .arrived ? "Check in" : "Check out") {
-                    startCheckIn(event, stop: stop, load: load)
-                }
-                .buttonStyle(.bordered)
-                .buttonBorderShape(.capsule)
-                .tint(.accentColor)
-            } else {
-                Text("—")
             }
         }
     }
