@@ -134,15 +134,12 @@ struct LoadScreen: View {
             if let time {
                 Text(time.formatted(date: .omitted, time: .shortened))
             } else if actionable {
-                if #available(iOS 26.0, *) {
-                    Button(action, action: start)
-                        .buttonStyle(.glassProminent)
-                        .controlSize(.large)
-                } else {
-                    Button(action, action: start)
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
-                }
+                // Small and tinted, like a compact DatePicker, so the row
+                // keeps its normal height.
+                Button(action, action: start)
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.roundedRectangle)
+                    .tint(.accentColor)
             } else {
                 Text("—")
             }
