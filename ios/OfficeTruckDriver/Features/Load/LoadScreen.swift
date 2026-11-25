@@ -78,32 +78,8 @@ struct LoadScreen: View {
                         LabeledContent("Phone") { Link(phone, destination: url) }
                     }
                     if let notes = stop.notes { Text(notes).foregroundStyle(.secondary) }
-                    ForEach([StopEvent.arrived, .departed], id: \.self) { event in
-                        let time = event == .arrived ? arrived : departed
-                        // The one row waiting on the driver: the next stop's
-                        // arrival, or its departure once they've arrived.
-                        let actionable = isNext && time == nil && (event == .arrived || arrived != nil)
-                        LabeledContent(event == .arrived ? "Arrived" : "Departed") {
-                            if let time {
-                                Text(time.formatted(date: .omitted, time: .shortened))
-                            } else if actionable {
-                                prominent(Button(event == .arrived ? "Check in" : "Check out") {
-                                    odometer = ""
-                                    checkIn = CheckInRequest(
-                                        loadID: load.id,
-                                        stopID: stop.id,
-                                        event: event,
-                                        place: stop.facility ?? stop.location,
-                                        asksOdometer: (event == .arrived && stop.position == load.stops.first?.position)
-                                            || (event == .departed && stop.position == load.stops.last?.position)
-                                    )
-                                })
-                                .controlSize(.large)
-                            } else {
-                                Text("—")
-                            }
-                        }
-                    }
+                    checkInRow(.arrived, time: arrived, actionable: isNext && arrived == nil, stop: stop, load: load)
+                    checkInRow(.departed, time: departed, actionable: isNext && arrived != nil && departed == nil, stop: stop, load: load)
                     if let reading = stop.departedOdometer ?? stop.arrivedOdometer {
                         LabeledContent("Odometer", value: "\(reading.formatted()) mi")
                     }
@@ -146,12 +122,37 @@ struct LoadScreen: View {
         .refreshable { await fetch() }
     }
 
-    @ViewBuilder
-    private func prominent(_ button: some View) -> some View {
-        if #available(iOS 26.0, *) {
-            button.buttonStyle(.glassProminent)
-        } else {
-            button.buttonStyle(.borderedProminent)
+    /// The Arrived or Departed row. Its time once recorded; on the row
+    /// waiting on the driver, swipe left to check in or out.
+    private func checkInRow(
+        _ event: StopEvent, time: Date?, actionable: Bool, stop: LoadDetail.Stop, load: LoadDetail
+    ) -> some View {
+        let action = event == .arrived ? "Check in" : "Check out"
+        return LabeledContent(event == .arrived ? "Arrived" : "Departed") {
+            if let time {
+                Text(time.formatted(date: .omitted, time: .shortened))
+            } else if actionable {
+                Text("\(Image(systemName: "chevron.left.2")) Swipe to \(action.lowercased())")
+                    .foregroundStyle(.tint)
+            } else {
+                Text("—")
+            }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            if actionable {
+                Button(action, systemImage: event == .arrived ? "mappin.and.ellipse" : "arrow.right.circle.fill") {
+                    odometer = ""
+                    checkIn = CheckInRequest(
+                        loadID: load.id,
+                        stopID: stop.id,
+                        event: event,
+                        place: stop.facility ?? stop.location,
+                        asksOdometer: (event == .arrived && stop.position == load.stops.first?.position)
+                            || (event == .departed && stop.position == load.stops.last?.position)
+                    )
+                }
+                .tint(.accentColor)
+            }
         }
     }
 
