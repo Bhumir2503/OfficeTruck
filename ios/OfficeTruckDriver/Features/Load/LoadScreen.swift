@@ -87,6 +87,13 @@ struct LoadScreen: View {
                     if let notes = stop.notes { Text(notes).foregroundStyle(.secondary) }
                     checkInRow(.arrived, time: arrived, actionable: isNext && arrived == nil, stop: stop, load: load)
                     checkInRow(.departed, time: departed, actionable: isNext && arrived != nil && departed == nil, stop: stop, load: load)
+                    // Paperwork is added where it's handed over, so the
+                    // driver doesn't scroll away from the stop.
+                    if isNext {
+                        LabeledContent("Paperwork") {
+                            addPaperworkMenu(first: stop.isPickup ? .bol : .pod)
+                        }
+                    }
                     if let reading = stop.departedOdometer ?? stop.arrivedOdometer {
                         LabeledContent("Odometer", value: "\(reading.formatted()) mi")
                     }
@@ -131,13 +138,11 @@ struct LoadScreen: View {
                         Text("Not sent yet").foregroundStyle(.orange)
                     }
                 }
-                if load.canEdit {
-                    Menu {
-                        ForEach(DocumentKind.allCases) { kind in
-                            Button(kind.label) { addKind = kind }
-                        }
-                    } label: {
-                        Label("Add paperwork", systemImage: "doc.viewfinder")
+                // After the last stop, paperwork is still added here (a
+                // POD or receipt the driver didn't get to at the stop).
+                if load.canEdit && next == nil {
+                    LabeledContent("Add more") {
+                        addPaperworkMenu(first: .pod)
                     }
                 }
             }
@@ -182,6 +187,19 @@ struct LoadScreen: View {
                 addPaperwork(pages, kind: kind, to: load)
             }
         }
+    }
+
+    /// The Add menu: BOL, POD, lumper receipt, other, with the kind the
+    /// stop usually needs listed first.
+    private func addPaperworkMenu(first: DocumentKind) -> some View {
+        Menu("Add") {
+            ForEach([first] + DocumentKind.allCases.filter { $0 != first }) { kind in
+                Button(kind.label) { addKind = kind }
+            }
+        }
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.capsule)
+        .tint(.accentColor)
     }
 
     /// The Arrived or Departed row. Its time once recorded; on the row
