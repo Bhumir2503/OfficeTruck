@@ -196,6 +196,45 @@ export async function markPaid(
   if ("error" in settlement) return settlement
 
   const supabase = await createClient()
+  // Adjustments left on an earlier schedule's open period inside this one
+  // move here first (copied, then the originals removed), while this one
+  // is still open, so they're paid once and kept with what was paid.
+  if (current.mergedFrom.length) {
+    const { data: strays, error: strayError } = await supabase
+      .from("driver_settlement_adjustments")
+      .select("id, description, amount")
+      .eq("organization_id", organizationId)
+      .in("settlement_id", current.mergedFrom)
+    if (strayError) return { error: strayError.message }
+    const moving = (strays ?? []) as {
+      id: string
+      description: string
+      amount: number
+    }[]
+    if (moving.length) {
+      const copied = await supabase
+        .from("driver_settlement_adjustments")
+        .insert(
+          moving.map(({ description, amount }) => ({
+            organization_id: organizationId,
+            settlement_id: settlement.id,
+            description,
+            amount,
+          }))
+        )
+      if (copied.error) return { error: copied.error.message }
+      const removed = await supabase
+        .from("driver_settlement_adjustments")
+        .delete()
+        .eq("organization_id", organizationId)
+        .in(
+          "id",
+          moving.map((adjustment) => adjustment.id)
+        )
+      if (removed.error) return { error: removed.error.message }
+    }
+  }
+
   const { data, error } = await supabase
     .from("driver_settlements")
     .update({
