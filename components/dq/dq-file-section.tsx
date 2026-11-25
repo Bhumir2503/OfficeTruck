@@ -3,7 +3,7 @@ import Link from "next/link"
 
 import { DriverDqBadge } from "@/components/dq/dq-badges"
 import { DqChecklist } from "@/components/dq/dq-checklist"
-import { EndDateButton, type DriverFacts } from "@/components/dq/driver-facts"
+import type { DriverFacts } from "@/components/dq/driver-facts"
 import {
   EmployerChecks,
   type EmployerCheck,
@@ -203,7 +203,6 @@ export function DqFileSummary({
                 <Download /> {f.title}
               </a>
             ))}
-          {manager && !driver.end_date && <EndDateButton driver={driver} />}
         </div>
         <p className="text-xs text-muted-foreground">
           OfficeTruck organizes these records. It does not certify that a
