@@ -12,6 +12,8 @@ struct LoadScreen: View {
     @State private var odometer = ""
     /// Paperwork being added: the kind picked, then how.
     @State private var addKind: DocumentKind?
+    /// Checking out without the stop's BOL or POD: warn first.
+    @State private var missingPaperwork: MissingPaperwork?
     @State private var scanKind: DocumentKind?
     @State private var photoKind: DocumentKind?
     @State private var choosingPhotos = false
@@ -51,6 +53,28 @@ struct LoadScreen: View {
             Button(request.event == .arrived ? "Arrived" : "Departed") { record(request) }
         } message: { _ in
             Text("This records \(Date.now.formatted(date: .omitted, time: .shortened)). Only dispatch can change it after.")
+        }
+        .alert(
+            missingPaperwork.map { "No \($0.kind.label) yet" } ?? "",
+            isPresented: Binding(get: { missingPaperwork != nil }, set: { if !$0 { missingPaperwork = nil } }),
+            presenting: missingPaperwork
+        ) { missing in
+            // Each choice waits for this alert to close before opening the next.
+            Button("Add \(missing.kind.label)") {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(350))
+                    addKind = missing.kind
+                }
+            }
+            Button("Check out anyway") {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(350))
+                    startCheckIn(.departed, stop: missing.stop, load: missing.load)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { missing in
+            Text("You haven't added the \(missing.kind.label) for \(missing.stop.facility ?? missing.stop.location). Add it before you leave so dispatch can bill the load.")
         }
         .alert(
             "Not saved",
@@ -165,7 +189,16 @@ struct LoadScreen: View {
         .safeAreaInset(edge: .bottom) {
             if load.canEdit, let next {
                 let arrived = next.arrivedAt != nil || pending.contains { $0.stopID == next.id && $0.event == .arrived }
-                let start = { startCheckIn(arrived ? .departed : .arrived, stop: next, load: load) }
+                let start = {
+                    let needed: DocumentKind = next.isPickup ? .bol : .pod
+                    let hasIt = load.documents.contains { $0.kind == needed.rawValue }
+                        || queue.documents(for: load.id).contains { $0.kind == needed }
+                    if arrived && !hasIt {
+                        missingPaperwork = MissingPaperwork(kind: needed, stop: next, load: load)
+                    } else {
+                        startCheckIn(arrived ? .departed : .arrived, stop: next, load: load)
+                    }
+                }
                 let title = arrived ? "Check out" : "Check in"
                 Group {
                     if #available(iOS 26.0, *) {
@@ -278,6 +311,13 @@ struct LoadScreen: View {
             load = .failed(error.driverMessage)
         }
     }
+}
+
+/// Checking out of a stop without its BOL (pickup) or POD (delivery).
+struct MissingPaperwork {
+    let kind: DocumentKind
+    let stop: LoadDetail.Stop
+    let load: LoadDetail
 }
 
 /// The check-in the driver is confirming.
