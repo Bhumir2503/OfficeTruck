@@ -67,7 +67,7 @@ struct LoadScreen: View {
 
                 Section {
                     VStack(alignment: .leading) {
-                        Text(stop.facility ?? stop.location).font(isNext ? .title2.bold() : .headline)
+                        Text(stop.facility ?? stop.location).font(.headline)
                         if stop.facility != nil { Text(stop.location).foregroundStyle(.secondary) }
                     }
                     LabeledContent("Appointment", value: appointment(stop))
