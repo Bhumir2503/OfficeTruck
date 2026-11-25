@@ -131,24 +131,23 @@ struct LoadScreen: View {
                         Text("Not sent yet").foregroundStyle(.orange)
                     }
                 }
-            }
-        }
-        .refreshable { await fetch() }
-        // The next step stays in the navigation bar, so it's one tap away
-        // wherever the driver has scrolled: add paperwork, check in or out.
-        .toolbar {
-            if load.canEdit {
-                ToolbarItem(placement: .topBarTrailing) {
+                if load.canEdit {
                     Menu {
+                        // What the next stop usually needs comes first.
                         let first: DocumentKind = (next ?? load.stops.last)?.isPickup == true ? .bol : .pod
                         ForEach([first] + DocumentKind.allCases.filter { $0 != first }) { kind in
                             Button(kind.label) { addKind = kind }
                         }
                     } label: {
-                        Label("Add paperwork", systemImage: "doc.badge.plus")
+                        Label("Add paperwork", systemImage: "doc.viewfinder")
                     }
                 }
             }
+        }
+        .refreshable { await fetch() }
+        // Check in / Check out stays in the navigation bar, so it's one tap
+        // away wherever the driver has scrolled.
+        .toolbar {
             if load.canEdit, let next {
                 let arrived = next.arrivedAt != nil || pending.contains { $0.stopID == next.id && $0.event == .arrived }
                 ToolbarItem(placement: .topBarTrailing) {
