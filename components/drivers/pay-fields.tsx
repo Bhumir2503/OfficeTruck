@@ -23,7 +23,7 @@ import {
   type PayPeriod,
 } from "@/lib/settlement-format"
 
-const UNITS: Record<
+export const PAY_UNITS: Record<
   PayType,
   { prefix?: string; suffix: string; hint: string }
 > = {
@@ -44,7 +44,7 @@ const UNITS: Record<
 }
 
 /** Keeps digits and one ".", at most 3 decimals, with commas in the whole part. */
-function formatRate(value: string) {
+export function formatRate(value: string) {
   const point = value.indexOf(".")
   const whole = (point === -1 ? value : value.slice(0, point))
     .replace(/\D/g, "")
@@ -60,7 +60,7 @@ function formatRate(value: string) {
 }
 
 /** Reformats the rate as it's typed, keeping the caret after the same digits. */
-function handleRateInput(event: React.ChangeEvent<HTMLInputElement>) {
+export function handleRateInput(event: React.ChangeEvent<HTMLInputElement>) {
   const input = event.currentTarget
   const formatted = formatRate(input.value)
   if (formatted === input.value) return
@@ -113,7 +113,7 @@ export function PayFields({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type, period])
 
-  const unit = type ? UNITS[type] : null
+  const unit = type ? PAY_UNITS[type] : null
   const rateErrors = errors.pay_rate
 
   return (

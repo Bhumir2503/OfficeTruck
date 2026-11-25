@@ -1,6 +1,6 @@
 "use client"
 
-import { AlertTriangle, Copy, CornerDownLeft, Send } from "lucide-react"
+import { AlertTriangle, CornerDownLeft, Pencil, Truck } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
@@ -9,10 +9,9 @@ import {
   type AssignmentConflicts,
   checkAssignmentConflicts,
   saveAssignment,
-  sendToDriver,
 } from "@/app/org/[slug]/loads/actions"
 import { DriverSelect } from "@/components/loads/driver-select"
-import { LocalTime } from "@/components/loads/local-time"
+import { LoadPayDialog } from "@/components/loads/load-pay-dialog"
 import { EmptyMilesField } from "@/components/loads/empty-miles-field"
 import { RouteMilesField } from "@/components/loads/route-miles-field"
 import { TruckSelect } from "@/components/loads/truck-select"
@@ -28,13 +27,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { useZodForm } from "@/hooks/use-zod-form"
-import {
-  offerResend,
-  RESEND_AFTER_MS,
-  saveLabel,
-  willNotify,
-} from "@/lib/assignment-format"
-import type { LoadDispatch } from "@/lib/dispatch"
+import { saveLabel, willDispatch } from "@/lib/assignment-format"
 import { driverPay, formatPay, loadDriverPay } from "@/lib/driver-format"
 import type { DriverOption } from "@/lib/drivers"
 import { formatRate } from "@/lib/load-format"
@@ -77,9 +70,8 @@ export function Conflict({
 }
 
 /**
- * Who's running the load: the truck, driver and miles, and whether the
- * driver has been notified. Saving notifies a new driver and tells one taken
- * off; nothing is sent until Save.
+ * Who's running the load: the truck, driver and miles. Saving a booked load
+ * with a truck and driver dispatches it.
  */
 export function LoadAssignmentForm({
   organizationId,
@@ -89,8 +81,7 @@ export function LoadAssignmentForm({
   trucks,
   trucksBase,
   loadsBase,
-  dispatch,
-  link,
+  canChangePay,
 }: {
   organizationId: string
   load: Load
@@ -102,22 +93,28 @@ export function LoadAssignmentForm({
   trucksBase: string
   /** /org/<slug>/loads */
   loadsBase: string
-  /** The driver's live link, once they've been notified. */
-  dispatch: LoadDispatch | null
-  link: string | null
+  /** Owners and admins can set the driver's pay on this load. */
+  canChangePay: boolean
 }) {
   const [truckId, setTruckId] = useState<string | null>(load.truck_id)
   const [driverId, setDriverId] = useState<string | null>(load.driver_id)
   const [conflicts, setConflicts] = useState(NO_CONFLICTS)
-  const [busy, setBusy] = useState<"resend" | null>(null)
-  // The clock, for when Resend shows; set after mount so the server and
-  // browser render the same thing.
-  const [now, setNow] = useState<number | null>(null)
+  const [payOpen, setPayOpen] = useState(false)
+  // The miles boxes as they read now, to tell whether anything changed.
+  const [miles, setMiles] = useState<string | null>(null)
+  const [emptyMiles, setEmptyMiles] = useState<string | null>(null)
 
   const driver = drivers.find((option) => option.id === driverId) ?? null
   const truck = trucks.find((option) => option.id === truckId) ?? null
   const driverChanged = driverId !== load.driver_id
-  const notify = willNotify({
+  const sameMiles = (typed: string | null, saved: number | null) =>
+    typed === null || typed.replace(/,/g, "") === (saved?.toString() ?? "")
+  const changed =
+    truckId !== load.truck_id ||
+    driverChanged ||
+    !sameMiles(miles, load.miles) ||
+    !sameMiles(emptyMiles, load.empty_miles)
+  const dispatches = willDispatch({
     status: load.status,
     savedDriverId: load.driver_id,
     driverId,
@@ -138,19 +135,6 @@ export function LoadAssignmentForm({
     }
   }, [organizationId, load.id, truckId, driverId])
 
-  // Read the clock after mount, and again when the 20 minutes are up.
-  useEffect(() => {
-    const timers = [setTimeout(() => setNow(Date.now()), 0)]
-    if (dispatch && !dispatch.seen_at) {
-      const due =
-        new Date(dispatch.sent_at).getTime() + RESEND_AFTER_MS - Date.now()
-      if (due > 0) {
-        timers.push(setTimeout(() => setNow(Date.now()), due + 1000))
-      }
-    }
-    return () => timers.forEach(clearTimeout)
-  }, [dispatch])
-
   const { errors, formError, pending, formProps, revalidate } = useZodForm(
     loadAssignmentSchema,
     async (values) => {
@@ -159,41 +143,15 @@ export function LoadAssignmentForm({
         return result.error
       }
       const parts = [`Load ${load.reference} saved.`]
-      if (result.removed)
-        parts.push(`${result.removed} was told it's off their schedule.`)
-      if (result.notified) parts.push(`${result.notified} was notified.`)
+      if (result.removed) parts.push(`${result.removed} is off it.`)
+      if (result.dispatched) parts.push(`Dispatched to ${result.dispatched}.`)
       toast.success(parts.join(" "))
-      for (const problem of result.problems) {
-        toast.warning(problem)
-      }
     }
   )
 
-  async function resend() {
-    setBusy("resend")
-    const result = await sendToDriver(organizationId, load.id)
-    setBusy(null)
-    if ("error" in result) {
-      toast.error(result.error)
-    } else if (result.emailError) {
-      toast.warning(result.emailError)
-    } else {
-      toast.success(`Sent to ${load.driver?.full_name ?? "the driver"} again.`)
-    }
-  }
-
-  async function copyLink() {
-    if (!link) return
-    try {
-      await navigator.clipboard.writeText(link)
-      toast.success("Link copied. Text it to the driver.")
-    } catch {
-      toast.error("Couldn't copy the link.")
-    }
-  }
-
   // The pay line: what's locked, or what it will be once saved.
   const savedPay = loadDriverPay(load)
+  const savedDriver = drivers.find((option) => option.id === load.driver_id)
   const lockedRate = formatPay(load.driver_pay_type, load.driver_pay_rate)
   let payNote: React.ReactNode
   if (driverChanged) {
@@ -216,210 +174,199 @@ export function LoadAssignmentForm({
   } else if (!lockedRate) {
     payNote = `${load.driver.full_name} has no pay rate yet.`
   } else {
+    // Different from their usual rate: set for this load (or locked before
+    // their rate changed).
+    const usualRate = formatPay(
+      savedDriver?.pay_type ?? null,
+      savedDriver?.pay_rate ?? null
+    )
+    const own = usualRate !== null && usualRate !== lockedRate
     payNote =
       savedPay === null
         ? `Add the miles to work out pay at ${lockedRate}.`
-        : `${formatRate(savedPay)} at ${lockedRate}, locked when assigned.`
+        : own
+          ? `${formatRate(savedPay)}${load.driver_pay_type === "flat" ? "" : ` at ${lockedRate}`} for this load. Usually ${usualRate}.`
+          : `${formatRate(savedPay)} at ${lockedRate}, locked when assigned.`
   }
+  // Pay can be changed for the driver saved on the load, not one just picked.
+  const showChangePay = canChangePay && !!load.driver && !driverChanged
 
   const truckName = load.truck_link?.unit_number ?? load.truck
   const driverName = load.driver?.full_name ?? load.driver_name
-  const showResend =
-    !!dispatch &&
-    now !== null &&
-    offerResend({
-      sentAt: dispatch.sent_at,
-      seenAt: dispatch.seen_at,
-      emailTo: dispatch.email_to,
-      emailFailed: dispatch.email_failed,
-      now,
-    })
-
   return (
-    <form {...formProps} autoComplete="off">
-      <fieldset disabled={pending}>
-        <SettingsCard
-          // The load page's next step links here to assign a truck and driver.
-          id="assignment"
-          className="scroll-mt-6"
-          title="Assignment"
-          description={
-            driverName ? (
-              <>
-                {truckName &&
-                  (load.truck_link ? (
+    <>
+      <form {...formProps} autoComplete="off">
+        <fieldset disabled={pending}>
+          <SettingsCard
+            // The load page's next step links here to assign a truck and driver.
+            id="assignment"
+            className="scroll-mt-6"
+            title="Assignment"
+            description={
+              driverName ? (
+                <>
+                  {truckName &&
+                    (load.truck_link ? (
+                      <Link
+                        href={`${trucksBase}/${load.truck_link.id}`}
+                        className="font-medium text-foreground hover:underline"
+                      >
+                        {truckName}
+                      </Link>
+                    ) : (
+                      <span className="font-medium text-foreground">
+                        {truckName}
+                      </span>
+                    ))}
+                  {truckName ? ", driven by " : "Driven by "}
+                  {load.driver ? (
                     <Link
-                      href={`${trucksBase}/${load.truck_link.id}`}
+                      href={`${driversBase}/${load.driver.id}`}
                       className="font-medium text-foreground hover:underline"
                     >
-                      {truckName}
+                      {driverName}
                     </Link>
                   ) : (
                     <span className="font-medium text-foreground">
-                      {truckName}
+                      {driverName}
                     </span>
-                  ))}
-                {truckName ? ", driven by " : "Driven by "}
-                {load.driver ? (
-                  <Link
-                    href={`${driversBase}/${load.driver.id}`}
-                    className="font-medium text-foreground hover:underline"
-                  >
-                    {driverName}
-                  </Link>
-                ) : (
-                  <span className="font-medium text-foreground">
-                    {driverName}
-                  </span>
-                )}
-              </>
-            ) : (
-              "No driver assigned"
-            )
-          }
-          contentClassName="flex flex-col gap-5"
-          footer={
-            <SettingsCardFooter
-              hint={
-                formError ? (
-                  <span className="text-destructive">{formError}</span>
-                ) : (
-                  payNote
-                )
-              }
-            >
-              <Button type="submit" size="sm" disabled={pending}>
-                {pending
-                  ? "Saving…"
-                  : saveLabel(notify, driver?.full_name ?? null)}{" "}
-                {notify ? <Send /> : <CornerDownLeft />}
-              </Button>
-            </SettingsCardFooter>
-          }
-        >
-          <div className="grid gap-5 sm:grid-cols-2">
-            <Field data-invalid={!!errors.truck_id}>
-              <FieldLabel htmlFor="load-truck-id">Truck</FieldLabel>
-              <TruckSelect
-                id="load-truck-id"
-                trucks={trucks}
-                defaultValue={load.truck_id}
-                invalid={!!errors.truck_id}
-                onPick={(picked) => setTruckId(picked?.id ?? null)}
-                onUpdate={revalidate}
-              />
-              <FieldError errors={errors.truck_id} />
-            </Field>
-            <Field data-invalid={!!errors.driver_id}>
-              <FieldLabel htmlFor="load-driver-id">Driver</FieldLabel>
-              <DriverSelect
-                id="load-driver-id"
-                drivers={drivers}
-                value={driverId}
-                onValueChange={setDriverId}
-                invalid={!!errors.driver_id}
-                onUpdate={revalidate}
-              />
-              {errors.driver_id ? (
-                <FieldError errors={errors.driver_id} />
+                  )}
+                </>
               ) : (
-                driverChanged &&
-                load.status === "dispatched" && (
-                  <FieldDescription>
-                    {driver
-                      ? `${load.driver?.full_name ?? "The current driver"} will be told it's off their schedule.`
-                      : `Saving takes ${load.driver?.full_name ?? "the driver"} off and puts the load back to booked.`}
-                  </FieldDescription>
-                )
-              )}
-            </Field>
-          </div>
-
-          {(conflicts.driver.length > 0 || conflicts.truck.length > 0) && (
-            <div
-              role="alert"
-              className="flex flex-col gap-1.5 rounded-lg bg-amber-500/15 px-3 py-2 text-amber-800 dark:text-amber-200"
-            >
-              {conflicts.driver.length > 0 && (
-                <Conflict
-                  who={driver?.full_name ?? "This driver"}
-                  loads={conflicts.driver}
-                  loadsBase={loadsBase}
-                />
-              )}
-              {conflicts.truck.length > 0 && (
-                <Conflict
-                  who={truck ? `Truck ${truck.unit_number}` : "This truck"}
-                  loads={conflicts.truck}
-                  loadsBase={loadsBase}
-                />
-              )}
-            </div>
-          )}
-
-          <div className="grid gap-5 sm:grid-cols-2">
-            <RouteMilesField
-              // Re-estimated when the stops are saved: show the new number.
-              key={`miles-${load.miles}`}
-              organizationId={organizationId}
-              defaultValue={load.miles}
-              errors={errors.miles}
-            />
-            <EmptyMilesField
-              // Re-estimated when the stops are saved: show the new number.
-              key={`empty-${load.empty_miles}`}
-              organizationId={organizationId}
-              truckId={truckId}
-              loadId={load.id}
-              defaultValue={load.empty_miles}
-              errors={errors.empty_miles}
-              trucksBase={trucksBase}
-            />
-          </div>
-
-          {load.driver && dispatch && (
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-4 text-sm">
-              <p className="text-muted-foreground">
-                Notified <LocalTime value={dispatch.sent_at} />
-                {" · "}
-                {dispatch.seen_at ? (
-                  <>
-                    Opened <LocalTime value={dispatch.seen_at} />
-                  </>
-                ) : (
-                  "Not opened yet"
-                )}
-              </p>
-              {showResend && (
-                <div className="flex gap-1">
+                "No driver assigned"
+              )
+            }
+            contentClassName="flex flex-col gap-5"
+            footer={
+              <SettingsCardFooter
+                hint={
+                  formError ? (
+                    <span className="text-destructive">{formError}</span>
+                  ) : (
+                    payNote
+                  )
+                }
+              >
+                {showChangePay && (
                   <Button
                     type="button"
-                    size="xs"
+                    size="sm"
                     variant="outline"
-                    disabled={busy !== null || pending}
-                    onClick={() => void resend()}
+                    onClick={() => setPayOpen(true)}
                   >
-                    <Send />
-                    {busy === "resend" ? "Sending…" : "Resend"}
+                    <Pencil />
+                    Change pay
                   </Button>
-                  {link && (
-                    <Button
-                      type="button"
-                      size="xs"
-                      variant="outline"
-                      disabled={pending}
-                      onClick={() => void copyLink()}
-                    >
-                      <Copy />
-                      Copy driver link
-                    </Button>
-                  )}
-                </div>
-              )}
+                )}
+                <Button
+                  type="submit"
+                  size="sm"
+                  // Nothing to save, unless saving would dispatch the load.
+                  disabled={pending || (!changed && !dispatches)}
+                >
+                  {pending ? "Saving…" : saveLabel(dispatches)}{" "}
+                  {dispatches ? <Truck /> : <CornerDownLeft />}
+                </Button>
+              </SettingsCardFooter>
+            }
+          >
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field data-invalid={!!errors.truck_id}>
+                <FieldLabel htmlFor="load-truck-id">Truck</FieldLabel>
+                <TruckSelect
+                  id="load-truck-id"
+                  trucks={trucks}
+                  defaultValue={load.truck_id}
+                  invalid={!!errors.truck_id}
+                  onPick={(picked) => setTruckId(picked?.id ?? null)}
+                  onUpdate={revalidate}
+                />
+                <FieldError errors={errors.truck_id} />
+              </Field>
+              <Field data-invalid={!!errors.driver_id}>
+                <FieldLabel htmlFor="load-driver-id">Driver</FieldLabel>
+                <DriverSelect
+                  id="load-driver-id"
+                  drivers={drivers}
+                  value={driverId}
+                  onValueChange={setDriverId}
+                  invalid={!!errors.driver_id}
+                  onUpdate={revalidate}
+                />
+                {errors.driver_id ? (
+                  <FieldError errors={errors.driver_id} />
+                ) : (
+                  driverChanged &&
+                  load.status === "dispatched" && (
+                    <FieldDescription>
+                      {driver
+                        ? `Saving takes ${load.driver?.full_name ?? "the current driver"} off it.`
+                        : `Saving takes ${load.driver?.full_name ?? "the driver"} off and puts the load back to booked.`}
+                    </FieldDescription>
+                  )
+                )}
+              </Field>
             </div>
-          )}
-        </SettingsCard>
-      </fieldset>
-    </form>
+
+            {(conflicts.driver.length > 0 || conflicts.truck.length > 0) && (
+              <div
+                role="alert"
+                className="flex flex-col gap-1.5 rounded-lg bg-amber-500/15 px-3 py-2 text-amber-800 dark:text-amber-200"
+              >
+                {conflicts.driver.length > 0 && (
+                  <Conflict
+                    who={driver?.full_name ?? "This driver"}
+                    loads={conflicts.driver}
+                    loadsBase={loadsBase}
+                  />
+                )}
+                {conflicts.truck.length > 0 && (
+                  <Conflict
+                    who={truck ? `Truck ${truck.unit_number}` : "This truck"}
+                    loads={conflicts.truck}
+                    loadsBase={loadsBase}
+                  />
+                )}
+              </div>
+            )}
+
+            <div className="grid gap-5 sm:grid-cols-2">
+              <RouteMilesField
+                // Re-estimated when the stops are saved: show the new number.
+                key={`miles-${load.miles}`}
+                organizationId={organizationId}
+                defaultValue={load.miles}
+                errors={errors.miles}
+                onValueChange={setMiles}
+              />
+              <EmptyMilesField
+                // Re-estimated when the stops are saved: show the new number.
+                key={`empty-${load.empty_miles}`}
+                organizationId={organizationId}
+                truckId={truckId}
+                loadId={load.id}
+                defaultValue={load.empty_miles}
+                errors={errors.empty_miles}
+                onValueChange={setEmptyMiles}
+                trucksBase={trucksBase}
+              />
+            </div>
+          </SettingsCard>
+        </fieldset>
+      </form>
+      {/* Outside the assignment form: a form can't sit inside another. */}
+      {showChangePay && (
+        <LoadPayDialog
+          organizationId={organizationId}
+          load={load}
+          usual={{
+            pay_type: savedDriver?.pay_type ?? null,
+            pay_rate: savedDriver?.pay_rate ?? null,
+          }}
+          open={payOpen}
+          onOpenChange={setPayOpen}
+        />
+      )}
+    </>
   )
 }

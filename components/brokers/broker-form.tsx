@@ -13,6 +13,7 @@ import {
   type McLookup,
 } from "@/app/org/[slug]/customers/actions"
 import { FlagBadge } from "@/components/brokers/broker-badges"
+import { FmcsaDown } from "@/components/brokers/fmcsa-down"
 import { ContactsDraft } from "@/components/brokers/contacts-draft"
 import {
   SettingsCard,
@@ -203,6 +204,7 @@ function McLookupCard({
   }
 
   const flags = result && "ok" in result ? fmcsaFlags(result.fmcsa) : []
+  const cleanedMc = mc.replace(/\D/g, "")
 
   return (
     <SettingsCard
@@ -225,6 +227,18 @@ function McLookupCard({
                   {result.existing.legal_name}
                 </Link>
               </span>
+            ) : result.fmcsaUnavailable ? (
+              <FmcsaDown
+                mc={cleanedMc}
+                savedOn={
+                  result.fmcsa
+                    ? new Date(result.fmcsa.checked_at).toLocaleDateString(
+                        "en-US",
+                        { month: "short", day: "numeric", year: "numeric" }
+                      )
+                    : null
+                }
+              />
             ) : result.fmcsa ? (
               <span>
                 Filled in from FMCSA: {result.fmcsa.legal_name ?? "no name"}.

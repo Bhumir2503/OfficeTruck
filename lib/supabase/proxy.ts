@@ -53,15 +53,9 @@ export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Signed-in users go to "/", which routes them on to their organization.
-  // Drivers sign in with a text message at /driver/login instead.
-  const driverArea = pathname === "/driver" || pathname.startsWith("/driver/")
   const destination = data?.claims
-    ? isSignedOutOnly(pathname)
-      ? "/"
-      : pathname === "/driver/login" && "/driver"
-    : driverArea
-      ? pathname !== "/driver/login" && "/driver/login"
-      : requiresSignIn(pathname) && "/login"
+    ? isSignedOutOnly(pathname) && "/"
+    : requiresSignIn(pathname) && "/login"
 
   if (destination) {
     const redirect = NextResponse.redirect(new URL(destination, request.url))

@@ -62,6 +62,8 @@ export type McLookup =
       fmcsaError?: string
       /** FMCSA answered, and has no company with this MC number. */
       fmcsaNotFound?: boolean
+      /** FMCSA's servers couldn't be reached. */
+      fmcsaUnavailable?: boolean
     }
 
 /**
@@ -102,6 +104,7 @@ export async function lookupMc(
     fmcsa: (data as FmcsaRecord | null) ?? null,
     fmcsaError: result.error,
     fmcsaNotFound: result.notFound,
+    fmcsaUnavailable: result.unavailable,
   }
 }
 

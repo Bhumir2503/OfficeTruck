@@ -848,7 +848,7 @@ export function DriverForm({
               />
               <TextField
                 name="phone"
-                label="Sign-in number"
+                label="Phone number"
                 type="tel"
                 placeholder="(555) 123-4567"
                 defaultValue={

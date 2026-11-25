@@ -1,5 +1,7 @@
 import { z } from "zod"
 
+import { PAY_TYPES } from "@/lib/schemas/driver"
+
 // Keep these rules in step with the checks on public.loads, load_stops and
 // load_charges, and the save_load_stops / create_load functions.
 
@@ -279,6 +281,42 @@ const driverId = id("Choose a driver.")
 const truckId = id("Choose a truck.")
 
 /** The truck, driver and miles on a load, which can be changed after it's added. */
+/** The driver's pay on one load, when it differs from their usual rate. */
+export const loadDriverPaySchema = z
+  .object({
+    pay_type: z.enum(PAY_TYPES, "Choose how the driver is paid."),
+    // A string from the form ("0.65", "1,200"); a number on the server.
+    pay_rate: z.preprocess(
+      (value) => {
+        if (typeof value === "number") return value
+        if (typeof value !== "string") return null
+        const cleaned = value.replace(/[$,%\s]/g, "")
+        return cleaned === "" ? null : cleaned
+      },
+      z.union(
+        [
+          z.number(),
+          z
+            .string()
+            .regex(/^\d{1,7}(\.\d{0,3})?$/, "Enter an amount like 0.65.")
+            .transform(Number),
+        ],
+        "Enter the rate."
+      )
+    ),
+  })
+  .superRefine((pay, context) => {
+    if (pay.pay_type === "percent" && pay.pay_rate > 100) {
+      context.addIssue({
+        code: "custom",
+        path: ["pay_rate"],
+        message: "Must be 100% or less.",
+      })
+    }
+  })
+
+export type LoadDriverPayValues = z.input<typeof loadDriverPaySchema>
+
 export const loadAssignmentSchema = z.object({
   truck_id: truckId,
   driver_id: driverId,

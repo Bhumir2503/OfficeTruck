@@ -520,8 +520,8 @@ export function driverNextSteps(
   if (!driver.phone)
     missing.push([
       "phone",
-      "Add a sign-in number",
-      `${name} signs in on their phone with it, to upload their own papers.`,
+      "Add a phone number",
+      `How you reach ${name}. They'll sign in to the driver app with it too.`,
       "details",
     ])
   if (!driver.start_date)

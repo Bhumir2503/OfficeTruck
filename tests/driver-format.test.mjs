@@ -112,7 +112,7 @@ describe("driverNextSteps", () => {
     assert.deepEqual(
       list.map((s) => [s.title, s.action?.target ?? s.action?.type]),
       [
-        ["Add a sign-in number", "details"],
+        ["Add a phone number", "details"],
         ["Add the start date", "details"],
         ["Add the CDL number and state", "cdl"],
         ["Add the CDL class", "cdl"],
@@ -152,7 +152,7 @@ describe("driverNextSteps", () => {
     ])
     assert.deepEqual(
       list.map((s) => s.title),
-      ["Add a sign-in number", "Next up: load LATER"]
+      ["Add a phone number", "Next up: load LATER"]
     )
   })
 })

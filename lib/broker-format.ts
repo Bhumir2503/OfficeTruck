@@ -2,6 +2,11 @@ import type { FmcsaRecord } from "@/lib/fmcsa"
 
 // Shared by server and client: no server-only imports here.
 
+/** FMCSA's own company snapshot for an MC number, to check by hand. */
+export function saferUrl(mcNumber: string) {
+  return `https://safer.fmcsa.dot.gov/query.asp?searchtype=ANY&query_type=queryCarrierSnapshot&query_param=MC_MX&query_string=${encodeURIComponent(mcNumber)}`
+}
+
 /** Authority granted this recently is "new": a common sign of a risky broker. */
 export const NEW_AUTHORITY_DAYS = 180
 /** A name, address, phone or authority change this recent is flagged. */

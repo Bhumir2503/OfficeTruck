@@ -8,7 +8,7 @@ import {
   MapPin,
   PackageCheck,
   ReceiptText,
-  Send,
+  Truck,
   UserPlus,
 } from "lucide-react"
 import Link from "next/link"
@@ -17,9 +17,9 @@ import { useState } from "react"
 import { toast } from "sonner"
 
 import {
-  sendToDriver,
-  updateLoadAssignment,
+  dispatchLoad,
   markLoadComplete,
+  saveAssignment,
 } from "@/app/org/[slug]/loads/actions"
 import { createInvoice } from "@/app/org/[slug]/invoices/actions"
 import { DriverSelect } from "@/components/loads/driver-select"
@@ -49,8 +49,6 @@ export type RowActionContext = {
   organizationId: string
   drivers: DriverOption[]
   trucks: TruckOption[]
-  /** Whether the company sends the rate to drivers. */
-  shareRate: boolean
   /** /org/<slug> */
   orgBase: string
   /** Every load, to spot a driver already on the road at the same time. */
@@ -131,7 +129,7 @@ function clashesFor(load: Load, driverId: string | null, loads: Load[]) {
   )
 }
 
-type Action = "assign" | "send" | "complete"
+type Action = "assign" | "dispatch" | "complete"
 
 /** The first pickup to the last delivery, as a line in a dialog. */
 function Route({ load }: { load: Load }) {
@@ -183,9 +181,9 @@ function AssignForm({
     loadAssignmentSchema,
     async (values) => {
       if (!values.truck_id || !values.driver_id) {
-        return "Pick a truck and a driver, so the load can be sent."
+        return "Pick a truck and a driver to dispatch the load."
       }
-      const result = await updateLoadAssignment(
+      const result = await saveAssignment(
         context.organizationId,
         load.id,
         values
@@ -195,12 +193,8 @@ function AssignForm({
       }
       const driver = context.drivers.find((d) => d.id === values.driver_id)
       toast.success(
-        `${driver?.full_name ?? "The driver"} is on load ${load.reference}. Send it when you're ready.`
+        `Load ${load.reference} dispatched to ${driver?.full_name ?? "the driver"}.`
       )
-      // Already shown above the Assign button.
-      if (result.warning && clashes.length === 0) {
-        toast.warning(result.warning)
-      }
       onDone()
     }
   )
@@ -299,15 +293,16 @@ function AssignForm({
       <DialogFooter>
         <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
         <Button type="submit" disabled={pending}>
-          <UserPlus />
-          {pending ? "Assigning…" : "Assign"}
+          <Truck />
+          {pending ? "Dispatching…" : "Assign and dispatch"}
         </Button>
       </DialogFooter>
     </form>
   )
 }
 
-function SendForm({
+/** Dispatches a load that already has its truck and driver. */
+function DispatchForm({
   load,
   context,
   onDone,
@@ -319,26 +314,16 @@ function SendForm({
   const [pending, setPending] = useState(false)
   const driver = context.drivers.find((d) => d.id === load.driver_id)
   const name = driver?.full_name ?? load.driver?.full_name ?? "the driver"
-  // Paid a percentage of the load, they're owed what it paid, so the rate
-  // goes in whatever the company setting.
-  const percentPay =
-    (load.driver_pay_type ?? load.driver?.pay_type) === "percent"
 
-  async function send() {
+  async function dispatch() {
     setPending(true)
-    const result = await sendToDriver(context.organizationId, load.id)
+    const result = await dispatchLoad(context.organizationId, load.id)
     setPending(false)
     if ("error" in result) {
       toast.error(result.error)
       return
     }
-    if (result.emailError) {
-      toast.warning(
-        `Load ${load.reference} sent to ${name}. ${result.emailError} Copy the link from the load page to text it to them.`
-      )
-    } else {
-      toast.success(`Load ${load.reference} sent to ${name}.`)
-    }
+    toast.success(`Load ${load.reference} dispatched to ${name}.`)
     if (result.warning) {
       toast.warning(result.warning)
     }
@@ -360,33 +345,16 @@ function SendForm({
               {load.truck_link?.unit_number ?? "—"}
             </dd>
           </div>
-          <div className="col-span-2">
-            <dt className="text-xs text-muted-foreground">Emailed to</dt>
-            <dd className="font-medium">
-              {driver?.email ?? (
-                <span className="font-normal text-muted-foreground">
-                  No email on file. You&apos;ll copy the link from the load page
-                  and text it.
-                </span>
-              )}
-            </dd>
-          </div>
         </dl>
         <p className="text-muted-foreground">
-          Sends the stops, appointments, pickup numbers and rate con.{" "}
-          {context.shareRate
-            ? "Includes the rate."
-            : percentPay
-              ? "Includes the rate, since they're paid a percentage of the load."
-              : "The rate isn't included."}{" "}
-          The load moves to dispatched.
+          The load moves to dispatched for {name}.
         </p>
       </div>
       <DialogFooter>
         <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-        <Button disabled={pending} onClick={send}>
-          <Send />
-          {pending ? "Sending…" : `Send to ${name.split(" ")[0]}`}
+        <Button disabled={pending} onClick={dispatch}>
+          <Truck />
+          {pending ? "Dispatching…" : "Dispatch"}
         </Button>
       </DialogFooter>
     </div>
@@ -425,8 +393,8 @@ function CompleteForm({
         <Route load={load} />
         <p className="text-muted-foreground">
           The status moves on its own when the BOL and POD are uploaded or the
-          driver checks in. Mark it complete only if those won&apos;t come; it
-          shows as &ldquo;Completed&rdquo; and moves to Needs billing.
+          stop times are entered. Mark it complete only if those won&apos;t
+          come; it shows as &ldquo;Completed&rdquo; and moves to Needs billing.
         </p>
       </div>
       <DialogFooter>
@@ -442,13 +410,13 @@ function CompleteForm({
 
 const TITLES: Record<Action, (load: Load) => string> = {
   assign: (load) => `Assign load ${load.reference}`,
-  send: (load) => `Send load ${load.reference}`,
+  dispatch: (load) => `Dispatch load ${load.reference}`,
   complete: (load) => `Mark ${load.reference} complete`,
 }
 
 const DESCRIPTIONS: Record<Action, string> = {
-  assign: "Pick who runs it. It stays booked until you send it.",
-  send: "Your driver gets a private link to the load.",
+  assign: "Pick who runs it. Saving dispatches the load to them.",
+  dispatch: "It has a truck and driver, but isn't dispatched yet.",
   complete: "Delivered, marked by hand.",
 }
 
@@ -458,7 +426,7 @@ function actionFor(load: Load): Action | null {
     case "needs_driver":
       return "assign"
     case "ready_to_send":
-      return "send"
+      return "dispatch"
     case "on_the_road":
       return "complete"
     default:
@@ -520,10 +488,7 @@ export function LoadRowAction({
 
   const button = {
     assign: { icon: <UserPlus />, label: "Assign driver" },
-    send: {
-      icon: <Send />,
-      label: `Send to ${load.driver?.full_name.split(" ")[0] ?? "driver"}`,
-    },
+    dispatch: { icon: <Truck />, label: "Dispatch" },
     complete: { icon: <PackageCheck />, label: "Mark complete" },
   }[action]
 
@@ -532,7 +497,7 @@ export function LoadRowAction({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <Button
-        variant={action === "send" ? "default" : "outline"}
+        variant={action === "dispatch" ? "default" : "outline"}
         size="sm"
         className="whitespace-nowrap"
         onClick={() => setOpen(true)}
@@ -548,8 +513,8 @@ export function LoadRowAction({
         {action === "assign" && (
           <AssignForm load={load} context={context} onDone={close} />
         )}
-        {action === "send" && (
-          <SendForm load={load} context={context} onDone={close} />
+        {action === "dispatch" && (
+          <DispatchForm load={load} context={context} onDone={close} />
         )}
         {action === "complete" && (
           <CompleteForm load={load} context={context} onDone={close} />

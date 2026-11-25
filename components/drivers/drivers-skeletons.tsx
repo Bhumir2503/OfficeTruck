@@ -140,7 +140,7 @@ export function DriverFormSkeleton({ editing = false }: { editing?: boolean }) {
         contentClassName="grid gap-5 sm:grid-cols-6"
       >
         <FieldSkeleton label="Full name" className="sm:col-span-6" />
-        <FieldSkeleton label="Sign-in number" className="sm:col-span-3" />
+        <FieldSkeleton label="Phone number" className="sm:col-span-3" />
         <FieldSkeleton label="Email" className="sm:col-span-3" />
         <FieldSkeleton label="Start date" className="sm:col-span-3" />
       </SettingsCard>

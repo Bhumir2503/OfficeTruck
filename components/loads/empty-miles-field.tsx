@@ -38,6 +38,7 @@ export function EmptyMilesField({
   errors,
   trucksBase,
   id = "load-empty-miles",
+  onValueChange,
 }: {
   organizationId: string
   truckId: string | null
@@ -51,6 +52,8 @@ export function EmptyMilesField({
   /** /org/<slug>/equipment, to link to the truck for its home base. */
   trucksBase: string
   id?: string
+  /** The box's value whenever it changes, typed or estimated. */
+  onValueChange?: (value: string) => void
 }) {
   const [value, setValue] = useState(
     defaultValue === null || defaultValue === undefined
@@ -63,6 +66,12 @@ export function EmptyMilesField({
   const runId = useRef(0)
   // A saved load keeps its saved number until something changes.
   const changed = useRef(false)
+
+  useEffect(() => {
+    onValueChange?.(value)
+    // Only when the value changes; the callback is new every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value])
 
   async function estimate() {
     if (!truckId) {

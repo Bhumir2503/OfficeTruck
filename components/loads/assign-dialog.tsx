@@ -1,6 +1,6 @@
 "use client"
 
-import { Send } from "lucide-react"
+import { Truck } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
@@ -30,7 +30,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { useZodForm } from "@/hooks/use-zod-form"
-import { saveLabel, willNotify } from "@/lib/assignment-format"
+import { saveLabel, willDispatch } from "@/lib/assignment-format"
 import { driverPay, formatPay } from "@/lib/driver-format"
 import type { DriverOption } from "@/lib/drivers"
 import { formatRate } from "@/lib/load-format"
@@ -67,7 +67,7 @@ function AssignForm({
   const [conflicts, setConflicts] = useState(NO_CONFLICTS)
 
   const driver = drivers.find((option) => option.id === driverId) ?? null
-  const notify = willNotify({
+  const dispatches = willDispatch({
     status: load.status,
     savedDriverId: load.driver_id,
     driverId,
@@ -96,11 +96,8 @@ function AssignForm({
         return result.error
       }
       const parts = [`Load ${load.reference} assigned.`]
-      if (result.notified) parts.push(`${result.notified} was notified.`)
+      if (result.dispatched) parts.push(`Dispatched to ${result.dispatched}.`)
       toast.success(parts.join(" "))
-      for (const problem of result.problems) {
-        toast.warning(problem)
-      }
       onDone()
     }
   )
@@ -217,10 +214,9 @@ function AssignForm({
           </div>
         )}
 
-        {notify && driver && (
+        {dispatches && driver && (
           <p className="text-sm text-muted-foreground">
-            {driver.full_name.split(/\s+/)[0]} gets the stops, appointments,
-            pickup numbers and rate con, and the load moves to dispatched.
+            Saving dispatches the load to {driver.full_name}.
           </p>
         )}
 
@@ -232,8 +228,8 @@ function AssignForm({
             Cancel
           </Button>
           <Button type="submit" disabled={pending}>
-            {pending ? "Saving…" : saveLabel(notify, driver?.full_name ?? null)}
-            {notify && <Send />}
+            {pending ? "Saving…" : saveLabel(dispatches)}
+            {dispatches && <Truck />}
           </Button>
         </DialogFooter>
       </fieldset>

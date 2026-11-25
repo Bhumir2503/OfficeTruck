@@ -228,8 +228,8 @@ type StatusAction =
 
 /**
  * What the office can do from a status. Everything else moves on its own:
- * Dispatched from Save and notify, In transit and Delivered from the BOL,
- * POD and check-ins. Invoiced and Paid are manual until invoicing and
+ * Dispatched from Save and dispatch, In transit and Delivered from the BOL,
+ * POD and stop times. Invoiced and Paid are manual until invoicing and
  * payments are built.
  */
 function actionsFor(status: LoadStatus, manual: boolean): StatusAction[][] {
@@ -358,7 +358,7 @@ export function LoadStatusMenu({
           aria-label={`Status of load ${load.reference}: ${statusLabel}${manual ? ", marked complete by hand" : ""}`}
           title={
             manual
-              ? "Marked complete by hand. No POD or check-in yet."
+              ? "Marked complete by hand. No POD or last stop time yet."
               : undefined
           }
           className={cn(
@@ -381,7 +381,7 @@ export function LoadStatusMenu({
               {index === 0 && (
                 <DropdownMenuLabel className="font-normal text-muted-foreground">
                   {load.status === "dispatched" || load.status === "loaded"
-                    ? "Moves on its own from the BOL, POD and check-ins"
+                    ? "Moves on its own from the BOL, POD and stop times"
                     : "Actions"}
                 </DropdownMenuLabel>
               )}
