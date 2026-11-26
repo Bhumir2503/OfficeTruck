@@ -6,6 +6,7 @@ import { getDriverOptions } from "@/lib/drivers"
 import { getLoadInvoices } from "@/lib/invoices"
 import { getLoads, getPaymentsDue } from "@/lib/loads"
 import { getOrganization } from "@/lib/organizations"
+import { getInboxWaiting } from "@/lib/rate-con-inbox-data"
 import { getTruckOptions } from "@/lib/trucks"
 
 export const metadata: Metadata = { title: "Loads" }
@@ -19,11 +20,12 @@ export default async function LoadsPage({
   }
 
   const base = `/org/${organization.slug}/loads`
-  const [loads, drivers, trucks, invoices] = await Promise.all([
+  const [loads, drivers, trucks, invoices, inboxWaiting] = await Promise.all([
     getLoads(organization.id),
     getDriverOptions(organization.id),
     getTruckOptions(organization.id),
     getLoadInvoices(organization.id),
+    getInboxWaiting(organization.id),
   ])
   const payments = await getPaymentsDue(organization.id, loads)
 
@@ -42,6 +44,7 @@ export default async function LoadsPage({
             invoices,
           }}
           base={base}
+          inboxWaiting={inboxWaiting}
         />
       </div>
     </div>
