@@ -137,8 +137,24 @@ enum DemoBackend {
           "status": "\(status)", "pickup_location": "Memphis, TN", "pickup_start": "2026-11-25T08:00:00",
           "delivery_location": "Atlanta, GA", "delivery_start": "2026-11-26T14:00:00",
           "delivered_on": null, "truck": "T-101", "trailer_number": "53-220",
-          "stop_count": 2, "stops_departed": \(departed.count)}\(twoCarriers ? secondCarrierLoad : "")]
+          "stop_count": 2, "stops_departed": \(departed.count)}, \(upcomingLoad)\(twoCarriers ? secondCarrierLoad : "")]
         """.utf8)
+    }
+
+    /// A dispatched load that picks up in two days, for the Upcoming
+    /// section. Opening it shows QA-1004's detail; demo mode has one.
+    private static var upcomingLoad: String {
+        let day = Calendar.current.date(byAdding: .day, value: 2, to: .now)!
+            .formatted(.iso8601.year().month().day())
+        let next = Calendar.current.date(byAdding: .day, value: 3, to: .now)!
+            .formatted(.iso8601.year().month().day())
+        return """
+        {"id": "11111111-0000-0000-0000-000000000003", "organization_name": "Acme Freight", "reference": "QA-1011",
+         "status": "dispatched", "pickup_location": "Nashville, TN", "pickup_start": "\(day)T07:00:00",
+         "delivery_location": "Louisville, KY", "delivery_start": "\(next)T10:00:00",
+         "delivered_on": null, "truck": "T-101", "trailer_number": null,
+         "stop_count": 2, "stops_departed": 0}
+        """
     }
 
     private static let secondCarrierLoad = """

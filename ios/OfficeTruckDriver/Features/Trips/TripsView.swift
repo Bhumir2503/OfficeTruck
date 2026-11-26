@@ -1,7 +1,11 @@
 import SwiftUI
 
-/// The app's one main screen: every load sent to the driver, the ones on
-/// the road first. Tap a trip to work it. Pay and Profile open as pages
+/// The app's one main screen: every load sent to the driver, in three
+/// groups. Today: loads in transit, dispatched ones picking up today or
+/// overdue, and ones delivered today. Upcoming: dispatched loads that pick
+/// up on a later day. Past: everything else, newest first; a delivered load
+/// still waiting on the office can be opened there to add paperwork.
+/// Tap a trip to work it. Pay and Profile open as pages
 /// from the toolbar.
 struct TripsView: View {
     @State private var loads: Loadable<[LoadSummary]> = .loading
@@ -31,13 +35,34 @@ struct TripsView: View {
                     )
                     .refreshable { await fetch() }
                 case .loaded(let trips):
-                    let onRoad = trips.filter(\.isOnTheRoad)
-                    let past = trips.filter { !$0.isOnTheRoad }
+                    // Pickup days compare as written ("2026-11-26"), never
+                    // converted to the phone's time zone.
+                    let today = WallClock.today()
+                    let isUpcoming = { (trip: LoadSummary) in
+                        trip.status == .dispatched && String(trip.pickupStart.prefix(10)) > today
+                    }
+                    let isToday = { (trip: LoadSummary) in
+                        switch trip.status {
+                        case .loaded: true
+                        case .dispatched: !isUpcoming(trip)
+                        case .delivered: (trip.deliveredOn ?? String(trip.deliveryStart.prefix(10))) >= today
+                        default: false
+                        }
+                    }
+                    let current = trips.filter(isToday).sorted { $0.pickupStart < $1.pickupStart }
+                    let upcoming = trips.filter(isUpcoming).sorted { $0.pickupStart < $1.pickupStart }
+                    let past = trips.filter { !isToday($0) && !isUpcoming($0) }
+                        .sorted { $0.pickupStart > $1.pickupStart }
                     let showsCarrier = Set(trips.map(\.organizationName)).count > 1
                     List {
-                        if !onRoad.isEmpty {
-                            Section("On the road") {
-                                ForEach(onRoad) { trip in tripRow(trip, showsCarrier: showsCarrier) }
+                        if !current.isEmpty {
+                            Section("Today") {
+                                ForEach(current) { trip in tripRow(trip, showsCarrier: showsCarrier) }
+                            }
+                        }
+                        if !upcoming.isEmpty {
+                            Section("Upcoming") {
+                                ForEach(upcoming) { trip in tripRow(trip, showsCarrier: showsCarrier) }
                             }
                         }
                         if !past.isEmpty {
