@@ -9,7 +9,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { cn } from "cn"
+
 import { assignmentProblems, problemShort } from "@/lib/assignment-compliance"
+import { type DriverCandidate, describeDriver } from "@/lib/assignment-match"
 import type { DriverOption } from "@/lib/drivers"
 
 const NONE = "none"
@@ -31,6 +34,7 @@ export function DriverSelect({
   invalid,
   onUpdate,
   until = null,
+  availability,
 }: {
   id: string
   /** The hidden input's name. */
@@ -44,7 +48,12 @@ export function DriverSelect({
   onUpdate: (form: HTMLFormElement | null) => void
   /** The load's last day, "YYYY-MM-DD", to flag dates that run out by then. */
   until?: string | null
+  /** What each driver is doing around the load, to say so and list free ones first. */
+  availability?: DriverCandidate[]
 }) {
+  const doing = new Map(
+    (availability ?? []).map((driver) => [driver.driverId, driver])
+  )
   const [own, setOwn] = useState(defaultValue ?? NONE)
   const value = controlled !== undefined ? (controlled ?? NONE) : own
   const setValue = (next: string) => {
@@ -64,12 +73,19 @@ export function DriverSelect({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value])
 
-  const options = drivers.filter(
-    (driver) =>
-      driver.status === "active" ||
-      driver.id === defaultValue ||
-      driver.id === value
-  )
+  const options = drivers
+    .filter(
+      (driver) =>
+        driver.status === "active" ||
+        driver.id === defaultValue ||
+        driver.id === value
+    )
+    // Free drivers first, once it's known who's busy.
+    .sort(
+      (a, b) =>
+        Number(!!doing.get(a.id)?.busyWith) -
+        Number(!!doing.get(b.id)?.busyWith)
+    )
   const items = [
     { value: NONE, label: "No driver" },
     ...options.map((driver) => ({
@@ -103,18 +119,34 @@ export function DriverSelect({
             const problems = driver
               ? assignmentProblems(driver.compliance, until)
               : []
+            const status = doing.get(item.value)
+            const line = status ? describeDriver(status) : null
             return (
               <SelectItem key={item.value} value={item.value}>
                 {item.value === NONE ? (
                   <span className="text-muted-foreground">{item.label}</span>
-                ) : problems.length ? (
+                ) : problems.length || line ? (
                   <span className="flex flex-col items-start gap-0.5">
                     <span>{item.label}</span>
-                    <span className="text-xs text-destructive">
-                      {problemShort(problems[0])}
-                      {problems.length > 1 &&
-                        ` and ${problems.length - 1} more`}
-                    </span>
+                    {line && (
+                      <span
+                        className={cn(
+                          "text-xs",
+                          line.tone === "warn"
+                            ? "text-amber-700 dark:text-amber-300"
+                            : "text-muted-foreground"
+                        )}
+                      >
+                        {line.text}
+                      </span>
+                    )}
+                    {problems.length > 0 && (
+                      <span className="text-xs text-destructive">
+                        {problemShort(problems[0])}
+                        {problems.length > 1 &&
+                          ` and ${problems.length - 1} more`}
+                      </span>
+                    )}
                   </span>
                 ) : (
                   item.label

@@ -11,6 +11,10 @@ import {
   saveAssignment,
 } from "@/app/org/[slug]/loads/actions"
 import { ComplianceWarning } from "@/components/loads/compliance-warning"
+import {
+  AssignmentSuggestions,
+  useAssignmentPlan,
+} from "@/components/loads/assignment-suggestions"
 import { DriverSelect } from "@/components/loads/driver-select"
 import { EmptyMilesField } from "@/components/loads/empty-miles-field"
 import { Conflict } from "@/components/loads/load-assignment-form"
@@ -71,6 +75,7 @@ function AssignForm({
   const driver = drivers.find((option) => option.id === driverId) ?? null
   const truck = trucks.find((option) => option.id === truckId) ?? null
   const until = loadUntil(load)
+  const plan = useAssignmentPlan(organizationId, { loadId: load.id })
   const dispatches = willDispatch({
     status: load.status,
     savedDriverId: load.driver_id,
@@ -128,6 +133,19 @@ function AssignForm({
       <fieldset disabled={pending} className="flex flex-col gap-5">
         {/* Loaded miles stay as they are; empty miles depend on the truck. */}
         <input type="hidden" name="miles" value={load.miles ?? ""} />
+        <AssignmentSuggestions
+          {...plan}
+          onRefresh={() => void plan.refresh()}
+          trucks={trucks}
+          drivers={drivers}
+          truckId={truckId}
+          driverId={driverId}
+          onUse={(truck, driver) => {
+            setTruckId(truck)
+            setDriverId(driver)
+            setDriverPicked(true)
+          }}
+        />
         <Field data-invalid={!!errors.truck_id}>
           <FieldLabel htmlFor="assign-truck-id">Truck</FieldLabel>
           <TruckSelect
@@ -137,6 +155,8 @@ function AssignForm({
             load={{ loadId: load.id }}
             until={until}
             defaultValue={load.truck_id}
+            value={truckId}
+            points={plan.plan?.points}
             invalid={!!errors.truck_id}
             onPick={(truck) => {
               setTruckId(truck?.id ?? null)
@@ -166,6 +186,7 @@ function AssignForm({
             id="assign-driver-id"
             drivers={drivers}
             until={until}
+            availability={plan.plan?.drivers}
             value={driverId}
             onValueChange={(value) => {
               setDriverId(value)

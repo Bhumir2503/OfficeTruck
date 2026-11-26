@@ -75,10 +75,16 @@ export function TruckSelect({
   organizationId,
   load,
   until = null,
+  value: controlled,
+  points: given,
 }: {
   id: string
   trucks: TruckOption[]
   defaultValue?: string | null
+  /** Set to control the choice from outside, e.g. a suggestion. */
+  value?: string | null
+  /** Where each truck starts from, when the form already has them. */
+  points?: TruckStartingPoint[]
   invalid?: boolean
   onPick?: (truck: TruckOption | null) => void
   onUpdate: (form: HTMLFormElement | null) => void
@@ -88,14 +94,21 @@ export function TruckSelect({
   /** The load's last day, "YYYY-MM-DD", to flag dates that run out by then. */
   until?: string | null
 }) {
-  const [value, setValue] = useState(defaultValue ?? NONE)
-  const [points, setPoints] = useState<Map<string, TruckStartingPoint>>()
+  const [own, setOwn] = useState(defaultValue ?? NONE)
+  const value = controlled !== undefined ? (controlled ?? NONE) : own
+  const setValue = (next: string) => {
+    if (controlled === undefined) setOwn(next)
+  }
+  const [fetched, setFetched] = useState<Map<string, TruckStartingPoint>>()
+  const points = given
+    ? new Map(given.map((point) => [point.truckId, point]))
+    : fetched
   const [working, setWorking] = useState(false)
   // What the starting points were worked out for, to redo them if it changes.
   const forKey = useRef<string | null>(null)
 
   async function loadPoints() {
-    if (!organizationId || !load) return
+    if (!organizationId || !load || given) return
     const input =
       "loadId" in load
         ? { loadId: load.loadId }
@@ -110,7 +123,7 @@ export function TruckSelect({
     try {
       const found = await getTruckStartingPoints(organizationId, input)
       if (forKey.current !== key) return
-      setPoints(new Map(found.map((point) => [point.truckId, point])))
+      setFetched(new Map(found.map((point) => [point.truckId, point])))
     } catch {
       forKey.current = null
     } finally {
@@ -131,7 +144,12 @@ export function TruckSelect({
   }, [value])
 
   const options = trucks
-    .filter((truck) => truck.status === "active" || truck.id === defaultValue)
+    .filter(
+      (truck) =>
+        truck.status === "active" ||
+        truck.id === defaultValue ||
+        truck.id === value
+    )
     .sort((a, b) =>
       points ? rank(points.get(a.id)) - rank(points.get(b.id)) : 0
     )

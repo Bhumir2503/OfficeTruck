@@ -10,6 +10,10 @@ import {
   checkAssignmentConflicts,
   saveAssignment,
 } from "@/app/org/[slug]/loads/actions"
+import {
+  AssignmentSuggestions,
+  useAssignmentPlan,
+} from "@/components/loads/assignment-suggestions"
 import { ComplianceWarning } from "@/components/loads/compliance-warning"
 import { DriverSelect } from "@/components/loads/driver-select"
 import { LoadPayDialog } from "@/components/loads/load-pay-dialog"
@@ -115,6 +119,19 @@ export function LoadAssignmentForm({
   const onTheRoad = ["booked", "dispatched", "loaded"].includes(load.status)
   const until = onTheRoad ? loadUntil(load) : null
   const driverChanged = driverId !== load.driver_id
+  // Matches until the load is picked up; worked out right away while it
+  // still needs a truck or driver.
+  const planning = ["booked", "dispatched"].includes(load.status)
+  const plan = useAssignmentPlan(
+    organizationId,
+    planning
+      ? {
+          loadId: load.id,
+          version: `${load.pickup_location}|${load.pickup_start}|${load.delivery_end ?? load.delivery_start}`,
+        }
+      : null,
+    { enabled: !load.truck_id || !load.driver_id }
+  )
   const sameMiles = (typed: string | null, saved: number | null) =>
     typed === null || typed.replace(/,/g, "") === (saved?.toString() ?? "")
   const changed =
@@ -282,6 +299,22 @@ export function LoadAssignmentForm({
               </SettingsCardFooter>
             }
           >
+            {planning && (
+              <AssignmentSuggestions
+                {...plan}
+                onRefresh={() => void plan.refresh()}
+                trucks={trucks}
+                drivers={drivers}
+                truckId={truckId}
+                driverId={driverId}
+                onUse={(truck, driver) => {
+                  setTruckId(truck)
+                  setDriverId(driver)
+                  setDriverPicked(true)
+                }}
+              />
+            )}
+
             <div className="grid gap-5 sm:grid-cols-2">
               <Field data-invalid={!!errors.truck_id}>
                 <FieldLabel htmlFor="load-truck-id">Truck</FieldLabel>
@@ -292,6 +325,8 @@ export function LoadAssignmentForm({
                   load={{ loadId: load.id }}
                   until={until}
                   defaultValue={load.truck_id}
+                  value={truckId}
+                  points={plan.plan?.points}
                   invalid={!!errors.truck_id}
                   onPick={(picked) => {
                     setTruckId(picked?.id ?? null)
@@ -310,6 +345,7 @@ export function LoadAssignmentForm({
                   id="load-driver-id"
                   drivers={drivers}
                   until={until}
+                  availability={plan.plan?.drivers}
                   value={driverId}
                   onValueChange={(value) => {
                     setDriverId(value)
