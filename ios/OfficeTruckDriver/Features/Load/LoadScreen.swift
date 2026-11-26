@@ -1,4 +1,6 @@
 import PhotosUI
+import QuickLook
+import Supabase
 import SwiftUI
 
 /// One load: its stops, details and paperwork. On a load that's on the road,
@@ -18,6 +20,10 @@ struct LoadScreen: View {
     @State private var photoKind: DocumentKind?
     @State private var choosingPhotos = false
     @State private var photoItems: [PhotosPickerItem] = []
+    /// A paperwork file open in Quick Look.
+    @State private var previewURL: URL?
+    @State private var removing: LoadDetail.LoadDocument?
+    @State private var actionError: String?
     private let queue = OfflineQueue.shared
     private let api = DriverAPI()
 
@@ -40,6 +46,26 @@ struct LoadScreen: View {
             }
         }
         .task(id: queue.deliveredCount) { await fetch() }
+        .quickLookPreview($previewURL)
+        .alert(
+            removing.map { "Remove the \($0.kind.documentLabel)?" } ?? "",
+            isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
+            presenting: removing
+        ) { doc in
+            Button("Remove", role: .destructive) { Task { await remove(doc) } }
+            Button("Cancel", role: .cancel) {}
+        } message: { doc in
+            switch doc.kind {
+            case "pod": Text("The load goes back to not delivered until a POD is added again.")
+            case "bol": Text("If it was the only BOL, the load goes back to not loaded.")
+            default: Text("The office won't see it anymore.")
+            }
+        }
+        .alert("Couldn't do that", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
+            Button("OK") {}
+        } message: {
+            Text(actionError ?? "")
+        }
         .alert(
             checkIn.map { "\($0.event == .arrived ? "Arrived at" : "Leaving") \($0.place)?" } ?? "",
             isPresented: Binding(get: { checkIn != nil }, set: { if !$0 { checkIn = nil } }),
@@ -146,20 +172,7 @@ struct LoadScreen: View {
                 Section("Notes") { Text(notes) }
             }
 
-            Section("Paperwork") {
-                let waitingDocuments = queue.documents(for: load.id)
-                if load.documents.isEmpty && waitingDocuments.isEmpty {
-                    Text("No paperwork yet").foregroundStyle(.secondary)
-                }
-                ForEach(load.documents) { doc in
-                    LabeledContent(doc.kind.documentLabel, value: doc.createdAt.formatted(date: .abbreviated, time: .shortened))
-                }
-                ForEach(waitingDocuments) { doc in
-                    LabeledContent(doc.kind.label) {
-                        Text("Not sent yet").foregroundStyle(.orange)
-                    }
-                }
-            }
+            paperwork(load)
         }
         .refreshable { await fetch() }
         .navigationTitle("Load \(load.reference)")
@@ -291,6 +304,74 @@ struct LoadScreen: View {
                 }
                 addPaperwork(pages, kind: kind, to: load)
             }
+        }
+    }
+
+    /// The load's paperwork. Tap to open; swipe to remove what the driver
+    /// added while the load is on the road, or cancel what hasn't gone yet.
+    @ViewBuilder
+    private func paperwork(_ load: LoadDetail) -> some View {
+        Section("Paperwork") {
+            let waitingDocuments = queue.documents(for: load.id)
+            if load.documents.isEmpty && waitingDocuments.isEmpty {
+                Text("No paperwork yet").foregroundStyle(.secondary)
+            }
+            // Tap to open. Swipe to remove what the driver added, while
+            // the load is on the road.
+            ForEach(load.documents) { doc in
+                Button {
+                    Task { await preview(bucket: "load-documents", path: doc.path, name: doc.fileName) }
+                } label: {
+                    LabeledContent {
+                        Text(doc.createdAt.formatted(date: .abbreviated, time: .shortened))
+                            .foregroundStyle(.secondary)
+                    } label: {
+                        Text(doc.kind.documentLabel).foregroundStyle(.primary)
+                    }
+                }
+                .swipeActions {
+                    if doc.mine && load.canEdit {
+                        Button("Remove", role: .destructive) { removing = doc }
+                    }
+                }
+            }
+            ForEach(waitingDocuments) { doc in
+                Button {
+                    previewURL = OfflineQueue.fileURL(for: doc)
+                } label: {
+                    LabeledContent {
+                        Text("Not sent yet").foregroundStyle(.orange)
+                    } label: {
+                        Text(doc.kind.label).foregroundStyle(.primary)
+                    }
+                }
+                .swipeActions {
+                    Button("Cancel", role: .destructive) {
+                        if !queue.cancelDocument(doc.id) {
+                            actionError = "It's sending right now. Remove it once it's sent."
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func preview(bucket: String, path: String, name: String) async {
+        do {
+            previewURL = try await api.downloadForPreview(bucket: bucket, path: path, name: name)
+        } catch {
+            actionError = "It couldn't be opened. Check your signal and try again."
+        }
+    }
+
+    private func remove(_ doc: LoadDetail.LoadDocument) async {
+        do {
+            try await api.removeLoadDocument(doc.id)
+            await fetch()
+        } catch let error as PostgrestError {
+            actionError = error.message
+        } catch {
+            actionError = "It wasn't removed. Check your signal and try again."
         }
     }
 

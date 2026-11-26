@@ -1,3 +1,4 @@
+import QuickLook
 import Supabase
 import SwiftUI
 
@@ -9,6 +10,9 @@ struct MeView: View {
     @State private var profiles: Loadable<[DriverProfile]> = .loading
     @State private var dqFiles: [DQFile] = []
     @State private var sendingCard: SendCardRequest?
+    @State private var withdrawing: DriverProfile.CardUpdate?
+    @State private var previewURL: URL?
+    @State private var cardError: String?
     @State private var confirmingSignOut = false
     @State private var changingPhone = false
     @State private var newPhone = ""
@@ -79,6 +83,22 @@ struct MeView: View {
         .task { await fetch() }
         .sheet(item: $sendingCard) { request in
             SendCardView(request: request) { await fetch() }
+        }
+        .quickLookPreview($previewURL)
+        .alert(
+            withdrawing.map { "Take back your new \($0.kind.name)?" } ?? "",
+            isPresented: Binding(get: { withdrawing != nil }, set: { if !$0 { withdrawing = nil } }),
+            presenting: withdrawing
+        ) { update in
+            Button("Take it back", role: .destructive) { Task { await withdraw(update) } }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("The office won't review it. You can send another one any time.")
+        }
+        .alert("Couldn't do that", isPresented: Binding(get: { cardError != nil }, set: { if !$0 { cardError = nil } })) {
+            Button("OK") {}
+        } message: {
+            Text(cardError ?? "")
         }
         .alert("Sign out?", isPresented: $confirmingSignOut) {
             Button("Cancel", role: .cancel) {}
@@ -211,6 +231,16 @@ struct MeView: View {
                 Label("New \(kind.name) sent (expires \(WallClock.fullDay(update.expiresOn))). The office is checking it.",
                       systemImage: "clock")
                     .foregroundStyle(.secondary)
+                Button {
+                    Task { await preview(update) }
+                } label: {
+                    Label("View what you sent", systemImage: "doc.text.magnifyingglass")
+                }
+                Button(role: .destructive) {
+                    withdrawing = update
+                } label: {
+                    Label("Take it back", systemImage: "arrow.uturn.backward")
+                }
             } else {
                 Label("Your new \(kind.name) wasn't accepted\(update.reviewNote.map { ": \($0)" } ?? "."). Send it again.",
                       systemImage: "xmark.circle.fill")
@@ -307,6 +337,27 @@ struct MeView: View {
     private func showChangeError(_ message: String) async {
         try? await Task.sleep(for: .milliseconds(350))
         changeError = message
+    }
+
+    private func preview(_ update: DriverProfile.CardUpdate) async {
+        do {
+            previewURL = try await api.downloadForPreview(
+                bucket: "driver-documents", path: update.path, name: "New \(update.kind.name)")
+        } catch {
+            cardError = "It couldn't be opened. Check your signal and try again."
+        }
+    }
+
+    private func withdraw(_ update: DriverProfile.CardUpdate) async {
+        do {
+            try await api.withdrawCard(update)
+            await fetch()
+        } catch let error as PostgrestError {
+            cardError = error.message
+            await fetch()
+        } catch {
+            cardError = "It wasn't taken back. Check your signal and try again."
+        }
     }
 
     private func fetch() async {

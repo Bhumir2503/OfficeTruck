@@ -1,4 +1,6 @@
 import PhotosUI
+import QuickLook
+import Supabase
 import SwiftUI
 
 /// The driver's DQ (driver qualification) file for one carrier: what's
@@ -14,6 +16,8 @@ struct DQFileView: View {
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var uploading: UUID?
     @State private var failure: String?
+    @State private var previewURL: URL?
+    @State private var removing: DQItem.DQDocument?
     private let api = DriverAPI()
 
     var body: some View {
@@ -57,7 +61,18 @@ struct DQFileView: View {
         } message: { item in
             Text("\(item.displayTitle)\n\nThe office checks it before it counts.")
         }
-        .alert("Not sent", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
+        .quickLookPreview($previewURL)
+        .alert(
+            "Take it back?",
+            isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
+            presenting: removing
+        ) { doc in
+            Button("Take it back", role: .destructive) { Task { await remove(doc) } }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("The office won't see it. You can send another copy any time.")
+        }
+        .alert("Couldn't do that", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
             Button("OK") {}
         } message: {
             Text(failure ?? "")
@@ -158,6 +173,27 @@ struct DQFileView: View {
             if status.needsAttention, let description = item.description {
                 Text(description).font(.footnote).foregroundStyle(.secondary)
             }
+            // What's on file: tap to open; take back your own while the
+            // office hasn't confirmed it.
+            ForEach(item.documents) { doc in
+                HStack {
+                    Button {
+                        Task { await preview(doc) }
+                    } label: {
+                        Label(doc.confirmed
+                              ? "On file"
+                              : "\(doc.mine ? "You sent" : "Added") \(doc.createdAt.formatted(date: .abbreviated, time: .omitted))",
+                              systemImage: "doc.text")
+                    }
+                    .buttonStyle(.borderless)
+                    Spacer()
+                    if doc.canRemove {
+                        Button("Take back", role: .destructive) { removing = doc }
+                            .buttonStyle(.borderless)
+                    }
+                }
+                .font(.subheadline)
+            }
             if uploading == item.id {
                 ProgressView("Sending…")
             } else if sendable && (status.needsAttention || status == .upcoming) {
@@ -187,6 +223,25 @@ struct DQFileView: View {
                 failure = "It wasn't sent. Check your signal and try again."
             }
         }
+    }
+
+    private func preview(_ doc: DQItem.DQDocument) async {
+        do {
+            previewURL = try await api.downloadForPreview(bucket: "dq-files", path: doc.path, name: doc.fileName)
+        } catch {
+            failure = "It couldn't be opened. Check your signal and try again."
+        }
+    }
+
+    private func remove(_ doc: DQItem.DQDocument) async {
+        do {
+            try await api.removeDQDocument(doc.id)
+        } catch let error as PostgrestError {
+            failure = error.message
+        } catch {
+            failure = "It wasn't taken back. Check your signal and try again."
+        }
+        await fetch()
     }
 
     private func fetch() async {

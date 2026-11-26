@@ -1,5 +1,6 @@
 #if DEBUG
 import Foundation
+import UIKit
 
 /// Sample data for trying the app in the simulator without a real SMS code
 /// or server. Launch with the `-demo` argument (Debug builds only):
@@ -27,21 +28,50 @@ enum DemoBackend {
     /// CDL and medical cards sent this run: kind → expiration date.
     nonisolated(unsafe) private static var sentCards: [CardKind: String] = [:]
     /// DQ items given an upload this run.
-    nonisolated(unsafe) private static var dqUploads: Set<UUID> = []
+    /// DQ items given an upload this run: item → document.
+    nonisolated(unsafe) private static var dqUploads: [UUID: UUID] = [:]
 
     static func sendCard(_ kind: CardKind, expiresOn: String) {
         sentCards[kind] = expiresOn
     }
 
     static func addDQUpload(_ item: UUID) {
-        dqUploads.insert(item)
+        dqUploads[item] = UUID()
+    }
+
+    static func removeDQUpload(_ document: UUID) {
+        dqUploads = dqUploads.filter { $0.value != document }
+    }
+
+    static func withdrawCard(_ kind: CardKind) {
+        sentCards[kind] = nil
+    }
+
+    static func removeDocument(_ id: UUID) {
+        documents.removeAll { $0.id == id }
+    }
+
+    /// A one-page PDF standing in for a stored file, for Quick Look.
+    static func samplePDF(named name: String) throws -> URL {
+        let page = CGRect(x: 0, y: 0, width: 612, height: 792)
+        let data = UIGraphicsPDFRenderer(bounds: page).pdfData { context in
+            context.beginPage()
+            let text = "\(name)\n\nDemo copy. In the real app this is the file that was uploaded."
+            text.draw(in: page.insetBy(dx: 54, dy: 72), withAttributes: [.font: UIFont.systemFont(ofSize: 20)])
+        }
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let url = folder.appending(path: name.hasSuffix(".pdf") ? name : "\(name).pdf")
+        try data.write(to: url)
+        return url
     }
 
     private static var updatesJSON: String {
         let sent = Date.ISO8601FormatStyle(includingFractionalSeconds: true).format(.now)
         let rows = sentCards.map { kind, expires in
             """
-            {"kind": "\(kind.rawValue)", "status": "pending", "expires_on": "\(expires)", "review_note": null, "sent_at": "\(sent)"}
+            {"id": "77777777-0000-0000-0000-00000000000\(kind == .cdl ? 1 : 2)", "path": "demo/\(kind.rawValue).pdf",
+             "kind": "\(kind.rawValue)", "status": "pending", "expires_on": "\(expires)", "review_note": null, "sent_at": "\(sent)"}
             """
         }
         return "[" + rows.joined(separator: ",") + "]"
@@ -173,14 +203,30 @@ enum DemoBackend {
         func item(_ n: Int, _ code: String, _ title: String, due: String?, completed: Bool, validUntil: String?,
                   canUpload: Bool, state: String? = nil, description: String? = nil) -> String {
             let id = "66666666-0000-0000-0000-00000000000\(n)"
-            let pending = !completed && dqUploads.contains(UUID(uuidString: id)!)
+            let upload = dqUploads[UUID(uuidString: id)!]
+            let pending = !completed && upload != nil
+            let stamp = Date.ISO8601FormatStyle(includingFractionalSeconds: true).format(.now)
+            var docs: [String] = []
+            if let upload {
+                docs.append("""
+                {"id": "\(upload.uuidString.lowercased())", "path": "demo/\(code).pdf", "file_name": "Sent from the app.pdf",
+                 "created_at": "\(stamp)", "confirmed": false, "mine": true}
+                """)
+            }
+            if completed {
+                docs.append("""
+                {"id": "88888888-0000-0000-0000-00000000000\(n)", "path": "demo/\(code)-office.pdf", "file_name": "On file.pdf",
+                 "created_at": \(done), "confirmed": true, "mine": false}
+                """)
+            }
             return """
             {"id": "\(id)", "code": "\(code)", "title": "\(title)",
              "description": \(description.map { "\"\($0)\"" } ?? "null"),
              "license_state": \(state.map { "\"\($0)\"" } ?? "null"),
              "due_date": \(due.map { "\"\($0)\"" } ?? "null"), "completed_at": \(completed ? done : "null"),
              "valid_until": \(validUntil.map { "\"\($0)\"" } ?? "null"), "not_applicable": false,
-             "pending_review": \(pending || code == "employment_application"), "can_upload": \(canUpload)}
+             "pending_review": \(pending || code == "employment_application"), "can_upload": \(canUpload),
+             "documents": [\(docs.joined(separator: ","))]}
             """
         }
         let items = [
