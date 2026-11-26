@@ -335,6 +335,12 @@ export function BrokerDetailSkeleton() {
           <div className="flex min-w-0 flex-col gap-4">
             <BrokerFormSkeleton editing />
             <SettingsCard
+              title="Automatic invoicing"
+              description="Once a delivered load's rate con, BOL and POD are in, the invoice is made and the packet emailed. Unpaid invoices get reminders if that's on in Settings."
+            >
+              <ToggleSkeleton widths={["w-44", "w-12", "w-12"]} />
+            </SettingsCard>
+            <SettingsCard
               title="Status updates"
               description="Emails when a driver arrives at or leaves a stop, and when the load is delivered: the time and where the driver was. Never the rate."
             >

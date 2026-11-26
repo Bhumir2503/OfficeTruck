@@ -3,7 +3,10 @@
 import { useState, useTransition } from "react"
 import { toast } from "sonner"
 
-import { setBrokerStatusUpdates } from "@/app/org/[slug]/customers/actions"
+import {
+  type BrokerAutomation,
+  setBrokerAutomation,
+} from "@/app/org/[slug]/customers/actions"
 import {
   SettingsCard,
   SettingsCardFooter,
@@ -16,25 +19,34 @@ const toChoice = (value: boolean | null): Choice =>
   value === null ? "default" : value ? "on" : "off"
 
 /**
- * Whether this customer gets automatic status updates (arrived, left,
- * delivered): the company's default, or on or off for them alone. Saves as
- * soon as it's picked. Says who the updates go to.
+ * One of a customer's automations (status updates, automatic invoicing):
+ * the company's default, or on or off for them alone. Saves as soon as it's
+ * picked. The footer says what happens while it's on.
  */
-export function CustomerUpdatesCard({
+export function CustomerAutomationCard({
   organizationId,
   brokerId,
+  field,
+  title,
+  description,
   value,
   companyDefault,
-  recipients,
+  whenOn,
+  whenOff,
   settingsHref,
 }: {
   organizationId: string
   brokerId: string
+  field: BrokerAutomation
+  title: string
+  description: string
   value: boolean | null
   /** The company's setting, which "default" follows. */
   companyDefault: boolean
-  /** Their dispatch contacts' emails. */
-  recipients: string[]
+  /** The footer while it's on, e.g. who the updates go to. */
+  whenOn: React.ReactNode
+  /** The footer while it's off. */
+  whenOff: string
   /** /org/<slug>/settings */
   settingsHref: string
 }) {
@@ -46,9 +58,10 @@ export function CustomerUpdatesCard({
     const previous = choice
     setChoice(next)
     start(async () => {
-      const result = await setBrokerStatusUpdates(
+      const result = await setBrokerAutomation(
         organizationId,
         brokerId,
+        field,
         next === "default" ? null : next === "on"
       )
       if ("error" in result) {
@@ -56,33 +69,18 @@ export function CustomerUpdatesCard({
         toast.error(result.error)
         return
       }
-      toast.success("Status updates saved.")
+      toast.success(`${title} saved.`)
     })
   }
 
   return (
     <SettingsCard
-      title="Status updates"
-      description="Emails when a driver arrives at or leaves a stop, and when the load is delivered: the time and where the driver was. Never the rate."
-      footer={
-        <SettingsCardFooter
-          hint={
-            !on ? (
-              "They won't get automatic updates."
-            ) : recipients.length ? (
-              <>Goes to {recipients.join(", ")}.</>
-            ) : (
-              <span className="text-amber-700 dark:text-amber-300">
-                No dispatch contact with an email yet. Updates go to whoever
-                sent each rate con instead.
-              </span>
-            )
-          }
-        />
-      }
+      title={title}
+      description={description}
+      footer={<SettingsCardFooter hint={on ? whenOn : whenOff} />}
     >
       <ToggleGroup
-        aria-label="Status updates"
+        aria-label={title}
         variant="outline"
         size="sm"
         spacing={1}

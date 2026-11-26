@@ -3,6 +3,7 @@ import { notFound } from "next/navigation"
 
 import { BrokerUpdatesSetting } from "@/components/settings/broker-updates-setting"
 import { DetentionSetting } from "@/components/settings/detention-setting"
+import { InvoicingSetting } from "@/components/settings/invoicing-setting"
 import { CompanyProfileSection } from "@/components/settings/company-profile-form"
 import { DeleteOrganization } from "@/components/settings/delete-organization"
 import { LeaveOrganization } from "@/components/settings/leave-organization"
@@ -58,6 +59,12 @@ export default async function GeneralSettingsPage({
       <BrokerUpdatesSetting
         organizationId={organization.id}
         enabled={org?.broker_updates ?? false}
+        canEdit={canManage(organization)}
+      />
+      <InvoicingSetting
+        organizationId={organization.id}
+        invoice={org?.auto_invoice ?? false}
+        reminders={org?.auto_invoice_reminders ?? false}
         canEdit={canManage(organization)}
       />
       <DetentionSetting

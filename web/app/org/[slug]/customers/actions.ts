@@ -205,19 +205,26 @@ export async function updateBroker(
   return result
 }
 
+/** A customer's automation switches, each following the company when null. */
+export type BrokerAutomation = "status_updates" | "auto_invoice"
+
 /** On, off, or null to follow the company's setting. */
-export async function setBrokerStatusUpdates(
+export async function setBrokerAutomation(
   organizationId: string,
   brokerId: string,
+  field: BrokerAutomation,
   value: boolean | null
 ): Promise<ActionResult> {
   if (!(await isMember(organizationId))) {
     return { error: NOT_MEMBER }
   }
+  if (field !== "status_updates" && field !== "auto_invoice") {
+    return { error: "That isn't a setting." }
+  }
   if (value !== null && typeof value !== "boolean") {
     return { error: "Pick on, off or the company default." }
   }
-  return update(organizationId, brokerId, { status_updates: value })
+  return update(organizationId, brokerId, { [field]: value })
 }
 
 /** Saves a customer's notes, from the box beside their page. */
@@ -337,6 +344,7 @@ async function update(
     do_not_use?: boolean
     do_not_use_reason?: string | null
     status_updates?: boolean | null
+    auto_invoice?: boolean | null
   }
 ): Promise<ActionResult> {
   const supabase = await createClient()
