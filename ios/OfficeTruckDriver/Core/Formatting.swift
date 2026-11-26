@@ -99,6 +99,15 @@ enum WallClock {
         return dayOnly.string(from: later)
     }
 
+    /// "2026-11-16" a year on → "2027-11-16" (Feb 29 → Feb 28).
+    static func addingYear(to text: String) -> String {
+        guard let date = dayOnly.date(from: text) else { return text }
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC")!
+        guard let later = utc.date(byAdding: .year, value: 1, to: date) else { return text }
+        return dayOnly.string(from: later)
+    }
+
     /// "2026-11-16" → "Nov 16".
     static func day(_ text: String) -> String {
         guard let date = dayOnly.date(from: text) else { return text }

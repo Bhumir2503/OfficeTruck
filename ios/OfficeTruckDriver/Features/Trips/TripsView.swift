@@ -54,20 +54,21 @@ struct TripsView: View {
                     let past = trips.filter { !isToday($0) && !isUpcoming($0) }
                         .sorted { $0.pickupStart > $1.pickupStart }
                     let showsCarrier = Set(trips.map(\.organizationName)).count > 1
+                    let overlaps = LoadSummary.overlaps(in: trips)
                     List {
                         if !current.isEmpty {
                             Section("Today") {
-                                ForEach(current) { trip in tripRow(trip, showsCarrier: showsCarrier) }
+                                ForEach(current) { trip in tripRow(trip, showsCarrier: showsCarrier, overlaps: overlaps[trip.id] ?? []) }
                             }
                         }
                         if !upcoming.isEmpty {
                             Section("Upcoming") {
-                                ForEach(upcoming) { trip in tripRow(trip, showsCarrier: showsCarrier) }
+                                ForEach(upcoming) { trip in tripRow(trip, showsCarrier: showsCarrier, overlaps: overlaps[trip.id] ?? []) }
                             }
                         }
                         if !past.isEmpty {
                             Section("Past") {
-                                ForEach(past) { trip in tripRow(trip, showsCarrier: showsCarrier) }
+                                ForEach(past) { trip in tripRow(trip, showsCarrier: showsCarrier, overlaps: overlaps[trip.id] ?? []) }
                             }
                         }
                     }
@@ -76,7 +77,7 @@ struct TripsView: View {
             }
             .navigationTitle("Trips")
             .navigationDestination(for: UUID.self) { id in
-                LoadScreen(loadID: id)
+                LoadScreen(loadID: id, overlaps: overlaps[id] ?? [])
             }
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
@@ -92,8 +93,14 @@ struct TripsView: View {
         }
     }
 
+    /// Other loads at the same time as each one, by load.
+    private var overlaps: [UUID: [String]] {
+        if case .loaded(let trips) = loads { LoadSummary.overlaps(in: trips) } else { [:] }
+    }
+
     /// The carrier's name shows only for drivers who drive for more than one.
-    private func tripRow(_ trip: LoadSummary, showsCarrier: Bool) -> some View {
+    /// A load at the same time as another says which, in orange.
+    private func tripRow(_ trip: LoadSummary, showsCarrier: Bool, overlaps: [String]) -> some View {
         NavigationLink(value: trip.id) {
             VStack(alignment: .leading) {
                 LabeledContent(trip.reference, value: trip.status.label)
@@ -103,6 +110,12 @@ struct TripsView: View {
                                   : WallClock.format(trip.pickupStart))
                     .font(.callout)
                     .foregroundStyle(.secondary)
+                if !overlaps.isEmpty {
+                    // Icon inline, so the line stays flush with the ones above.
+                    Text("\(Image(systemName: "exclamationmark.triangle.fill")) Same time as \(overlaps.formatted(.list(type: .and)))")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                }
             }
         }
     }

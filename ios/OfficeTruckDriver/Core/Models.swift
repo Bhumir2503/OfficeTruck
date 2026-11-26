@@ -15,6 +15,8 @@ struct LoadSummary: Decodable, Identifiable, Hashable, Sendable {
     let pickupStart: String
     let deliveryLocation: String
     let deliveryStart: String
+    /// End of the last stop's window, if it has one (older servers leave it out).
+    let deliveryEnd: String?
     let deliveredOn: String?
     let truck: String?
     let trailerNumber: String?
@@ -22,6 +24,27 @@ struct LoadSummary: Decodable, Identifiable, Hashable, Sendable {
     let stopsDeparted: Int
 
     var isOnTheRoad: Bool { status.isOnTheRoad }
+
+    /// The other loads still to drive whose time on the road overlaps each
+    /// one's: the office's check (`web/lib/dispatch-format.ts`), from the
+    /// first appointment to the end of the last, compared as written.
+    /// The office is warned, not stopped, so the driver hears it too.
+    static func overlaps(in trips: [LoadSummary]) -> [UUID: [String]] {
+        let scheduled = trips.filter { $0.status == .dispatched || $0.status == .loaded }
+        func window(_ trip: LoadSummary) -> (start: Substring, end: Substring) {
+            (trip.pickupStart.prefix(16), (trip.deliveryEnd ?? trip.deliveryStart).prefix(16))
+        }
+        var result: [UUID: [String]] = [:]
+        for trip in scheduled {
+            let a = window(trip)
+            let others = scheduled.filter { other in
+                let b = window(other)
+                return other.id != trip.id && a.start < b.end && b.start < a.end
+            }
+            if !others.isEmpty { result[trip.id] = others.map(\.reference) }
+        }
+        return result
+    }
 }
 
 /// `my_load(id)`.
@@ -39,6 +62,11 @@ struct LoadDetail: Decodable, Identifiable, Sendable {
     let notes: String?
     let miles: Int?
     let truck: String?
+    /// The truck's last odometer reading before this load, if it has one. A
+    /// new reading can't be lower (the server checks too).
+    let truckOdometer: Int?
+    /// The truck on the load, for the info sheet.
+    let truckDetails: Truck?
     let organization: Organization
     let driverPay: DriverPay?
     let stops: [Stop]
@@ -50,6 +78,29 @@ struct LoadDetail: Decodable, Identifiable, Sendable {
         let name: String
         let phone: String?
         let timeZone: String
+    }
+
+    /// What a driver is asked for at a scale or an inspection. Dates are
+    /// days as written ("2026-11-20").
+    struct Truck: Decodable, Sendable {
+        let unitNumber: String
+        let year: Int?
+        let make: String?
+        let model: String?
+        let vin: String?
+        let plateNumber: String?
+        let plateState: String?
+        let odometer: Int?
+        let odometerOn: String?
+        /// When the annual inspection was last done; it's due a year later.
+        let annualInspectionOn: String?
+        let registrationExpiresOn: String?
+
+        /// "2022 Freightliner Cascadia", or nil when none of it is known.
+        var description: String? {
+            let parts = [year.map(String.init), make, model].compactMap { $0 }
+            return parts.isEmpty ? nil : parts.joined(separator: " ")
+        }
     }
 
     struct DriverPay: Decodable, Sendable {
@@ -101,6 +152,12 @@ struct LoadDetail: Decodable, Identifiable, Sendable {
         /// The driver added it, so they can remove it. Missing from older
         /// servers.
         let mine: Bool?
+        /// "driver" (paid back on their settlement) or "company" (a receipt
+        /// for the office). Missing from older servers, which only sent the
+        /// driver's.
+        let paidBy: String?
+
+        var companyPaid: Bool { paidBy == "company" }
     }
 }
 

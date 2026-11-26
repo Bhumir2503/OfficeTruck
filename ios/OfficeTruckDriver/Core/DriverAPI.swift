@@ -57,7 +57,7 @@ struct DriverAPI: Sendable {
     /// same stop, event and tap time again.
     func recordStopEvent(_ checkIn: PendingCheckIn) async throws {
         #if DEBUG
-        if DemoBackend.isOn { return DemoBackend.record(checkIn) }
+        if DemoBackend.isOn { return try DemoBackend.record(checkIn) }
         #endif
         struct Params: Encodable {
             let target_stop: UUID
@@ -87,7 +87,7 @@ struct DriverAPI: Sendable {
     /// returns the same document for the same path.
     func uploadDocument(_ document: PendingDocument, file: URL) async throws {
         #if DEBUG
-        if DemoBackend.isOn { return DemoBackend.addDocument(document) }
+        if DemoBackend.isOn { return try await DemoBackend.addDocument(document) }
         #endif
         do {
             try await client.storage.from("load-documents").upload(
@@ -123,7 +123,7 @@ struct DriverAPI: Sendable {
     /// expense for the same client id.
     func addExpense(_ expense: PendingExpense, receipt: URL?) async throws {
         #if DEBUG
-        if DemoBackend.isOn { return DemoBackend.addExpense(expense) }
+        if DemoBackend.isOn { return try await DemoBackend.addExpense(expense) }
         #endif
         if let receipt {
             do {
@@ -147,6 +147,7 @@ struct DriverAPI: Sendable {
             let receipt_name: String?
             let receipt_type: String?
             let client_id: UUID
+            let paid_by: String
         }
         try await client.rpc("add_my_expense", params: Params(
             target_load: expense.loadID,
@@ -157,7 +158,8 @@ struct DriverAPI: Sendable {
             receipt_path: receipt == nil ? nil : expense.receiptPath,
             receipt_name: receipt == nil ? nil : "\(expense.kind.label) receipt \(expense.spentOn).pdf",
             receipt_type: receipt == nil ? nil : "application/pdf",
-            client_id: expense.id
+            client_id: expense.id,
+            paid_by: expense.companyPaid == true ? "company" : "driver"
         )).execute()
     }
 

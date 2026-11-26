@@ -1,5 +1,6 @@
 #if DEBUG
 import Foundation
+import Supabase
 import UIKit
 
 /// Sample data for trying the app in the simulator without a real SMS code
@@ -9,6 +10,12 @@ enum DemoBackend {
     static let isOn = ProcessInfo.processInfo.arguments.contains("-demo")
     /// Add `-two-carriers` too to see a driver who drives for two companies.
     static let twoCarriers = ProcessInfo.processInfo.arguments.contains("-two-carriers")
+    /// Adds a load at the same time as QA-1004, to see the overlap note.
+    static let overlap = ProcessInfo.processInfo.arguments.contains("-overlap")
+    /// Check-ins can't reach the "server", to see them marked as not sent.
+    static let offline = ProcessInfo.processInfo.arguments.contains("-offline")
+    /// T-101's last reading before QA-1004, like the server's truck_odometer.
+    static let truckOdometer = 414_000
     /// Add `-signed-out` too to start at sign-in. No text is sent; any
     /// 6-digit code signs in.
     static let startsSignedOut = ProcessInfo.processInfo.arguments.contains("-signed-out")
@@ -28,8 +35,15 @@ enum DemoBackend {
     /// Expenses added this run.
     nonisolated(unsafe) private static var expenses: [PendingExpense] = []
 
-    static func addExpense(_ expense: PendingExpense) {
+    /// Uploads take a moment, like on a real connection, so the spinner shows.
+    static func addExpense(_ expense: PendingExpense) async throws {
+        try await upload()
         expenses.append(expense)
+    }
+
+    private static func upload() async throws {
+        if offline { throw URLError(.notConnectedToInternet) }
+        try await Task.sleep(for: .seconds(2))
     }
 
     static func removeExpense(_ id: UUID) {
@@ -42,7 +56,8 @@ enum DemoBackend {
             {"id": "\(e.id.uuidString.lowercased())", "kind": "\(e.kind.rawValue)", "amount": \(e.amount),
              "spent_on": "\(e.spentOn)", "note": \(e.note.flatMap { try? JSONEncoder().encode($0) }.flatMap { String(data: $0, encoding: .utf8) } ?? "null"),
              "receipt_path": \(e.hasReceipt ? "\"\(e.receiptPath)\"" : "null"),
-             "receipt_type": \(e.hasReceipt ? "\"application/pdf\"" : "null"), "mine": true}
+             "receipt_type": \(e.hasReceipt ? "\"application/pdf\"" : "null"), "mine": true,
+             "paid_by": "\(e.companyPaid == true ? "company" : "driver")"}
             """
         }
         return "[" + rows.joined(separator: ",") + "]"
@@ -100,11 +115,19 @@ enum DemoBackend {
         return "[" + rows.joined(separator: ",") + "]"
     }
 
-    static func addDocument(_ document: PendingDocument) {
+    static func addDocument(_ document: PendingDocument) async throws {
+        try await upload()
         documents.append(document)
     }
 
-    static func record(_ checkIn: PendingCheckIn) {
+    static func record(_ checkIn: PendingCheckIn) throws {
+        if offline { throw URLError(.notConnectedToInternet) }
+        if let reading = checkIn.odometer, reading < truckOdometer {
+            throw PostgrestError(
+                hint: "below_truck",
+                message: "That's lower than the truck's last reading, \(truckOdometer.formatted()) mi. Odometers only go up."
+            )
+        }
         let key = checkIn.stopID.uuidString.lowercased()
         switch checkIn.event {
         case .arrived: arrived[key] = (checkIn.tappedAt, checkIn.odometer)
@@ -137,7 +160,7 @@ enum DemoBackend {
           "status": "\(status)", "pickup_location": "Memphis, TN", "pickup_start": "2026-11-25T08:00:00",
           "delivery_location": "Atlanta, GA", "delivery_start": "2026-11-26T14:00:00",
           "delivered_on": null, "truck": "T-101", "trailer_number": "53-220",
-          "stop_count": 2, "stops_departed": \(departed.count)}, \(upcomingLoad)\(twoCarriers ? secondCarrierLoad : "")]
+          "stop_count": 2, "stops_departed": \(departed.count)}, \(upcomingLoad)\(twoCarriers ? secondCarrierLoad : "")\(overlap ? overlappingLoad : "")]
         """.utf8)
     }
 
@@ -157,6 +180,14 @@ enum DemoBackend {
         """
     }
 
+    private static let overlappingLoad = """
+    , {"id": "11111111-0000-0000-0000-000000000004", "organization_name": "Acme Freight", "reference": "QA-1012",
+       "status": "dispatched", "pickup_location": "Birmingham, AL", "pickup_start": "2026-11-26T09:00:00",
+       "delivery_location": "Jacksonville, FL", "delivery_start": "2026-11-26T18:00:00",
+       "delivered_on": null, "truck": "T-101", "trailer_number": null,
+       "stop_count": 2, "stops_departed": 0}
+    """
+
     private static let secondCarrierLoad = """
     , {"id": "11111111-0000-0000-0000-000000000002", "organization_name": "Bluegrass Haulers", "reference": "BG-310",
        "status": "delivered", "pickup_location": "Louisville, KY", "pickup_start": "2026-11-20T06:00:00",
@@ -175,7 +206,7 @@ enum DemoBackend {
         let a0 = arrived[stopIDs[0]], d0 = departed[stopIDs[0]]
         let a1 = arrived[stopIDs[1]], d1 = departed[stopIDs[1]]
         return Data("""
-        {"id": "\(loadID)", "reference": "QA-1004", "status": "\(status)", "can_edit": true,
+        {"id": "\(loadID)", "reference": "QA-1004", "status": "\(status)", "can_edit": true, "truck_odometer": \(truckOdometer), "truck_details": {"unit_number": "T-101", "year": 2022, "make": "Freightliner", "model": "Cascadia", "vin": "1FUJGLDR7NLAB1234", "plate_number": "TRK4821", "plate_state": "TN", "odometer": \(truckOdometer), "odometer_on": "2026-11-20", "annual_inspection_on": "2025-12-10", "registration_expires_on": "2027-03-31"},
          "broker_name": "QA Test Broker", "reference_numbers": "PO 88123", "equipment": "dry_van",
          "commodity": "Paper goods", "weight_lbs": 38000, "trailer_number": "53-220",
          "notes": "Check in at the guard shack. No overnight parking.", "miles": 382, "truck": "T-101",

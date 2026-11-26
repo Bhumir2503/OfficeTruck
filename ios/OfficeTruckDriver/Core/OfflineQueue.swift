@@ -57,6 +57,9 @@ struct PendingExpense: Codable, Identifiable, Sendable {
     let note: String?
     let hasReceipt: Bool
     let createdAt: Date
+    /// The company paid it (a fuel card, say): sent for its receipt, not
+    /// paid back. Nil in expenses queued before this existed: the driver paid.
+    var companyPaid: Bool? = nil
 
     /// Where the receipt goes in the load-documents bucket:
     /// <org>/<load>/receipt-<id>.pdf.
@@ -80,6 +83,16 @@ final class OfflineQueue {
     private(set) var pendingExpenses: [PendingExpense] = []
     /// Why the server turned down a check-in or document, for an alert.
     var rejections: [String] = []
+    /// Queued check-ins, documents and expenses that couldn't reach the
+    /// server on the last try (or were left from an earlier run). Only these
+    /// show as not sent; anything else queued is going out now and shows a
+    /// spinner, so nothing flashes as unsent on its way.
+    private(set) var unsent: Set<UUID> = []
+    /// Sent this run. Screens keep counting them until they reload the load
+    /// from the server, so nothing blinks back to "—" or "Add" in between.
+    private(set) var sent: [PendingCheckIn] = []
+    private(set) var sentDocuments: [PendingDocument] = []
+    private(set) var sentExpenses: [PendingExpense] = []
     /// Goes up each time something reaches the server, so screens reload.
     private(set) var deliveredCount = 0
 
@@ -93,6 +106,7 @@ final class OfflineQueue {
 
     private init() {
         pending = Self.read(checkInsURL) ?? []
+        unsent = Set(pending.map(\.id) + pendingDocuments.map(\.id) + pendingExpenses.map(\.id))
         pendingDocuments = Self.read(documentsURL) ?? []
         pendingExpenses = Self.read(expensesURL) ?? []
         monitor.pathUpdateHandler = { path in
@@ -102,8 +116,15 @@ final class OfflineQueue {
         monitor.start(queue: DispatchQueue(label: "OfflineQueue.network"))
     }
 
+    /// The load's check-ins tapped on this phone: queued, then sent this run.
     func checkIns(for loadID: UUID) -> [PendingCheckIn] {
-        pending.filter { $0.loadID == loadID }
+        (pending + sent).filter { $0.loadID == loadID }
+    }
+
+    /// Every queued item waits: the first couldn't get through, and the rest
+    /// go after it.
+    private func stall() {
+        unsent.formUnion(pending.map(\.id) + pendingDocuments.map(\.id) + pendingExpenses.map(\.id))
     }
 
     func documents(for loadID: UUID) -> [PendingDocument] {
@@ -140,7 +161,7 @@ final class OfflineQueue {
     /// Keeps the receipt (if any) on disk and queues the expense.
     func enqueueExpense(
         loadID: UUID, organizationID: UUID, kind: ExpenseKind, amount: Double,
-        spentOn: String, note: String?, receipt: Data?
+        spentOn: String, note: String?, receipt: Data?, companyPaid: Bool = false
     ) {
         let expense = PendingExpense(
             loadID: loadID,
@@ -150,7 +171,8 @@ final class OfflineQueue {
             spentOn: spentOn,
             note: note,
             hasReceipt: receipt != nil,
-            createdAt: .now
+            createdAt: .now,
+            companyPaid: companyPaid
         )
         if let receipt {
             do {
@@ -218,11 +240,34 @@ final class OfflineQueue {
         while let next = pending.first {
             do {
                 try await api.recordStopEvent(next)
+                sent.append(next)
             } catch let error as PostgrestError {
-                rejections.append(error.message)
+                // Only the odometer was turned down (say, lower than the
+                // truck's last reading): keep the check-in, drop the reading.
+                if next.odometer != nil, ["lower", "higher", "below_truck", "range"].contains(error.hint ?? "") {
+                    let withoutReading = PendingCheckIn(
+                        id: next.id, loadID: next.loadID, stopID: next.stopID, event: next.event,
+                        tappedAt: next.tappedAt, odometer: nil,
+                        latitude: next.latitude, longitude: next.longitude, locationAccuracy: next.locationAccuracy
+                    )
+                    do {
+                        try await api.recordStopEvent(withoutReading)
+                        sent.append(withoutReading)
+                        rejections.append("Your check-in was saved, but not the odometer. \(error.message)")
+                    } catch let error as PostgrestError {
+                        rejections.append(error.message)
+                    } catch {
+                        stall()
+                        return
+                    }
+                } else {
+                    rejections.append(error.message)
+                }
             } catch {
+                stall()
                 return
             }
+            unsent.remove(next.id)
             pending.removeFirst()
             deliveredCount += 1
             save()
@@ -234,13 +279,16 @@ final class OfflineQueue {
             defer { uploadingID = nil }
             do {
                 try await api.uploadDocument(next, file: file)
+                sentDocuments.append(next)
             } catch let error as PostgrestError {
                 rejections.append(error.message)
             } catch let error as StorageError where error.statusCode?.hasPrefix("4") == true {
                 rejections.append("The \(next.kind.label) upload was turned down: \(error.message)")
             } catch {
+                stall()
                 return
             }
+            unsent.remove(next.id)
             try? FileManager.default.removeItem(at: file)
             pendingDocuments.removeAll { $0.id == next.id }
             deliveredCount += 1
@@ -253,13 +301,16 @@ final class OfflineQueue {
             defer { uploadingID = nil }
             do {
                 try await api.addExpense(next, receipt: next.hasReceipt ? file : nil)
+                sentExpenses.append(next)
             } catch let error as PostgrestError {
                 rejections.append(error.message)
             } catch let error as StorageError where error.statusCode?.hasPrefix("4") == true {
                 rejections.append("The \(next.kind.label.lowercased()) receipt was turned down: \(error.message)")
             } catch {
+                stall()
                 return
             }
+            unsent.remove(next.id)
             try? FileManager.default.removeItem(at: file)
             pendingExpenses.removeAll { $0.id == next.id }
             deliveredCount += 1

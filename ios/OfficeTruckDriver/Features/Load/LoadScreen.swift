@@ -9,10 +9,14 @@ import SwiftUI
 /// their own sections.
 struct LoadScreen: View {
     let loadID: UUID
+    /// Other loads of the driver's at the same time as this one, from Trips.
+    var overlaps: [String] = []
 
     @State private var load: Loadable<LoadDetail> = .loading
     @State private var checkIn: CheckInRequest?
     @State private var odometer = ""
+    /// A check-in whose odometer was lower than the truck's last reading.
+    @State private var lowReading: CheckInRequest?
     /// Paperwork being added: the kind picked, then how.
     @State private var addKind: DocumentKind?
     /// Checking out without the stop's BOL or POD: warn first.
@@ -34,6 +38,63 @@ struct LoadScreen: View {
     private let api = DriverAPI()
 
     var body: some View {
+        screen
+            .alert(
+                checkIn.map { "\($0.event == .arrived ? "Arrived at" : "Leaving") \($0.place)?" } ?? "",
+                isPresented: Binding(get: { checkIn != nil }, set: { if !$0 { checkIn = nil } }),
+                presenting: checkIn
+            ) { request in
+                if request.asksOdometer {
+                    TextField(request.minimumOdometer.map { "Odometer, \($0.formatted()) or more" } ?? "Odometer (optional)",
+                              text: $odometer)
+                        .keyboardType(.numberPad)
+                }
+                Button("Cancel", role: .cancel) {}
+                // The preferred action is drawn in the app's green. A reading
+                // lower than the truck's last one asks again instead.
+                Button(request.event == .arrived ? "Arrived" : "Departed") {
+                    if isTooLow(odometer, for: request) {
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(350))
+                            lowReading = request
+                        }
+                    } else {
+                        record(request)
+                    }
+                }
+                .keyboardShortcut(.defaultAction)
+            } message: { request in
+                let when = "This records \(Date.now.formatted(date: .omitted, time: .shortened))\(CheckInLocation.shared.allowed ? " with your location" : ""). Only dispatch can change it after."
+                if request.asksOdometer, let minimum = request.minimumOdometer {
+                    Text("The truck's last odometer reading was \(minimum.formatted()) mi. A new one can't be lower.\n\n\(when)")
+                } else {
+                    Text(when)
+                }
+            }
+            .alert(
+                "Odometer too low",
+                isPresented: Binding(get: { lowReading != nil }, set: { if !$0 { lowReading = nil } }),
+                presenting: lowReading
+            ) { request in
+                // Each choice waits for this alert to close before the next opens.
+                Button("Enter it again") {
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(350))
+                        checkIn = request
+                    }
+                }
+                .keyboardShortcut(.defaultAction)
+                Button("\(request.event == .arrived ? "Arrive" : "Depart") without it") {
+                    odometer = ""
+                    record(request)
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: { request in
+                Text("\(Int(odometer.filter(\.isNumber))?.formatted() ?? odometer) mi is lower than the truck's last reading, \((request.minimumOdometer ?? 0).formatted()) mi. Odometers only go up. Check it and enter it again.")
+            }
+    }
+
+    private var screen: some View {
         Group {
             switch load {
             case .loading:
@@ -89,22 +150,6 @@ struct LoadScreen: View {
             Text(actionError ?? "")
         }
         .alert(
-            checkIn.map { "\($0.event == .arrived ? "Arrived at" : "Leaving") \($0.place)?" } ?? "",
-            isPresented: Binding(get: { checkIn != nil }, set: { if !$0 { checkIn = nil } }),
-            presenting: checkIn
-        ) { request in
-            if request.asksOdometer {
-                TextField("Odometer (optional)", text: $odometer)
-                    .keyboardType(.numberPad)
-            }
-            Button("Cancel", role: .cancel) {}
-            // The preferred action is drawn in the app's green.
-            Button(request.event == .arrived ? "Arrived" : "Departed") { record(request) }
-                .keyboardShortcut(.defaultAction)
-        } message: { _ in
-            Text("This records \(Date.now.formatted(date: .omitted, time: .shortened))\(CheckInLocation.shared.allowed ? " with your location" : ""). Only dispatch can change it after.")
-        }
-        .alert(
             missingPaperwork.map { "No \($0.kind.label) yet" } ?? "",
             isPresented: Binding(get: { missingPaperwork != nil }, set: { if !$0 { missingPaperwork = nil } }),
             presenting: missingPaperwork
@@ -142,10 +187,28 @@ struct LoadScreen: View {
         let next = nextStop(load, pending: pending)
 
         return List {
+            // Dispatch was warned when it booked them; the driver needs to
+            // hear it too, before driving to the wrong one first.
+            if !overlaps.isEmpty && (load.status == .dispatched || load.status == .loaded) {
+                Section {
+                    Label {
+                        Text("This load's times overlap \(overlaps.formatted(.list(type: .and))). Call dispatch to check which comes first.")
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                    }
+                    if let phone = load.organization.phone, let url = telURL(phone) {
+                        Link(destination: url) {
+                            Label("Call dispatch", systemImage: "phone")
+                        }
+                    }
+                }
+            }
             ForEach(load.stops) { stop in
-                let arrived = stop.arrivedAt ?? pending.first { $0.stopID == stop.id && $0.event == .arrived }?.tappedAt
-                let departed = stop.departedAt ?? pending.first { $0.stopID == stop.id && $0.event == .departed }?.tappedAt
-                let waiting = pending.contains { $0.stopID == stop.id }
+                let arrivedTap = pending.first { $0.stopID == stop.id && $0.event == .arrived }
+                let departedTap = pending.first { $0.stopID == stop.id && $0.event == .departed }
+                let arrived = stop.arrivedAt ?? arrivedTap?.tappedAt
+                let departed = stop.departedAt ?? departedTap?.tappedAt
+                let reading = odometerReading(stop, arrivedTap: arrivedTap, departedTap: departedTap)
                 let isNext = load.canEdit && stop.id == next?.id
 
                 Section {
@@ -161,14 +224,18 @@ struct LoadScreen: View {
                         LabeledContent("Phone") { Link(phone, destination: url) }
                     }
                     if let notes = stop.notes { Text(notes).foregroundStyle(.secondary) }
-                    LabeledContent("Arrived", value: arrived?.formatted(date: .omitted, time: .shortened) ?? "—")
-                    LabeledContent("Departed", value: departed?.formatted(date: .omitted, time: .shortened) ?? "—")
-                    if let reading = stop.departedOdometer ?? stop.arrivedOdometer {
-                        LabeledContent("Odometer", value: "\(reading.formatted()) mi")
+                    LabeledContent("Arrived") {
+                        checkInValue(arrived?.formatted(date: .omitted, time: .shortened) ?? "—",
+                                     unsent: stop.arrivedAt == nil && isUnsent(arrivedTap))
                     }
-                    if waiting {
-                        Label("Saved on this phone. Sends when you have signal.", systemImage: "icloud.and.arrow.up")
-                            .foregroundStyle(.orange)
+                    LabeledContent("Departed") {
+                        checkInValue(departed?.formatted(date: .omitted, time: .shortened) ?? "—",
+                                     unsent: stop.departedAt == nil && isUnsent(departedTap))
+                    }
+                    if let reading {
+                        LabeledContent("Odometer") {
+                            checkInValue("\(reading.miles.formatted()) mi", unsent: reading.unsent)
+                        }
                     }
                 } header: {
                     // The next stop's header is in the tint color.
@@ -263,6 +330,9 @@ struct LoadScreen: View {
                 .padding(.bottom, 8)
             }
         }
+        // The keyboard (the odometer field in the check-in alert) covers the
+        // button instead of pushing it up over the alert.
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         .alert(
             addKind.map { "Add \($0.label)" } ?? "",
             isPresented: Binding(get: { addKind != nil }, set: { if !$0 { addKind = nil } }),
@@ -298,22 +368,51 @@ struct LoadScreen: View {
                     }
                     Section("Details") {
                         LabeledContent("Status", value: load.status.label)
-                        if let truck = load.truck { LabeledContent("Truck", value: truck) }
-                        if let trailer = load.trailerNumber { LabeledContent("Trailer", value: trailer) }
                         if let commodity = load.commodity { LabeledContent("Commodity", value: commodity) }
                         if let weight = load.weightLbs { LabeledContent("Weight", value: "\(weight.formatted()) lbs") }
                         if let miles = load.miles { LabeledContent("Miles", value: miles.formatted()) }
                     }
+                    // What a scale or an inspection asks for, and when the
+                    // truck's paperwork runs out.
+                    if let truck = load.truckDetails {
+                        Section("Truck") {
+                            LabeledContent("Unit", value: truck.unitNumber)
+                            if let description = truck.description { Text(description) }
+                            if let plate = truck.plateNumber {
+                                LabeledContent("Plate", value: [plate, truck.plateState].compactMap { $0 }.joined(separator: " · "))
+                            }
+                            if let vin = truck.vin {
+                                LabeledContent("VIN") {
+                                    Text(vin).monospaced().textSelection(.enabled)
+                                }
+                            }
+                            if let odometer = truck.odometer {
+                                LabeledContent("Odometer") {
+                                    Text("\(odometer.formatted()) mi")
+                                    if let day = truck.odometerOn { Text("Read \(WallClock.day(day))") }
+                                }
+                            }
+                            if let done = truck.annualInspectionOn {
+                                dueRow("Inspection due", WallClock.addingYear(to: done))
+                            }
+                            if let expires = truck.registrationExpiresOn {
+                                dueRow("Registration expires", expires)
+                            }
+                            if let trailer = load.trailerNumber { LabeledContent("Trailer", value: trailer) }
+                        }
+                    } else if load.truck != nil || load.trailerNumber != nil {
+                        Section("Truck") {
+                            if let truck = load.truck { LabeledContent("Unit", value: truck) }
+                            if let trailer = load.trailerNumber { LabeledContent("Trailer", value: trailer) }
+                        }
+                    }
                 }
                 .navigationTitle("Load \(load.reference)")
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") { showingInfo = false }
-                    }
-                }
             }
-            .presentationDetents([.medium, .large])
+            // Full height; swiped down to close.
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $addingExpense) {
             AddExpenseView(load: load)
@@ -337,11 +436,15 @@ struct LoadScreen: View {
 
     /// The load's paperwork: one row each for the BOL and POD the load
     /// needs, then anything else (lumper receipts and the like). A missing
-    /// BOL or POD is tapped to add it; one that's in has a checkmark, opens
+    /// BOL or POD is tapped to add it; one that's in says View, opens
     /// on a tap, and swipes left to View, Upload again or Remove.
     @ViewBuilder
     private func paperwork(_ load: LoadDetail, next: LoadDetail.Stop?, pending: [PendingCheckIn]) -> some View {
+        // Queued, plus ones just sent that the load hasn't come back with yet.
         let waitingDocuments = queue.documents(for: load.id)
+            + queue.sentDocuments.filter { doc in
+                doc.loadID == load.id && !load.documents.contains { $0.path == doc.storagePath }
+            }
 
         Section {
             ForEach([DocumentKind.bol, .pod]) { kind in
@@ -353,9 +456,13 @@ struct LoadScreen: View {
                     $0.isPickup == (kind == .bol) && arrivedTime($0, pending: pending) != nil
                 } == true
                 // The newest copy: what View opens and Remove takes away.
+                // The copy on this phone while it's there (queued or not sent
+                // yet), so the driver can always see what they scanned.
+                let local = waiting.last.map { OfflineQueue.fileURL(for: $0) }
+                    .flatMap { FileManager.default.fileExists(atPath: $0.path) ? $0 : nil }
                 let view = {
-                    if let doc = waiting.last {
-                        previewURL = OfflineQueue.fileURL(for: doc)
+                    if let local {
+                        previewLocal(local, name: kind.label)
                     } else if let doc = added.last {
                         Task { await preview(bucket: "load-documents", path: doc.path, name: doc.fileName) }
                     }
@@ -365,21 +472,21 @@ struct LoadScreen: View {
                     if hasIt { view() } else if load.canEdit { addKind = kind }
                 } label: {
                     LabeledContent {
-                        if !waiting.isEmpty {
-                            Text("Sending").foregroundStyle(.orange)
-                        } else if hasIt {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.title2)
-                                .foregroundStyle(.green)
-                                .accessibilityLabel("Added")
+                        if hasIt {
+                            Text("View").foregroundStyle(Color.accentColor)
                         } else if load.canEdit {
                             Text("Add").foregroundStyle(Color.accentColor)
                         }
                     } label: {
                         Text(kind.label).foregroundStyle(.primary)
-                        Text(added.last.map { "Added \($0.createdAt.formatted(.dateTime.month().day().hour().minute()))" }
-                             ?? (kind == .bol ? "Signed at pickup" : "Signed at delivery"))
-                            .foregroundStyle(neededNow ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                        // Uploading, or not sent yet; either way it's viewable.
+                        if let doc = waiting.last {
+                            uploadStatus(doc.id)
+                        } else {
+                            Text(added.last.map { "Added \($0.createdAt.formatted(.dateTime.month().day().hour().minute()))" }
+                                 ?? (kind == .bol ? "Signed at pickup" : "Signed at delivery"))
+                                .foregroundStyle(neededNow ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                        }
                     }
                 }
                 // The name and hint read as text, not as a link; only "Add"
@@ -416,10 +523,7 @@ struct LoadScreen: View {
                 }
                 Button { _ = view() } label: {
                     LabeledContent {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.title2)
-                            .foregroundStyle(.green)
-                            .accessibilityLabel("Added")
+                        Text("View").foregroundStyle(Color.accentColor)
                     } label: {
                         Text(doc.kind.documentLabel)
                         Text("Added \(doc.createdAt.formatted(.dateTime.month().day().hour().minute()))")
@@ -443,21 +547,23 @@ struct LoadScreen: View {
             }
             ForEach(waitingDocuments.filter { $0.kind != .bol && $0.kind != .pod }) { doc in
                 Button {
-                    previewURL = OfflineQueue.fileURL(for: doc)
+                    previewLocal(OfflineQueue.fileURL(for: doc), name: doc.kind.label)
                 } label: {
                     LabeledContent {
-                        Text("Sending").foregroundStyle(.orange)
+                        Text("View").foregroundStyle(Color.accentColor)
                     } label: {
                         Text(doc.kind.label).foregroundStyle(.primary)
+                        uploadStatus(doc.id)
                     }
                 }
+                .tint(.primary)
                 .swipeActions(allowsFullSwipe: false) {
                     Button("Stop sending", systemImage: "xmark", role: .destructive) {
                         if !queue.cancelDocument(doc.id) {
                             actionError = "It's sending right now. Remove it once it's sent."
                         }
                     }
-                    Button("View", systemImage: "eye") { previewURL = OfflineQueue.fileURL(for: doc) }
+                    Button("View", systemImage: "eye") { previewLocal(OfflineQueue.fileURL(for: doc), name: doc.kind.label) }
                         .tint(.blue)
                 }
             }
@@ -486,7 +592,14 @@ struct LoadScreen: View {
     @ViewBuilder
     private func expenses(_ load: LoadDetail) -> some View {
         let waiting = queue.expenses(for: load.id)
-        let total = load.expenses.reduce(0) { $0 + $1.amount } + waiting.reduce(0) { $0 + $1.amount }
+            + queue.sentExpenses.filter { sent in
+                sent.loadID == load.id && !load.expenses.contains { $0.id == sent.id }
+            }
+        // Only what the driver paid comes back to them; company-paid ones
+        // are there for their receipts.
+        let owed = load.expenses.filter { !$0.companyPaid }.map(\.amount)
+            + waiting.filter { $0.companyPaid != true }.map(\.amount)
+        let total = owed.reduce(0, +)
 
         Section {
             if load.expenses.isEmpty && waiting.isEmpty && !load.canEdit {
@@ -507,8 +620,10 @@ struct LoadScreen: View {
                         Label {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(kind.label).foregroundStyle(.primary)
-                                Text(([WallClock.day(expense.spentOn)] + [expense.note].compactMap { $0 }
-                                      + (expense.receiptPath != nil ? ["Receipt"] : [])).joined(separator: " · "))
+                                Text(([WallClock.day(expense.spentOn)] + (expense.companyPaid ? ["Company paid"] : [])
+                                      + [expense.note].compactMap { $0 }
+                                      // A company-paid one always has its receipt.
+                                      + (expense.receiptPath != nil && !expense.companyPaid ? ["Receipt"] : [])).joined(separator: " · "))
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
                             }
@@ -517,6 +632,7 @@ struct LoadScreen: View {
                         }
                     }
                 }
+                .tint(.primary)
                 .disabled(expense.receiptPath == nil)
                 // No full swipe, so a long swipe can't remove it by accident.
                 .swipeActions(allowsFullSwipe: false) {
@@ -533,7 +649,7 @@ struct LoadScreen: View {
             }
             ForEach(waiting) { expense in
                 Button {
-                    if expense.hasReceipt { previewURL = OfflineQueue.receiptURL(for: expense) }
+                    if expense.hasReceipt { previewLocal(OfflineQueue.receiptURL(for: expense), name: "\(expense.kind.label) receipt") }
                 } label: {
                     LabeledContent {
                         Text(expense.amount.dollars)
@@ -543,13 +659,18 @@ struct LoadScreen: View {
                         Label {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(expense.kind.label).foregroundStyle(.primary)
-                                Text("Not sent yet").font(.subheadline).foregroundStyle(.orange)
+                                HStack(spacing: 6) {
+                                    if expense.companyPaid == true { Text("Company paid ·").foregroundStyle(.secondary) }
+                                    uploadStatus(expense.id)
+                                }
+                                .font(.subheadline)
                             }
                         } icon: {
                             Image(systemName: expense.kind.systemImage)
                         }
                     }
                 }
+                .tint(.primary)
                 .swipeActions(allowsFullSwipe: false) {
                     Button("Stop sending", systemImage: "xmark", role: .destructive) {
                         if !queue.cancelExpense(expense.id) {
@@ -557,13 +678,13 @@ struct LoadScreen: View {
                         }
                     }
                     if expense.hasReceipt {
-                        Button("View", systemImage: "eye") { previewURL = OfflineQueue.receiptURL(for: expense) }
+                        Button("View", systemImage: "eye") { previewLocal(OfflineQueue.receiptURL(for: expense), name: "\(expense.kind.label) receipt") }
                             .tint(.blue)
                     }
                 }
             }
-            if load.expenses.count + waiting.count > 1 {
-                LabeledContent("Total") {
+            if !owed.isEmpty && load.expenses.count + waiting.count > 1 {
+                LabeledContent("Paid back to you") {
                     Text(total.dollars).font(.headline.monospacedDigit()).foregroundStyle(.primary)
                 }
                 .font(.headline)
@@ -578,8 +699,16 @@ struct LoadScreen: View {
         } header: {
             Text("Expenses")
         } footer: {
-            Text("Fuel, tolls, scales and anything else you paid for yourself. The office pays it back on your settlement. Swipe left on one to view the receipt or remove it.")
+            Text("Fuel, tolls, scales and the like. What you paid yourself comes back on your settlement; for what the company paid, add the receipt so the office has it. Swipe left on one to view the receipt or remove it.")
         }
+    }
+
+    /// Opens a copy still on this phone under its name ("BOL"), not the
+    /// queue's file id.
+    private func previewLocal(_ file: URL, name: String) {
+        let named = URL.temporaryDirectory.appending(path: "\(name).pdf")
+        try? FileManager.default.removeItem(at: named)
+        previewURL = (try? FileManager.default.copyItem(at: file, to: named)) != nil ? named : file
     }
 
     private func preview(bucket: String, path: String, name: String) async {
@@ -621,8 +750,86 @@ struct LoadScreen: View {
             event: event,
             place: stop.facility ?? stop.location,
             asksOdometer: (event == .arrived && stop.position == load.stops.first?.position)
-                || (event == .departed && stop.position == load.stops.last?.position)
+                || (event == .departed && stop.position == load.stops.last?.position),
+            minimumOdometer: minimumOdometer(load)
         )
+    }
+
+    /// The lowest reading a new check-in may have: the truck's last one before
+    /// this load, or the highest already taken on it (readings only go up, and
+    /// the next one asked for is always later on the load).
+    private func minimumOdometer(_ load: LoadDetail) -> Int? {
+        let taken = load.stops.flatMap { [$0.arrivedOdometer, $0.departedOdometer] }
+            + queue.checkIns(for: load.id).map(\.odometer)
+        return ([load.truckOdometer] + taken).compactMap { $0 }.max()
+    }
+
+    /// A typed reading below the minimum. Empty is fine: it's optional.
+    private func isTooLow(_ text: String, for request: CheckInRequest) -> Bool {
+        guard request.asksOdometer, let minimum = request.minimumOdometer,
+              let reading = Int(text.filter(\.isNumber)) else { return false }
+        return reading < minimum
+    }
+
+    /// A check-in the phone tried to send and couldn't. One still going out
+    /// right after the tap isn't, so it doesn't flash as unsent.
+    private func isUnsent(_ tap: PendingCheckIn?) -> Bool {
+        tap.map { queue.unsent.contains($0.id) } ?? false
+    }
+
+    /// The stop's odometer: the departure's if there is one, else the
+    /// arrival's, counting readings still on this phone.
+    private func odometerReading(
+        _ stop: LoadDetail.Stop, arrivedTap: PendingCheckIn?, departedTap: PendingCheckIn?
+    ) -> (miles: Int, unsent: Bool)? {
+        if let miles = stop.departedOdometer { return (miles, false) }
+        if let miles = departedTap?.odometer { return (miles, isUnsent(departedTap)) }
+        if let miles = stop.arrivedOdometer { return (miles, false) }
+        if let miles = arrivedTap?.odometer { return (miles, isUnsent(arrivedTap)) }
+        return nil
+    }
+
+    /// A queued upload, shown under its name: a spinner while it's going out,
+    /// or orange "Not sent yet" once a try couldn't reach the server (it goes
+    /// when there's signal). The row still says View either way.
+    @ViewBuilder
+    private func uploadStatus(_ id: UUID) -> some View {
+        if queue.unsent.contains(id) {
+            // Reassuring: the copy is safe on the phone and goes on its own.
+            Text("\(Image(systemName: "icloud.slash")) Not sent yet · saved on this phone")
+                .foregroundStyle(.orange)
+                .accessibilityLabel("Not sent yet. Saved on this phone; it sends when you have signal.")
+        } else {
+            HStack(spacing: 6) {
+                ProgressView()
+                Text("Uploading")
+            }
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    /// A date the truck's paperwork runs out: orange within 30 days, red
+    /// once it's past.
+    private func dueRow(_ title: String, _ day: String) -> some View {
+        let days = WallClock.daysUntil(day) ?? .max
+        return LabeledContent(title) {
+            Text(WallClock.fullDay(day))
+                .foregroundStyle(days < 0 ? .red : days <= 30 ? .orange : .secondary)
+                .accessibilityValue(days < 0 ? "Past due" : days <= 30 ? "Due soon" : "")
+        }
+    }
+
+    /// A check-in time or reading. One that hasn't reached the office yet is
+    /// orange with a crossed-out cloud beside it; it goes once there's signal.
+    @ViewBuilder
+    private func checkInValue(_ text: String, unsent: Bool) -> some View {
+        if unsent {
+            Text("\(Image(systemName: "icloud.slash")) \(text)")
+                .foregroundStyle(.orange)
+                .accessibilityLabel("\(text), not sent yet")
+        } else {
+            Text(text)
+        }
     }
 
     private func telURL(_ phone: String) -> URL? {
@@ -719,6 +926,9 @@ struct CheckInRequest {
     let event: StopEvent
     let place: String
     let asksOdometer: Bool
+    /// The lowest reading allowed: the truck's last one, or a later one
+    /// already taken on this load. Nil when there's none yet.
+    let minimumOdometer: Int?
 }
 
 /// An expense the driver paid out of pocket: what for, how much, the day,
@@ -729,6 +939,7 @@ struct AddExpenseView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var kind: ExpenseKind = .fuel
+    @State private var companyPaid = false
     @State private var amountText = ""
     @State private var spentOn = Date.now
     @State private var note = ""
@@ -750,6 +961,19 @@ struct AddExpenseView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    // Who paid decides whether it comes back on the settlement.
+                    Picker("Paid by", selection: $companyPaid) {
+                        Text("Me").tag(false)
+                        Text("Company").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+                } header: {
+                    Text("Who paid?")
+                }
+
                 Section {
                     Picker("Type", selection: $kind) {
                         ForEach(ExpenseKind.allCases) { kind in
@@ -797,9 +1021,11 @@ struct AddExpenseView: View {
                         }
                     }
                 } header: {
-                    Text("Receipt")
+                    Text(companyPaid ? "Receipt (needed)" : "Receipt")
                 } footer: {
-                    Text("The office pays it back on your settlement. A receipt helps them approve it.")
+                    Text(companyPaid
+                         ? "The company paid, so nothing comes back to you. The receipt goes to the office for its records."
+                         : "The office pays it back on your settlement. A receipt helps them approve it.")
                 }
 
                 if let error {
@@ -816,8 +1042,9 @@ struct AddExpenseView: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
+                    // A company-paid expense is only here for its receipt.
                     Button("Add", action: add)
-                        .disabled(amount == nil)
+                        .disabled(amount == nil || (companyPaid && pages.isEmpty))
                 }
             }
             .onAppear { amountFocused = true }
@@ -866,7 +1093,8 @@ struct AddExpenseView: View {
             amount: amount,
             spentOn: WallClock.string(from: spentOn),
             note: trimmed.isEmpty ? nil : trimmed,
-            receipt: receipt
+            receipt: receipt,
+            companyPaid: companyPaid
         )
         dismiss()
     }

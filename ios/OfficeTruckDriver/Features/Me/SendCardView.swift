@@ -84,8 +84,14 @@ struct SendCardView: View {
                         .disabled(sending)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(sending ? "Sending…" : "Send", action: send)
-                        .disabled(sending || pages.isEmpty || !datePicked)
+                    // A spinner in place of Send while the card uploads.
+                    if sending {
+                        ProgressView()
+                            .accessibilityLabel("Uploading")
+                    } else {
+                        Button("Send", action: send)
+                            .disabled(pages.isEmpty || !datePicked)
+                    }
                 }
             }
             .interactiveDismissDisabled(sending)
