@@ -21,7 +21,21 @@ struct RootView: View {
         Group {
             switch session.state {
             case .loading:
-                ProgressView()
+                // Picks up where the launch screen leaves off (same color,
+                // same truck, same place), with a spinner while the session
+                // comes back.
+                ZStack {
+                    Color("LaunchBackground")
+                    Image("LaunchLogo")
+                        .accessibilityLabel("OfficeTruck")
+                }
+                .overlay(alignment: .bottom) {
+                    ProgressView()
+                        .tint(.white)
+                        .controlSize(.large)
+                        .padding(.bottom, 96)
+                }
+                .ignoresSafeArea()
             case .signedOut:
                 SignInView()
             case .signedIn:
