@@ -116,6 +116,41 @@ export function stopDetention(
   }
 }
 
+/**
+ * The detention clock for a driver still at a stop: how long they've
+ * waited, how much free time is left, and once it's run out, how long
+ * detention has run and what it comes to so far (quarter hours, rounded up,
+ * as it'll be billed). Null until they've arrived, after they've left, or
+ * with no free time on the load.
+ */
+export function detentionClock(
+  stop: { arrived_at: string | null; departed_at: string | null },
+  terms: { detention_free_hours: number | null; detention_rate: number | null },
+  now: number
+) {
+  if (!stop.arrived_at || stop.departed_at) return null
+  if (terms.detention_free_hours === null) return null
+  const arrived = new Date(stop.arrived_at).getTime()
+  const freeUntil = arrived + Number(terms.detention_free_hours) * 3_600_000
+  const waiting = Math.max(0, now - arrived)
+  const over = Math.max(0, now - freeUntil)
+  const billableHours = over > 0 ? Math.ceil((over / 3_600_000) * 4) / 4 : 0
+  return {
+    waiting,
+    freeUntil,
+    /** Free time left; 0 once detention has started. */
+    freeLeft: Math.max(0, freeUntil - now),
+    over,
+    started: over > 0,
+    /** Within 30 minutes of free time running out. */
+    soon: over === 0 && freeUntil - now <= 30 * 60_000,
+    amount:
+      terms.detention_rate === null
+        ? null
+        : Math.round(billableHours * Number(terms.detention_rate) * 100) / 100,
+  }
+}
+
 // ------------------------------------------------------------- Odometer ----
 
 type OdometerStop = {

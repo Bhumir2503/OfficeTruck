@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
 import { BrokerUpdatesSetting } from "@/components/settings/broker-updates-setting"
+import { DetentionSetting } from "@/components/settings/detention-setting"
 import { CompanyProfileSection } from "@/components/settings/company-profile-form"
 import { DeleteOrganization } from "@/components/settings/delete-organization"
 import { LeaveOrganization } from "@/components/settings/leave-organization"
@@ -29,7 +30,9 @@ export default async function GeneralSettingsPage({
     await createClient()
   )
     .from("organizations")
-    .select("icon_url, broker_updates")
+    .select(
+      "icon_url, broker_updates, detention_notices, detention_auto_charge"
+    )
     .eq("id", organization.id)
     .single()
 
@@ -55,6 +58,12 @@ export default async function GeneralSettingsPage({
       <BrokerUpdatesSetting
         organizationId={organization.id}
         enabled={org?.broker_updates ?? false}
+        canEdit={canManage(organization)}
+      />
+      <DetentionSetting
+        organizationId={organization.id}
+        notices={org?.detention_notices ?? false}
+        autoCharge={org?.detention_auto_charge ?? false}
         canEdit={canManage(organization)}
       />
       <OrganizationUrlForm
