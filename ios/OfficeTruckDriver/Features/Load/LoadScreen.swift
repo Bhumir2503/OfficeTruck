@@ -355,7 +355,7 @@ struct LoadScreen: View {
 
     /// The load's paperwork: one row each for the BOL and POD the load
     /// needs, then anything else (lumper receipts and the like). A missing
-    /// BOL or POD is tapped to add it; one that's in has a checkmark, opens
+    /// BOL or POD is tapped to add it; one that's in says View, opens
     /// on a tap, and swipes left to View, Upload again or Remove.
     @ViewBuilder
     private func paperwork(_ load: LoadDetail, next: LoadDetail.Stop?, pending: [PendingCheckIn]) -> some View {
@@ -386,10 +386,7 @@ struct LoadScreen: View {
                         if !waiting.isEmpty {
                             Text("Sending").foregroundStyle(.orange)
                         } else if hasIt {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.title2)
-                                .foregroundStyle(.green)
-                                .accessibilityLabel("Added")
+                            Text("View").foregroundStyle(Color.accentColor)
                         } else if load.canEdit {
                             Text("Add").foregroundStyle(Color.accentColor)
                         }
@@ -434,10 +431,7 @@ struct LoadScreen: View {
                 }
                 Button { _ = view() } label: {
                     LabeledContent {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.title2)
-                            .foregroundStyle(.green)
-                            .accessibilityLabel("Added")
+                        Text("View").foregroundStyle(Color.accentColor)
                     } label: {
                         Text(doc.kind.documentLabel)
                         Text("Added \(doc.createdAt.formatted(.dateTime.month().day().hour().minute()))")
