@@ -1,56 +1,58 @@
 "use client"
 
-import { Pencil } from "lucide-react"
-import { useState } from "react"
+import { CornerDownLeft } from "lucide-react"
+import { useRef, useState } from "react"
 import { toast } from "sonner"
 
 import { updateLoadDetails } from "@/app/org/[slug]/loads/actions"
 import { FreightFields, LoadTextField } from "@/components/loads/freight-fields"
-import { SettingsCard } from "@/components/settings/settings-card"
-import { Button } from "@/components/ui/button"
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+  SettingsCard,
+  SettingsCardFooter,
+} from "@/components/settings/settings-card"
+import { Button } from "@/components/ui/button"
 import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Textarea } from "@/components/ui/textarea"
 import { useZodForm } from "@/hooks/use-zod-form"
 import type { Load } from "@/lib/loads"
-import { EQUIPMENT_LABELS, loadDetailsSchema } from "@/lib/schemas/load"
+import { loadDetailsSchema } from "@/lib/schemas/load"
 
-function Detail({
-  label,
-  children,
-  className,
-}: {
-  label: string
-  children: React.ReactNode
-  className?: string
-}) {
-  return (
-    <div className={className}>
-      <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="mt-1 text-sm font-medium whitespace-pre-wrap">
-        {children}
-      </dd>
-    </div>
-  )
+/** The form's values as text, to tell whether anything changed. */
+function snapshot(form: HTMLFormElement | null) {
+  const values = new Map<string, string>()
+  if (form) {
+    for (const [name, value] of new FormData(form)) {
+      values.set(name, typeof value === "string" ? value : value.name)
+    }
+  }
+  return values
 }
 
-// Lives inside the dialog content so its state resets each time it opens.
+function differs(a: Map<string, string>, b: Map<string, string>) {
+  for (const name of new Set([...a.keys(), ...b.keys()])) {
+    if (a.get(name) !== b.get(name)) return true
+  }
+  return false
+}
+
+/**
+ * The load number and what's being hauled, edited in place like the truck
+ * and driver pages: Save turns on once something changes, and Enter saves.
+ */
 function DetailsForm({
   organizationId,
   load,
-  onDone,
+  notice,
 }: {
   organizationId: string
   load: Load
-  onDone: () => void
+  notice?: React.ReactNode
 }) {
+  const formRef = useRef<HTMLFormElement>(null)
+  // What's saved, read from the form once it's drawn.
+  const baseline = useRef<Map<string, string> | null>(null)
+  const [dirty, setDirty] = useState(false)
+
   const { errors, formError, pending, formProps, revalidate } = useZodForm(
     loadDetailsSchema,
     async (values) => {
@@ -58,15 +60,49 @@ function DetailsForm({
       if ("error" in result) {
         return result.error
       }
-      toast.success(`Load ${values.reference} updated.`)
-      onDone()
+      baseline.current = snapshot(formRef.current)
+      setDirty(false)
+      toast.success(`Load ${values.reference} saved.`)
     }
   )
 
+  function checkDirty() {
+    const form = formRef.current
+    if (!form) return
+    baseline.current ??= snapshot(form)
+    setDirty(differs(baseline.current, snapshot(form)))
+  }
+
   return (
-    <form {...formProps} autoComplete="off">
-      <fieldset disabled={pending} className="flex flex-col gap-6">
-        <div className="grid gap-5 sm:grid-cols-6">
+    <form
+      {...formProps}
+      ref={(form) => {
+        formRef.current = form
+        if (form && !baseline.current) baseline.current = snapshot(form)
+      }}
+      autoComplete="off"
+      onChange={(event) => {
+        formProps.onChange(event)
+        checkDirty()
+      }}
+    >
+      <SettingsCard
+        title="Load details"
+        description="The load number and what's being hauled."
+        footer={
+          <SettingsCardFooter
+            hint={
+              formError && <span className="text-destructive">{formError}</span>
+            }
+          >
+            <Button type="submit" size="sm" disabled={pending || !dirty}>
+              {pending ? "Saving…" : "Save"} <CornerDownLeft />
+            </Button>
+          </SettingsCardFooter>
+        }
+      >
+        {notice}
+        <fieldset disabled={pending} className="grid gap-5 sm:grid-cols-6">
           <LoadTextField
             name="reference"
             label="Load number"
@@ -77,7 +113,10 @@ function DetailsForm({
           <FreightFields
             defaults={load}
             errors={errors}
-            onUpdate={revalidate}
+            onUpdate={(form) => {
+              revalidate(form)
+              checkDirty()
+            }}
           />
           <Field data-invalid={!!errors.notes} className="sm:col-span-6">
             <FieldLabel htmlFor="load-notes">Notes</FieldLabel>
@@ -90,97 +129,43 @@ function DetailsForm({
             />
             <FieldError errors={errors.notes} />
           </Field>
-        </div>
-        <DialogFooter className="items-center">
-          {formError && (
-            <p className="mr-auto text-sm text-destructive">{formError}</p>
-          )}
-          <Button type="button" variant="outline" onClick={onDone}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={pending}>
-            {pending ? "Saving…" : "Save"}
-          </Button>
-        </DialogFooter>
-      </fieldset>
+        </fieldset>
+      </SettingsCard>
     </form>
   )
 }
 
 /**
- * The load card at the top of the load page, laid out like the Load card on
- * New Load: the load number, broker and status, then what's being hauled,
- * with a dialog to change it.
+ * The load's details at the top of the load page, editable in place. The
+ * load number, broker and status are in the page header above it.
  */
 export function LoadDetailsCard({
   organizationId,
   load,
-  description,
-  statusMenu,
   notice,
 }: {
   organizationId: string
   load: Load
-  /** Under the title: the broker. */
-  description: React.ReactNode
-  /** Beside the Edit button: the status menu. */
-  statusMenu: React.ReactNode
-  /** Above the details, e.g. why the load was canceled. */
+  /** Above the fields, e.g. why the load was canceled. */
   notice?: React.ReactNode
 }) {
-  const [open, setOpen] = useState(false)
-  const none = (
-    <span className="font-normal text-muted-foreground">Not set</span>
-  )
-
+  // Saved values that change elsewhere (another tab, a teammate) start the
+  // form over from them.
+  const saved = JSON.stringify([
+    load.reference,
+    load.reference_numbers,
+    load.equipment,
+    load.commodity,
+    load.weight_lbs,
+    load.trailer_number,
+    load.notes,
+  ])
   return (
-    <SettingsCard
-      title={`Load ${load.reference}`}
-      description={description}
-      action={
-        <div className="flex items-center gap-2">
-          {statusMenu}
-          <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-            <Pencil />
-            Edit
-          </Button>
-        </div>
-      }
-    >
-      {notice}
-      <dl className="grid gap-5 sm:grid-cols-3">
-        <Detail label="Reference numbers" className="sm:col-span-3">
-          {load.reference_numbers ?? none}
-        </Detail>
-        <Detail label="Equipment">
-          {load.equipment ? EQUIPMENT_LABELS[load.equipment] : none}
-        </Detail>
-        <Detail label="Commodity">{load.commodity ?? none}</Detail>
-        <Detail label="Weight">
-          {load.weight_lbs !== null
-            ? `${load.weight_lbs.toLocaleString("en-US")} lbs`
-            : none}
-        </Detail>
-        <Detail label="Trailer number">{load.trailer_number ?? none}</Detail>
-        <Detail label="Notes" className="sm:col-span-2">
-          {load.notes ?? none}
-        </Detail>
-      </dl>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Edit load {load.reference}</DialogTitle>
-            <DialogDescription>
-              The load number and what&apos;s being hauled.
-            </DialogDescription>
-          </DialogHeader>
-          <DetailsForm
-            organizationId={organizationId}
-            load={load}
-            onDone={() => setOpen(false)}
-          />
-        </DialogContent>
-      </Dialog>
-    </SettingsCard>
+    <DetailsForm
+      key={saved}
+      organizationId={organizationId}
+      load={load}
+      notice={notice}
+    />
   )
 }

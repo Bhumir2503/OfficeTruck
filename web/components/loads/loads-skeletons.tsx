@@ -463,56 +463,49 @@ export function NewLoadSkeleton() {
   )
 }
 
-function DetailSkeleton({
-  label,
-  className,
-  width = "w-24",
-}: {
-  label: string
-  className?: string
-  width?: string
-}) {
-  return (
-    <div className={className}>
-      <div className="text-sm text-muted-foreground">{label}</div>
-      <Line spacing="mt-1" className={width} />
-    </div>
-  )
-}
-
 /** A small outline button, like Edit or Upload. */
 function ButtonSkeleton({ className }: { className?: string }) {
   return <Skeleton className={cn("h-8 shrink-0 rounded-md", className)} />
 }
 
-/** The load card at the top: number, broker, status and what's hauled. */
+/** The load's details form at the top of the Trip tab. */
 function LoadDetailsCardSkeleton() {
   return (
     <SettingsCard
-      title="Load"
-      description={
-        <span className="inline-block h-4 w-32 animate-pulse rounded-md bg-muted align-middle" />
-      }
-      action={
-        <div className="flex items-center gap-2">
-          <Skeleton className="h-6 w-24 rounded-full" />
-          <ButtonSkeleton className="w-16" />
-        </div>
-      }
+      title="Load details"
+      description="The load number and what's being hauled."
+      footer={<SaveFooterSkeleton hint="" />}
     >
-      <div className="grid gap-5 sm:grid-cols-3">
-        <DetailSkeleton
-          label="Reference numbers"
-          className="sm:col-span-3"
-          width="w-40"
+      <div className="grid gap-5 sm:grid-cols-6">
+        <FieldSkeleton label="Load number" className="sm:col-span-6" />
+        <FieldSkeleton label="Reference numbers" className="sm:col-span-6" />
+        <FieldSkeleton label="Equipment" className="sm:col-span-2" />
+        <FieldSkeleton label="Commodity" className="sm:col-span-2" />
+        <FieldSkeleton label="Weight (lbs)" className="sm:col-span-2" />
+        <FieldSkeleton label="Trailer number" className="sm:col-span-2" />
+        <FieldSkeleton
+          label="Notes"
+          className="sm:col-span-6"
+          inputClassName="h-20"
         />
-        <DetailSkeleton label="Equipment" width="w-16" />
-        <DetailSkeleton label="Commodity" width="w-24" />
-        <DetailSkeleton label="Weight" width="w-20" />
-        <DetailSkeleton label="Trailer number" width="w-16" />
-        <DetailSkeleton label="Notes" className="sm:col-span-2" width="w-48" />
       </div>
     </SettingsCard>
+  )
+}
+
+/** The page header: load number, status, broker, and Change status. */
+function LoadHeaderSkeleton() {
+  return (
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-3">
+          <Skeleton className="h-8 w-40" />
+          <Skeleton className="h-6 w-20 rounded-full" />
+        </div>
+        <Skeleton className="h-4 w-32" />
+      </div>
+      <ButtonSkeleton className="w-32" />
+    </div>
   )
 }
 
@@ -760,6 +753,7 @@ function HistoryCardSkeleton() {
 export const LOAD_TAB_SKELETONS: Record<LoadTab, React.ReactNode> = {
   trip: (
     <>
+      <LoadDetailsCardSkeleton />
       <AssignmentCardSkeleton />
       <StopsCardSkeleton />
     </>
@@ -832,10 +826,10 @@ export function LoadDetailSkeleton() {
     <div className="px-4 py-6 lg:px-6 lg:py-8">
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
         <BackLinkSkeleton />
+        <LoadHeaderSkeleton />
+        <LoadTabBarSkeleton />
         <div className="grid items-start gap-6 @4xl/main:grid-cols-[minmax(0,1fr)_20rem] @6xl/main:grid-cols-[minmax(0,1fr)_24rem]">
           <div className="flex min-w-0 flex-col gap-6">
-            <LoadDetailsCardSkeleton />
-            <LoadTabBarSkeleton />
             <div className="flex min-w-0 flex-col gap-6">
               {LOAD_TAB_SKELETONS.trip}
             </div>
