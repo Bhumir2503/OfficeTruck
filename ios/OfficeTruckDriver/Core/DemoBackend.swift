@@ -135,6 +135,23 @@ enum DemoBackend {
         }
     }
 
+    /// Like set_my_stop_odometer: only after the check-in, never below the
+    /// truck's last reading.
+    static func setOdometer(stopID: UUID, event: StopEvent, reading: Int) throws {
+        if offline { throw URLError(.notConnectedToInternet) }
+        if reading < truckOdometer {
+            throw PostgrestError(
+                hint: "below_truck",
+                message: "That's lower than the truck's last reading, \(truckOdometer.formatted()) mi. Odometers only go up."
+            )
+        }
+        let key = stopID.uuidString.lowercased()
+        switch event {
+        case .arrived: if let time = arrived[key]?.0 { arrived[key] = (time, reading) }
+        case .departed: if let time = departed[key]?.0 { departed[key] = (time, reading) }
+        }
+    }
+
     /// Like the server: a POD or leaving the last stop is delivered, a BOL
     /// or leaving the last pickup is loaded.
     private static var status: String {
@@ -206,7 +223,7 @@ enum DemoBackend {
         let a0 = arrived[stopIDs[0]], d0 = departed[stopIDs[0]]
         let a1 = arrived[stopIDs[1]], d1 = departed[stopIDs[1]]
         return Data("""
-        {"id": "\(loadID)", "reference": "QA-1004", "status": "\(status)", "can_edit": true, "truck_odometer": \(truckOdometer), "truck_details": {"unit_number": "T-101", "year": 2022, "make": "Freightliner", "model": "Cascadia", "vin": "1FUJGLDR7NLAB1234", "plate_number": "TRK4821", "plate_state": "TN", "odometer": \(truckOdometer), "odometer_on": "2026-11-20", "annual_inspection_on": "2025-12-10", "registration_expires_on": "2027-03-31"},
+        {"id": "\(loadID)", "reference": "QA-1004", "status": "\(status)", "can_edit": true, "truck_odometer": \(truckOdometer), "detention_free_hours": 2, "truck_details": {"unit_number": "T-101", "year": 2022, "make": "Freightliner", "model": "Cascadia", "vin": "1FUJGLDR7NLAB1234", "plate_number": "TRK4821", "plate_state": "TN", "odometer": \(truckOdometer), "odometer_on": "2026-11-20", "annual_inspection_on": "2025-12-10", "registration_expires_on": "2027-03-31"},
          "broker_name": "QA Test Broker", "reference_numbers": "PO 88123", "equipment": "dry_van",
          "commodity": "Paper goods", "weight_lbs": 38000, "trailer_number": "53-220",
          "notes": "Check in at the guard shack. No overnight parking.", "miles": 382, "truck": "T-101",
@@ -217,7 +234,7 @@ enum DemoBackend {
            {"id": "\(stopIDs[0])", "position": 1, "kind": "pickup", "facility": "Riverside Paper DC",
             "location": "Memphis, TN", "appointment_type": "appointment",
             "appointment_start": "2026-11-25T08:00:00", "appointment_end": null,
-            "stop_number": "PU-55821", "reference_numbers": null, "contact_phone": "(901) 555-0188",
+            "stop_number": "PU-55821", "reference_numbers": "PO 4471, PO 4472", "contact_phone": "(901) 555-0188",
             "notes": null, "arrived_at": \(time(a0)), "departed_at": \(time(d0)),
             "arrived_odometer": \(odometer(a0)), "departed_odometer": \(odometer(d0))},
            {"id": "\(stopIDs[1])", "position": 2, "kind": "delivery", "facility": "Peachtree Grocers",

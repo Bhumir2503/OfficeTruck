@@ -82,6 +82,41 @@ struct DriverAPI: Sendable {
         try await client.rpc("record_my_stop_event", params: params).execute()
     }
 
+    /// Keeps this phone's push token on the server, so dispatch can notify
+    /// the driver. Development builds use Apple's sandbox push server.
+    func registerPushToken(_ token: String) async throws {
+        #if DEBUG
+        let environment = "sandbox"
+        #else
+        let environment = "production"
+        #endif
+        try await client.rpc("register_my_push_token", params: [
+            "push_token": token, "push_environment": environment,
+        ]).execute()
+    }
+
+    /// Stops pushes to this phone (on sign-out).
+    func removePushToken(_ token: String) async throws {
+        try await client.rpc("remove_my_push_token", params: ["push_token": token]).execute()
+    }
+
+    /// Adds or fixes the odometer at a stop the driver already checked in at.
+    /// Needs signal: it isn't queued, so the driver sees right away if the
+    /// server turns it down (lower than the truck's last reading, say).
+    func setStopOdometer(stopID: UUID, event: StopEvent, reading: Int) async throws {
+        #if DEBUG
+        if DemoBackend.isOn { return try DemoBackend.setOdometer(stopID: stopID, event: event, reading: reading) }
+        #endif
+        struct Params: Encodable {
+            let target_stop: UUID
+            let event: String
+            let reading: Int
+        }
+        try await client.rpc("set_my_stop_odometer", params: Params(
+            target_stop: stopID, event: event.rawValue, reading: reading
+        )).execute()
+    }
+
     /// Uploads a scanned PDF to the load's folder, then adds it to the load.
     /// Safe to retry: a file already uploaded (409) moves on, and the server
     /// returns the same document for the same path.

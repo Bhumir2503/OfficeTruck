@@ -17,6 +17,9 @@ struct LoadScreen: View {
     @State private var odometer = ""
     /// A check-in whose odometer was lower than the truck's last reading.
     @State private var lowReading: CheckInRequest?
+    /// An odometer being added or fixed after the check-in went through.
+    @State private var fixingOdometer: OdometerFix?
+    @State private var fixedOdometer = ""
     /// Paperwork being added: the kind picked, then how.
     @State private var addKind: DocumentKind?
     /// Checking out without the stop's BOL or POD: warn first.
@@ -91,6 +94,19 @@ struct LoadScreen: View {
                 Button("Cancel", role: .cancel) {}
             } message: { request in
                 Text("\(Int(odometer.filter(\.isNumber))?.formatted() ?? odometer) mi is lower than the truck's last reading, \((request.minimumOdometer ?? 0).formatted()) mi. Odometers only go up. Check it and enter it again.")
+            }
+            .alert(
+                fixingOdometer.map { "Odometer \($0.event == .arrived ? "arriving at" : "leaving") \($0.place)" } ?? "",
+                isPresented: Binding(get: { fixingOdometer != nil }, set: { if !$0 { fixingOdometer = nil } }),
+                presenting: fixingOdometer
+            ) { fix in
+                TextField(fix.minimum.map { "Odometer, \($0.formatted()) or more" } ?? "Odometer", text: $fixedOdometer)
+                    .keyboardType(.numberPad)
+                Button("Cancel", role: .cancel) {}
+                Button("Save") { Task { await saveOdometer(fix) } }
+                    .keyboardShortcut(.defaultAction)
+            } message: { fix in
+                Text(fix.minimum.map { "The truck's last reading was \($0.formatted()) mi." } ?? "Miles on the truck's odometer.")
             }
     }
 
@@ -220,6 +236,10 @@ struct LoadScreen: View {
                     if let number = stop.stopNumber {
                         LabeledContent(stop.isPickup ? "Pickup #" : "Delivery #", value: number)
                     }
+                    // PO and other numbers the guard shack asks for.
+                    if let refs = stop.referenceNumbers {
+                        LabeledContent("Reference #", value: refs)
+                    }
                     if let phone = stop.contactPhone, let url = URL(string: "tel:\(phone.filter(\.isNumber))") {
                         LabeledContent("Phone") { Link(phone, destination: url) }
                     }
@@ -232,10 +252,31 @@ struct LoadScreen: View {
                         checkInValue(departed?.formatted(date: .omitted, time: .shortened) ?? "—",
                                      unsent: stop.departedAt == nil && isUnsent(departedTap))
                     }
-                    if let reading {
-                        LabeledContent("Odometer") {
-                            checkInValue("\(reading.miles.formatted()) mi", unsent: reading.unsent)
+                    // While waiting at the dock: when the free time runs out.
+                    if let hours = load.detentionFreeHours, hours > 0, let arrived, departed == nil {
+                        let starts = arrived.addingTimeInterval(hours * 3600)
+                        LabeledContent("Detention starts") {
+                            Text(starts.formatted(date: .omitted, time: .shortened))
+                                .foregroundStyle(starts <= .now ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
                         }
+                    }
+                    // The odometer, added or fixed once the check-in is in.
+                    let fix = odometerFix(stop, in: load)
+                    if let reading {
+                        if let fix, !reading.unsent {
+                            Button { startFixingOdometer(fix, current: reading.miles) } label: {
+                                LabeledContent("Odometer") {
+                                    Text("\(reading.miles.formatted()) mi")
+                                }
+                            }
+                            .tint(.primary)
+                        } else {
+                            LabeledContent("Odometer") {
+                                checkInValue("\(reading.miles.formatted()) mi", unsent: reading.unsent)
+                            }
+                        }
+                    } else if let fix {
+                        Button("Add odometer") { startFixingOdometer(fix, current: nil) }
                     }
                 } header: {
                     // The next stop's header is in the tint color.
@@ -368,9 +409,28 @@ struct LoadScreen: View {
                     }
                     Section("Details") {
                         LabeledContent("Status", value: load.status.label)
+                        if let broker = load.brokerName { LabeledContent("Broker", value: broker) }
+                        if let refs = load.referenceNumbers { LabeledContent("Reference #", value: refs) }
+                        if let equipment = load.equipment { LabeledContent("Equipment", value: equipmentLabel(equipment)) }
                         if let commodity = load.commodity { LabeledContent("Commodity", value: commodity) }
                         if let weight = load.weightLbs { LabeledContent("Weight", value: "\(weight.formatted()) lbs") }
                         if let miles = load.miles { LabeledContent("Miles", value: miles.formatted()) }
+                        if let hours = load.detentionFreeHours, hours > 0 {
+                            LabeledContent("Detention", value: "After \(hours.formatted()) free \(hours == 1 ? "hour" : "hours")")
+                        }
+                    }
+                    // What this load pays the driver (never the load's rate).
+                    if let pay = load.driverPay {
+                        Section {
+                            LabeledContent("Rate", value: pay.label)
+                            if let amount = pay.amount(miles: load.miles) {
+                                LabeledContent("This load", value: amount.dollars)
+                            }
+                        } header: {
+                            Text("Your pay")
+                        } footer: {
+                            Text("Before deductions. Your pay statement has the final amount.")
+                        }
                     }
                     // What a scale or an inspection asks for, and when the
                     // truck's paperwork runs out.
@@ -808,6 +868,59 @@ struct LoadScreen: View {
         }
     }
 
+    /// The first pickup's arrival or the last delivery's departure, once the
+    /// server has it: the two check-ins that take an odometer.
+    private func odometerFix(_ stop: LoadDetail.Stop, in load: LoadDetail) -> OdometerFix? {
+        guard load.canEdit else { return nil }
+        if stop.position == load.stops.first?.position, stop.arrivedAt != nil {
+            return OdometerFix(stopID: stop.id, event: .arrived, place: stop.facility ?? stop.location,
+                               minimum: load.truckOdometer)
+        }
+        if stop.position == load.stops.last?.position, stop.departedAt != nil {
+            let earlier = load.stops.filter { $0.id != stop.id }.flatMap { [$0.arrivedOdometer, $0.departedOdometer] }
+                + [stop.arrivedOdometer, load.truckOdometer]
+            return OdometerFix(stopID: stop.id, event: .departed, place: stop.facility ?? stop.location,
+                               minimum: earlier.compactMap { $0 }.max())
+        }
+        return nil
+    }
+
+    private func startFixingOdometer(_ fix: OdometerFix, current: Int?) {
+        fixedOdometer = current.map(String.init) ?? ""
+        fixingOdometer = fix
+    }
+
+    /// Sends the added or fixed reading; the server checks it again.
+    private func saveOdometer(_ fix: OdometerFix) async {
+        guard let reading = Int(fixedOdometer.filter(\.isNumber)) else { return }
+        if let minimum = fix.minimum, reading < minimum {
+            actionError = "\(reading.formatted()) mi is lower than the truck's last reading, \(minimum.formatted()) mi. Odometers only go up."
+            return
+        }
+        do {
+            try await api.setStopOdometer(stopID: fix.stopID, event: fix.event, reading: reading)
+            await fetch()
+        } catch let error as PostgrestError {
+            actionError = error.message
+        } catch {
+            actionError = "It wasn't saved. Check your signal and try again."
+        }
+    }
+
+    /// "dry_van" → "Dry van", like the web.
+    private func equipmentLabel(_ code: String) -> String {
+        switch code {
+        case "dry_van": "Dry van"
+        case "reefer": "Reefer"
+        case "flatbed": "Flatbed"
+        case "step_deck": "Step deck"
+        case "conestoga": "Conestoga"
+        case "power_only": "Power only"
+        case "other": "Other"
+        default: code
+        }
+    }
+
     /// A date the truck's paperwork runs out: orange within 30 days, red
     /// once it's past.
     private func dueRow(_ title: String, _ day: String) -> some View {
@@ -920,6 +1033,16 @@ struct MissingPaperwork {
 }
 
 /// The check-in the driver is confirming.
+/// Adding or fixing the odometer at a stop already checked in at.
+struct OdometerFix: Identifiable {
+    var id: UUID { stopID }
+    let stopID: UUID
+    let event: StopEvent
+    let place: String
+    /// The lowest reading allowed, from the truck and the rest of the load.
+    let minimum: Int?
+}
+
 struct CheckInRequest {
     let loadID: UUID
     let stopID: UUID

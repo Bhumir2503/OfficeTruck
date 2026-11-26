@@ -9,11 +9,17 @@ import SwiftUI
 /// from the toolbar.
 struct TripsView: View {
     @State private var loads: Loadable<[LoadSummary]> = .loading
+    /// Load number, city or carrier to find a trip by.
+    @State private var search = ""
+    @State private var searching = false
+    /// The open load, so a tapped push can open one.
+    @State private var path: [UUID] = []
+    private let push = PushCenter.shared
     private let queue = OfflineQueue.shared
     private let api = DriverAPI()
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             Group {
                 switch loads {
                 case .loading:
@@ -34,7 +40,8 @@ struct TripsView: View {
                         description: Text("When dispatch sends you a load, it shows up here.")
                     )
                     .refreshable { await fetch() }
-                case .loaded(let trips):
+                case .loaded(let all):
+                    let trips = filtered(all)
                     // Pickup days compare as written ("2026-11-26"), never
                     // converted to the phone's time zone.
                     let today = WallClock.today()
@@ -53,9 +60,12 @@ struct TripsView: View {
                     let upcoming = trips.filter(isUpcoming).sorted { $0.pickupStart < $1.pickupStart }
                     let past = trips.filter { !isToday($0) && !isUpcoming($0) }
                         .sorted { $0.pickupStart > $1.pickupStart }
-                    let showsCarrier = Set(trips.map(\.organizationName)).count > 1
-                    let overlaps = LoadSummary.overlaps(in: trips)
+                    let showsCarrier = Set(all.map(\.organizationName)).count > 1
+                    let overlaps = LoadSummary.overlaps(in: all)
                     List {
+                        if trips.isEmpty {
+                            ContentUnavailableView.search(text: search)
+                        }
                         if !current.isEmpty {
                             Section("Today") {
                                 ForEach(current) { trip in tripRow(trip, showsCarrier: showsCarrier, overlaps: overlaps[trip.id] ?? []) }
@@ -76,8 +86,12 @@ struct TripsView: View {
                 }
             }
             .navigationTitle("Trips")
+            // Closed (text kept) when a load opens: a load opened from an
+            // active search loses its title otherwise.
+            .searchable(text: $search, isPresented: $searching, prompt: "Load #, city or carrier")
             .navigationDestination(for: UUID.self) { id in
                 LoadScreen(loadID: id, overlaps: overlaps[id] ?? [])
+                    .onAppear { searching = false }
             }
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
@@ -90,6 +104,20 @@ struct TripsView: View {
                 }
             }
             .task(id: queue.deliveredCount) { await fetch() }
+            // Notifications: asked once signed in; the token goes to the
+            // server whenever iOS hands over a new one.
+            .task { await push.requestAndRegister() }
+            .onChange(of: push.token, initial: true) { _, token in
+                guard let token else { return }
+                Task { try? await api.registerPushToken(token) }
+            }
+            // A tapped push opens its load (and the list reloads to show it).
+            .onChange(of: push.openLoad, initial: true) { _, id in
+                guard let id else { return }
+                push.openLoad = nil
+                path = [id]
+                Task { await fetch() }
+            }
         }
     }
 
@@ -106,8 +134,7 @@ struct TripsView: View {
                 LabeledContent(trip.reference, value: trip.status.label)
                     .font(.headline)
                 Text("\(trip.pickupLocation) → \(trip.deliveryLocation)")
-                Text(showsCarrier ? "\(trip.organizationName) · \(WallClock.format(trip.pickupStart))"
-                                  : WallClock.format(trip.pickupStart))
+                Text(showsCarrier ? "\(trip.organizationName) · \(when(trip))" : when(trip))
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 if !overlaps.isEmpty {
@@ -117,6 +144,31 @@ struct TripsView: View {
                         .foregroundStyle(.orange)
                 }
             }
+        }
+    }
+
+    /// What's next for the trip: when it picks up, when it delivers (with
+    /// the stop it's on, past two stops), or the day it was delivered.
+    private func when(_ trip: LoadSummary) -> String {
+        switch trip.status {
+        case .loaded:
+            let progress = trip.stopCount > 2
+                ? " · Stop \(min(trip.stopsDeparted + 1, trip.stopCount)) of \(trip.stopCount)" : ""
+            return "Delivers \(WallClock.format(trip.deliveryStart))\(progress)"
+        case .delivered, .invoiced, .paid, .factored:
+            return "Delivered \(WallClock.day(trip.deliveredOn ?? String(trip.deliveryStart.prefix(10))))"
+        default:
+            return "Picks up \(WallClock.format(trip.pickupStart))"
+        }
+    }
+
+    /// Trips matching the search: load number, either city, or carrier.
+    private func filtered(_ trips: [LoadSummary]) -> [LoadSummary] {
+        let text = search.trimmingCharacters(in: .whitespaces)
+        guard !text.isEmpty else { return trips }
+        return trips.filter { trip in
+            [trip.reference, trip.pickupLocation, trip.deliveryLocation, trip.organizationName]
+                .contains { $0.localizedCaseInsensitiveContains(text) }
         }
     }
 

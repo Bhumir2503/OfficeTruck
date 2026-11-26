@@ -47,3 +47,4 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
         INFOPLIST_FILE: OfficeTruckDriver/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: OfficeTruckDriver/Resources/OfficeTruckDriver.entitlements
