@@ -80,6 +80,19 @@ final class OfflineQueue {
         pendingDocuments.filter { $0.loadID == loadID }
     }
 
+    /// The queued upload being sent right now, which can't be cancelled.
+    private(set) var uploadingID: UUID?
+
+    /// Drops a queued upload before it's sent. False if it's going out now.
+    @discardableResult
+    func cancelDocument(_ id: UUID) -> Bool {
+        guard id != uploadingID, let document = pendingDocuments.first(where: { $0.id == id }) else { return false }
+        try? FileManager.default.removeItem(at: Self.fileURL(for: document))
+        pendingDocuments.removeAll { $0.id == id }
+        save()
+        return true
+    }
+
     func enqueue(_ checkIn: PendingCheckIn) {
         pending.append(checkIn)
         save()
@@ -138,6 +151,8 @@ final class OfflineQueue {
 
         while let next = pendingDocuments.first {
             let file = Self.fileURL(for: next)
+            uploadingID = next.id
+            defer { uploadingID = nil }
             do {
                 try await api.uploadDocument(next, file: file)
             } catch let error as PostgrestError {
@@ -148,7 +163,7 @@ final class OfflineQueue {
                 return
             }
             try? FileManager.default.removeItem(at: file)
-            pendingDocuments.removeFirst()
+            pendingDocuments.removeAll { $0.id == next.id }
             deliveredCount += 1
             save()
         }

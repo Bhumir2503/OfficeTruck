@@ -182,7 +182,10 @@ struct DriverProfile: Decodable, Identifiable, Sendable {
     }
 
     struct CardUpdate: Decodable, Sendable {
+        let id: UUID
         let kind: CardKind
+        /// The copy in driver-documents.
+        let path: String
         /// "pending" or "declined".
         let status: String
         let expiresOn: String
@@ -289,6 +292,23 @@ struct DQItem: Decodable, Identifiable, Sendable {
     let pendingReview: Bool
     /// Takes a document the driver can send.
     let canUpload: Bool
+    /// What's on file for it, newest first (removed and replaced ones left out).
+    let documents: [DQDocument]
+
+    struct DQDocument: Decodable, Identifiable, Sendable {
+        let id: UUID
+        /// In dq-files.
+        let path: String
+        let fileName: String
+        let createdAt: Date
+        /// The office confirmed it; it's part of the record now.
+        let confirmed: Bool
+        /// The driver sent it from the app.
+        let mine: Bool
+
+        /// The driver's own, not yet confirmed: they can take it back.
+        var canRemove: Bool { mine && !confirmed }
+    }
 
     enum Status {
         case missing, pendingReview, complete, dueSoon, upcoming, overdue, notApplicable

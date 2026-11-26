@@ -182,6 +182,45 @@ struct DriverAPI: Sendable {
         )).execute()
     }
 
+    /// Downloads a stored file to a temporary file for Quick Look.
+    func downloadForPreview(bucket: String, path: String, name: String) async throws -> URL {
+        #if DEBUG
+        if DemoBackend.isOn { return try DemoBackend.samplePDF(named: name) }
+        #endif
+        let data = try await client.storage.from(bucket).download(path: path)
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let ext = (path as NSString).pathExtension
+        let safeName = name.replacingOccurrences(of: "/", with: "-")
+        let url = folder.appending(path: ext.isEmpty || safeName.hasSuffix(".\(ext)") ? safeName : "\(safeName).\(ext)")
+        try data.write(to: url)
+        return url
+    }
+
+    /// Takes back a CDL or medical card the office hasn't reviewed.
+    func withdrawCard(_ update: DriverProfile.CardUpdate) async throws {
+        #if DEBUG
+        if DemoBackend.isOn { return DemoBackend.withdrawCard(update.kind) }
+        #endif
+        try await client.rpc("withdraw_my_driver_update", params: ["update_id": update.id]).execute()
+    }
+
+    /// Removes paperwork the driver added, while the load is on the road.
+    func removeLoadDocument(_ id: UUID) async throws {
+        #if DEBUG
+        if DemoBackend.isOn { return DemoBackend.removeDocument(id) }
+        #endif
+        try await client.rpc("remove_my_load_document", params: ["target_document": id]).execute()
+    }
+
+    /// Takes back a DQ upload the office hasn't confirmed.
+    func removeDQDocument(_ id: UUID) async throws {
+        #if DEBUG
+        if DemoBackend.isOn { return DemoBackend.removeDQUpload(id) }
+        #endif
+        try await client.rpc("remove_my_dq_document", params: ["target_document": id]).execute()
+    }
+
     func mySettlements() async throws -> [SettlementSummary] {
         #if DEBUG
         if DemoBackend.isOn { return try decode(Data(DemoBackend.settlementsJSON.utf8)) }
