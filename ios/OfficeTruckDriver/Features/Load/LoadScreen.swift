@@ -10,7 +10,7 @@ import SwiftUI
 struct LoadScreen: View {
     let loadID: UUID
     /// Other loads of the driver's at the same time as this one, from Trips.
-    var overlaps: [String] = []
+    var overlaps: [Overlap] = []
 
     @State private var load: Loadable<LoadDetail> = .loading
     @State private var checkIn: CheckInRequest?
@@ -192,7 +192,7 @@ struct LoadScreen: View {
             if !overlaps.isEmpty && (load.status == .dispatched || load.status == .loaded) {
                 Section {
                     Label {
-                        Text("This load's times overlap \(overlaps.formatted(.list(type: .and))). Call dispatch to check which comes first.")
+                        Text((overlaps.map(\.long) + ["Call dispatch to check which comes first."]).joined(separator: " "))
                     } icon: {
                         Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
                     }
