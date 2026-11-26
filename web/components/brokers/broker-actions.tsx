@@ -1,6 +1,6 @@
 "use client"
 
-import { Ban, Pencil, RefreshCw, Trash2, UserPlus } from "lucide-react"
+import { Pencil, RefreshCw, Trash2, UserPlus } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
 
@@ -8,7 +8,6 @@ import {
   addContact,
   removeContact,
   runFmcsaCheck,
-  setDoNotUse,
   updateContact,
 } from "@/app/org/[slug]/customers/actions"
 import {
@@ -25,7 +24,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
 import type { BrokerContact } from "@/lib/brokers"
 import { formatPhone, handlePhoneInput, handlePhoneKeyDown } from "@/lib/phone"
 import {
@@ -65,97 +63,6 @@ export function RecheckButton({
       <RefreshCw className={pending ? "animate-spin" : undefined} />
       {pending ? "Checking…" : "Check again"}
     </Button>
-  )
-}
-
-/** Marks a broker "do not use" with a reason, or clears it. */
-export function DoNotUseControl({
-  organizationId,
-  broker,
-}: {
-  organizationId: string
-  broker: {
-    id: string
-    legal_name: string
-    do_not_use: boolean
-    do_not_use_reason: string | null
-  }
-}) {
-  const [open, setOpen] = useState(false)
-  const [reason, setReason] = useState("")
-  const [pending, setPending] = useState(false)
-
-  async function save(doNotUse: boolean) {
-    setPending(true)
-    const result = await setDoNotUse(organizationId, broker.id, {
-      do_not_use: doNotUse,
-      do_not_use_reason: doNotUse ? reason : null,
-    })
-    setPending(false)
-    if ("error" in result) {
-      toast.error(result.error)
-      return
-    }
-    setOpen(false)
-    setReason("")
-    toast.success(
-      doNotUse
-        ? `${broker.legal_name} marked do not use.`
-        : `${broker.legal_name} can be used again.`
-    )
-  }
-
-  if (broker.do_not_use) {
-    return (
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={pending}
-        onClick={() => save(false)}
-      >
-        {pending ? "Saving…" : "Allow again"}
-      </Button>
-    )
-  }
-
-  if (!open) {
-    return (
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <Ban />
-        Mark do not use
-      </Button>
-    )
-  }
-
-  return (
-    <div className="flex w-full flex-col gap-2 sm:w-96">
-      <Textarea
-        aria-label="Why not to use this broker"
-        rows={2}
-        autoFocus
-        placeholder="Why? e.g. paid 90 days late twice"
-        value={reason}
-        onChange={(event) => setReason(event.target.value)}
-      />
-      <div className="flex justify-end gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={pending}
-          onClick={() => setOpen(false)}
-        >
-          Cancel
-        </Button>
-        <Button
-          variant="destructive"
-          size="sm"
-          disabled={pending}
-          onClick={() => save(true)}
-        >
-          {pending ? "Saving…" : "Mark do not use"}
-        </Button>
-      </div>
-    </div>
   )
 }
 

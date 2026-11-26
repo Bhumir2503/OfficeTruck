@@ -15,6 +15,8 @@ export type LoadEvent = {
     | "status"
     /** The office entered a stop's arrival or departure. */
     | "stop_time"
+    /** An automatic status update emailed to the broker. */
+    | "broker_update"
   from_status: string | null
   to_status: string | null
   detail: string | null

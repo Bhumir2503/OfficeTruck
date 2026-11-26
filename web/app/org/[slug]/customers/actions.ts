@@ -180,7 +180,8 @@ export async function createBroker(
 export async function updateBroker(
   organizationId: string,
   brokerId: string,
-  input: BrokerValues
+  /** Without `notes`, the saved notes stay as they are. */
+  input: Omit<BrokerValues, "notes"> & { notes?: string | null }
 ): Promise<ActionResult> {
   if (!(await isMember(organizationId))) {
     return { error: NOT_MEMBER }
@@ -189,12 +190,50 @@ export async function updateBroker(
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Check the form." }
   }
-  const result = await update(organizationId, brokerId, parsed.data)
+  // The broker page saves notes from their own box, so a form without the
+  // notes field leaves them as they are.
+  const { notes, ...rest } = parsed.data
+  const result = await update(
+    organizationId,
+    brokerId,
+    input.notes === undefined ? rest : { ...rest, notes }
+  )
   if ("ok" in result) {
     // A new MC number gets its own check.
     await refreshFmcsa(parsed.data.mc_number)
   }
   return result
+}
+
+/** On, off, or null to follow the company's setting. */
+export async function setBrokerStatusUpdates(
+  organizationId: string,
+  brokerId: string,
+  value: boolean | null
+): Promise<ActionResult> {
+  if (!(await isMember(organizationId))) {
+    return { error: NOT_MEMBER }
+  }
+  if (value !== null && typeof value !== "boolean") {
+    return { error: "Pick on, off or the company default." }
+  }
+  return update(organizationId, brokerId, { status_updates: value })
+}
+
+/** Saves a customer's notes, from the box beside their page. */
+export async function updateBrokerNotes(
+  organizationId: string,
+  brokerId: string,
+  notes: string
+): Promise<ActionResult> {
+  if (!(await isMember(organizationId))) {
+    return { error: NOT_MEMBER }
+  }
+  const trimmed = notes.trim()
+  if (trimmed.length > 2000) {
+    return { error: "Keep notes under 2,000 characters." }
+  }
+  return update(organizationId, brokerId, { notes: trimmed || null })
 }
 
 export async function setDoNotUse(
@@ -297,6 +336,7 @@ async function update(
   values: Partial<BrokerValues> & {
     do_not_use?: boolean
     do_not_use_reason?: string | null
+    status_updates?: boolean | null
   }
 ): Promise<ActionResult> {
   const supabase = await createClient()

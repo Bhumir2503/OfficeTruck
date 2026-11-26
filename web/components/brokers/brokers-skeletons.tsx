@@ -1,9 +1,11 @@
 import { cn } from "cn"
 
+import { AddRecordPanelSkeleton } from "@/components/add-record-panel"
 import {
   SettingsCard,
   SettingsCardFooter,
 } from "@/components/settings/settings-card"
+import { TabBarSkeleton } from "@/components/tab-skeletons"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -16,7 +18,7 @@ import {
 } from "@/components/ui/table"
 
 /*
- * Loading states for the Brokers pages. Text that doesn't depend on data is
+ * Loading states for the Customers pages. Text that doesn't depend on data is
  * real and built from the same pieces as the pages, so nothing shifts when
  * the content arrives. Keep the page wrappers in step with the pages.
  */
@@ -112,10 +114,41 @@ function FieldSkeleton({
   )
 }
 
-/** The broker form's cards. `editing` matches the broker page's version. */
-function BrokerFormSkeleton({ editing = false }: { editing?: boolean }) {
+/** A card's Save button, as on the customer page's cards. */
+function SaveFooter() {
   return (
-    <div className="flex flex-col gap-6">
+    <SettingsCardFooter>
+      <Skeleton className="h-8 w-16 rounded-md bg-foreground/10" />
+    </SettingsCardFooter>
+  )
+}
+
+function ToggleSkeleton({ widths }: { widths: string[] }) {
+  return (
+    <div className="flex flex-wrap gap-1">
+      {widths.map((width, index) => (
+        <Skeleton key={index} className={cn("h-8 rounded-md", width)} />
+      ))}
+    </div>
+  )
+}
+
+/**
+ * The customer form's cards. `editing` is the customer page's Overview,
+ * where each card saves on its own; otherwise Add customer's cards.
+ */
+function BrokerFormSkeleton({ editing = false }: { editing?: boolean }) {
+  const footer = editing ? <SaveFooter /> : undefined
+  return (
+    <>
+      {!editing && (
+        <SettingsCard
+          title="Customer type"
+          description="A broker arranges the load for a fee. A direct shipper owns the freight and pays you themselves."
+        >
+          <ToggleSkeleton widths={["w-16", "w-28"]} />
+        </SettingsCard>
+      )}
       {!editing && (
         <SettingsCard
           title="Look up by MC number"
@@ -130,10 +163,17 @@ function BrokerFormSkeleton({ editing = false }: { editing?: boolean }) {
         </SettingsCard>
       )}
       <SettingsCard
-        title="Broker"
+        title={editing ? "Company" : "Broker"}
         description="As registered with FMCSA."
         contentClassName="grid gap-5 sm:grid-cols-6"
+        footer={footer}
       >
+        {editing && (
+          <Field className="sm:col-span-6">
+            <FieldLabel>Type</FieldLabel>
+            <ToggleSkeleton widths={["w-16", "w-28"]} />
+          </Field>
+        )}
         <FieldSkeleton label="Legal name" className="sm:col-span-3" />
         <FieldSkeleton label="DBA name" className="sm:col-span-3" />
         <FieldSkeleton
@@ -172,6 +212,7 @@ function BrokerFormSkeleton({ editing = false }: { editing?: boolean }) {
         title="Mailing address"
         description="Where paper invoices and checks go."
         contentClassName="grid gap-5 sm:grid-cols-6"
+        footer={footer}
       >
         <FieldSkeleton label="Street address" className="sm:col-span-6" />
         <FieldSkeleton
@@ -186,13 +227,11 @@ function BrokerFormSkeleton({ editing = false }: { editing?: boolean }) {
         title="Billing"
         description="Where invoice packets go, and how fast they pay."
         contentClassName="grid gap-5 sm:grid-cols-6"
+        footer={footer}
       >
         <Field className="sm:col-span-6">
           <FieldLabel>How they take invoices</FieldLabel>
-          <div className="flex flex-wrap gap-1">
-            <Skeleton className="h-8 w-16 rounded-md" />
-            <Skeleton className="h-8 w-48 rounded-md" />
-          </div>
+          <ToggleSkeleton widths={["w-16", "w-48"]} />
           <FieldDescription>
             Packets are emailed to the billing addresses below.
           </FieldDescription>
@@ -216,128 +255,126 @@ function BrokerFormSkeleton({ editing = false }: { editing?: boolean }) {
       </SettingsCard>
       <SettingsCard
         title="Factoring"
-        description="If you factor this broker's loads, packets go to your factoring company instead."
+        description="If you factor this customer's loads, packets go to your factoring company instead."
+        footer={footer}
       >
         <Skeleton className="h-4 w-56" />
       </SettingsCard>
       {!editing && (
         <SettingsCard
           title="Do not use"
-          description="For a broker you're adding only to keep on record, e.g. one who never paid."
+          description="For a customer you're adding only to keep on record, e.g. one who never paid."
         >
           <Skeleton className="h-4 w-56" />
         </SettingsCard>
       )}
-      <SettingsCard
-        title="Notes"
-        footer={
-          <SettingsCardFooter
-            hint={
-              editing
-                ? "Changes are saved for everyone in your organization."
-                : "Brokers with an MC number are checked with FMCSA when saved."
-            }
-          >
-            {!editing && (
-              <Skeleton className="h-8 w-16 rounded-md bg-foreground/10" />
-            )}
-            <Skeleton className="h-8 w-28 rounded-md bg-foreground/10" />
-          </SettingsCardFooter>
-        }
-      >
-        <Skeleton className="h-16 w-full" />
-      </SettingsCard>
-    </div>
+      {!editing && (
+        <SettingsCard title="Notes">
+          <Skeleton className="h-16 w-full" />
+        </SettingsCard>
+      )}
+    </>
   )
+}
+
+/** The "All customers" link: a small ghost button. */
+function BackLinkSkeleton() {
+  return <Skeleton className="h-8 w-32 rounded-md" />
 }
 
 export function NewBrokerSkeleton() {
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
-      <div className="mx-auto max-w-5xl">
-        <BrokerFormSkeleton />
-      </div>
-    </div>
-  )
-}
-
-function DetailSkeleton({
-  label,
-  width = "w-28",
-}: {
-  label: string
-  width?: string
-}) {
-  return (
-    <div>
-      <div className="text-sm text-muted-foreground">{label}</div>
-      <div className="mt-1">
-        <Line className={width} />
+      <div className="mx-auto flex max-w-7xl flex-col gap-6">
+        <BackLinkSkeleton />
+        <div className="grid items-start gap-6 @4xl/main:grid-cols-[minmax(0,1fr)_20rem] @6xl/main:grid-cols-[minmax(0,1fr)_24rem]">
+          <div className="flex min-w-0 flex-col gap-6">
+            <BrokerFormSkeleton />
+          </div>
+          <aside>
+            <AddRecordPanelSkeleton
+              eyebrow="New customer"
+              placeholderTitle="Add a customer"
+              hint="Saving needs the legal name, and a billing email unless they take invoices through a portal. Brokers with an MC number are checked with FMCSA when saved."
+              sections={[
+                { label: "Customer type" },
+                { label: "Broker" },
+                { label: "Contacts", optional: true },
+                { label: "Mailing address" },
+                { label: "Billing" },
+                { label: "Do not use", optional: true },
+                { label: "Notes", optional: true },
+              ]}
+            />
+          </aside>
+        </div>
       </div>
     </div>
   )
 }
 
 export function BrokerDetailSkeleton() {
+  const panel = "rounded-xl border bg-card px-5 pt-4 pb-5 shadow-xs"
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
-      <div className="mx-auto flex max-w-5xl flex-col gap-4">
-        {/* The "All brokers" link: a small ghost button. */}
-        <Skeleton className="h-8 w-28 rounded-md" />
-        <section className="overflow-hidden rounded-xl border bg-card shadow-xs">
-          <div className="space-y-1 px-6 pt-5">
-            <div className="flex h-6 items-center">
-              <Skeleton className="h-4 w-56" />
+      <div className="mx-auto flex max-w-7xl flex-col gap-6">
+        <BackLinkSkeleton />
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-col gap-1">
+            <div className="flex h-8 items-center gap-3">
+              <Skeleton className="h-6 w-56" />
+              <Skeleton className="h-6 w-24 rounded-full" />
             </div>
-            <Line className="h-3.5 w-48" />
+            <Line className="w-72" />
           </div>
-          <div className="grid gap-5 px-6 pt-5 pb-6 sm:grid-cols-3">
-            <DetailSkeleton label="Terms" width="w-20" />
-            <DetailSkeleton label="Invoices" width="w-44" />
-            <DetailSkeleton label="Factoring" width="w-24" />
-            <DetailSkeleton label="Main phone" width="w-28" />
-            <DetailSkeleton label="Email domains" width="w-24" />
-            <DetailSkeleton label="Mailing address" width="w-40" />
+          <Skeleton className="h-8 w-32 rounded-md" />
+        </div>
+        {/* Overview, Loads, Payments, FMCSA. */}
+        <TabBarSkeleton widths={["w-20", "w-16", "w-20", "w-16"]} />
+        <div className="grid items-start gap-6 @4xl/main:grid-cols-[minmax(0,1fr)_20rem] @6xl/main:grid-cols-[minmax(0,1fr)_24rem]">
+          <div className="flex min-w-0 flex-col gap-4">
+            <BrokerFormSkeleton editing />
+            <SettingsCard
+              title="Status updates"
+              description="Emails when a driver arrives at or leaves a stop, and when the load is delivered: the time and where the driver was. Never the rate."
+            >
+              <ToggleSkeleton widths={["w-44", "w-12", "w-12"]} />
+            </SettingsCard>
+            <SettingsCard
+              title="Contacts"
+              description="Dispatch for loads, billing and accounting for payment."
+            >
+              <Skeleton className="h-24 w-full" />
+            </SettingsCard>
           </div>
-          <div className="flex min-h-14 flex-col gap-3 border-t bg-muted/40 px-6 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <Skeleton className="h-4 w-72 max-w-full bg-foreground/10" />
-            <Skeleton className="h-8 w-36 rounded-md bg-foreground/10" />
-          </div>
-        </section>
-        <SettingsCard
-          title="FMCSA"
-          description={
-            // The description is a <p>, so an inline placeholder.
-            <span className="inline-block h-4 w-96 max-w-full animate-pulse rounded-md bg-muted align-middle" />
-          }
-          footer={
-            <SettingsCardFooter hint="Public data, shared by every OfficeTruck customer.">
-              <Skeleton className="h-8 w-28 rounded-md bg-foreground/10" />
-            </SettingsCardFooter>
-          }
-        >
-          <div className="grid gap-5 sm:grid-cols-3">
-            <DetailSkeleton label="Broker authority" width="w-14" />
-            <DetailSkeleton label="Allowed to operate" width="w-10" />
-            <DetailSkeleton label="Broker bond on file" width="w-10" />
-          </div>
-        </SettingsCard>
-        <SettingsCard
-          title="Payment history"
-          description={
-            <span className="inline-block h-4 w-56 animate-pulse rounded-md bg-muted align-middle" />
-          }
-        >
-          <Skeleton className="h-24 w-full" />
-        </SettingsCard>
-        <SettingsCard
-          title="Contacts"
-          description="Dispatch for loads, billing and accounting for payment."
-        >
-          <Skeleton className="h-24 w-full" />
-        </SettingsCard>
-        <div className="mt-2">
-          <BrokerFormSkeleton editing />
+          <aside className="order-first flex flex-col gap-4 @4xl/main:order-none">
+            <section className={panel}>
+              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                At a glance
+              </p>
+              <div className="mt-2 flex h-7 items-center">
+                <Skeleton className="h-5 w-40" />
+              </div>
+              <Line className="mt-1 w-56" />
+              <div className="mt-3 flex flex-col divide-y border-t">
+                {["Terms", "Pays in", "Open", "Loads", "Last load"].map(
+                  (label) => (
+                    <div
+                      key={label}
+                      className="flex items-center justify-between py-1.5 text-sm"
+                    >
+                      <span className="text-muted-foreground">{label}</span>
+                      <Skeleton className="h-4 w-20" />
+                    </div>
+                  )
+                )}
+              </div>
+            </section>
+            <section className={cn(panel, "flex flex-col gap-3")}>
+              <h4 className="font-semibold">Notes</h4>
+              <Skeleton className="h-16 w-full" />
+            </section>
+          </aside>
         </div>
       </div>
     </div>

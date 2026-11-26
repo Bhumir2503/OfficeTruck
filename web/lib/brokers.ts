@@ -33,6 +33,8 @@ export type Broker = {
   do_not_use: boolean
   do_not_use_reason: string | null
   notes: string | null
+  /** Automatic status updates: on, off, or null to follow the company. */
+  status_updates: boolean | null
   created_at: string
   updated_at: string
 }
@@ -41,7 +43,7 @@ export type Broker = {
 export type BrokerWithFmcsa = Broker & { fmcsa: FmcsaRecord | null }
 
 const BROKER_COLUMNS =
-  "id, kind, legal_name, dba_name, mc_number, dot_number, phone, address_line1, address_line2, city, state, postal_code, email_domains, invoice_method, billing_emails, portal_url, payment_terms_days, quick_pay_fee_percent, factored, noa_on_file, do_not_use, do_not_use_reason, notes, created_at, updated_at"
+  "id, kind, legal_name, dba_name, mc_number, dot_number, phone, address_line1, address_line2, city, state, postal_code, email_domains, invoice_method, billing_emails, portal_url, payment_terms_days, quick_pay_fee_percent, factored, noa_on_file, do_not_use, do_not_use_reason, notes, status_updates, created_at, updated_at"
 
 /**
  * FMCSA records for these MC numbers, by MC number. The shared table has no
