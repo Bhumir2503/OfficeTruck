@@ -3,8 +3,8 @@ import QuickLook
 import Supabase
 import SwiftUI
 
-/// One load: its stops, details, a paperwork checklist and the driver's
-/// expenses. On a load that's on the road, Check in / Check out for the
+/// One load: its stops, a paperwork checklist and the driver's expenses,
+/// with the load's details and dispatch's notes behind the (i) button. On a load that's on the road, Check in / Check out for the
 /// next stop is pinned to the bottom; paperwork and expenses are added from
 /// their own sections.
 struct LoadScreen: View {
@@ -26,7 +26,10 @@ struct LoadScreen: View {
     @State private var removing: LoadDetail.LoadDocument?
     @State private var actionError: String?
     @State private var addingExpense = false
+    @State private var showingInfo = false
     @State private var choosingOtherPaperwork = false
+    /// The BOL or POD whose View / Upload again choices are showing.
+    @State private var paperworkChoices: DocumentKind?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     private let queue = OfflineQueue.shared
     private let api = DriverAPI()
@@ -169,19 +172,6 @@ struct LoadScreen: View {
                 }
             }
 
-            Section("Details") {
-                LabeledContent("Status", value: load.status.label)
-                if let truck = load.truck { LabeledContent("Truck", value: truck) }
-                if let trailer = load.trailerNumber { LabeledContent("Trailer", value: trailer) }
-                if let commodity = load.commodity { LabeledContent("Commodity", value: commodity) }
-                if let weight = load.weightLbs { LabeledContent("Weight", value: "\(weight.formatted()) lbs") }
-                if let miles = load.miles { LabeledContent("Miles", value: miles.formatted()) }
-            }
-
-            if let notes = load.notes, !notes.isEmpty {
-                Section("Notes") { Text(notes) }
-            }
-
             paperwork(load, next: next, pending: pending)
             expenses(load)
         }
@@ -189,6 +179,11 @@ struct LoadScreen: View {
         .navigationTitle("Load \(load.reference)")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            // Load info: the details and dispatch's notes, kept off the main
+            // screen so what the driver does comes first.
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Load info", systemImage: "info.circle") { showingInfo = true }
+            }
             // More: calls, directions and the stop's number, the things a
             // driver reaches for at a stop.
             ToolbarItem(placement: .topBarTrailing) {
@@ -286,6 +281,31 @@ struct LoadScreen: View {
             )
             .ignoresSafeArea()
         }
+        .sheet(isPresented: $showingInfo) {
+            NavigationStack {
+                List {
+                    if let notes = load.notes, !notes.isEmpty {
+                        Section("Notes from dispatch") { Text(notes) }
+                    }
+                    Section("Details") {
+                        LabeledContent("Status", value: load.status.label)
+                        if let truck = load.truck { LabeledContent("Truck", value: truck) }
+                        if let trailer = load.trailerNumber { LabeledContent("Trailer", value: trailer) }
+                        if let commodity = load.commodity { LabeledContent("Commodity", value: commodity) }
+                        if let weight = load.weightLbs { LabeledContent("Weight", value: "\(weight.formatted()) lbs") }
+                        if let miles = load.miles { LabeledContent("Miles", value: miles.formatted()) }
+                    }
+                }
+                .navigationTitle("Load \(load.reference)")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { showingInfo = false }
+                    }
+                }
+            }
+            .presentationDetents([.medium, .large])
+        }
         .sheet(isPresented: $addingExpense) {
             AddExpenseView(load: load)
         }
@@ -306,10 +326,10 @@ struct LoadScreen: View {
         }
     }
 
-    /// The load's paperwork as a checklist: the BOL and POD the load needs,
-    /// each with its own Add button, then anything else (lumper receipts and
-    /// the like). Tap a copy to open it; swipe to remove one the driver
-    /// added while the load is on the road, or cancel one not sent yet.
+    /// The load's paperwork: one row each for the BOL and POD the load
+    /// needs, then anything else (lumper receipts and the like). A BOL or POD
+    /// not added yet is tapped to add it; one that's in has a checkmark and
+    /// is tapped to view it or upload it again.
     @ViewBuilder
     private func paperwork(_ load: LoadDetail, next: LoadDetail.Stop?, pending: [PendingCheckIn]) -> some View {
         let waitingDocuments = queue.documents(for: load.id)
@@ -318,79 +338,37 @@ struct LoadScreen: View {
             ForEach([DocumentKind.bol, .pod]) { kind in
                 let added = load.documents.filter { $0.kind == kind.rawValue }
                 let waiting = waitingDocuments.filter { $0.kind == kind }
-                let count = added.count + waiting.count
+                let hasIt = !added.isEmpty || !waiting.isEmpty
                 // Needed now: at the stop that hands it over, once checked in.
-                let neededNow = count == 0 && next.map {
+                let neededNow = !hasIt && next.map {
                     $0.isPickup == (kind == .bol) && arrivedTime($0, pending: pending) != nil
                 } == true
 
-                // Side by side; the Add button goes under the text at the
-                // largest text sizes.
-                let layout = dynamicTypeSize.isAccessibilitySize
-                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
-                    : AnyLayout(HStackLayout())
-                layout {
-                    Label {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(kind.label).font(.headline)
-                            Text(count > 0
-                                 ? (count == 1 ? "Added" : "\(count) added")
-                                 : (kind == .bol ? "Signed at pickup" : "Signed at delivery"))
-                                .font(.subheadline)
-                                .foregroundStyle(neededNow ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                Button {
+                    if hasIt { paperworkChoices = kind } else if load.canEdit { addKind = kind }
+                } label: {
+                    LabeledContent {
+                        if !waiting.isEmpty {
+                            Text("Sending").foregroundStyle(.orange)
+                        } else if hasIt {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.title2)
+                                .foregroundStyle(.green)
+                                .accessibilityLabel("Added")
+                        } else if load.canEdit {
+                            Text("Add").foregroundStyle(Color.accentColor)
                         }
-                    } icon: {
-                        Image(systemName: count > 0 ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(count > 0 ? AnyShapeStyle(.green) : AnyShapeStyle(.secondary))
-                    }
-                    .accessibilityElement(children: .combine)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    if load.canEdit {
-                        if neededNow {
-                            Button("Add") { addKind = kind }
-                                .buttonStyle(.borderedProminent)
-                                .controlSize(.large)
-                                .accessibilityLabel("Add \(kind.label)")
-                        } else {
-                            Button("Add") { addKind = kind }
-                                .buttonStyle(.bordered)
-                                .controlSize(.large)
-                                .accessibilityLabel("Add \(kind.label)")
-                        }
-                    }
-                }
-
-                ForEach(added) { doc in
-                    Button {
-                        Task { await preview(bucket: "load-documents", path: doc.path, name: doc.fileName) }
                     } label: {
-                        Label("\(kind.label) · \(doc.createdAt.formatted(date: .abbreviated, time: .shortened))", systemImage: "doc.text")
-                            .foregroundStyle(.primary)
-                    }
-                    .swipeActions {
-                        if doc.mine && load.canEdit {
-                            Button("Remove", role: .destructive) { removing = doc }
-                        }
+                        Text(kind.label).foregroundStyle(.primary)
+                        Text(added.last.map { "Added \($0.createdAt.formatted(date: .abbreviated, time: .shortened))" }
+                             ?? (kind == .bol ? "Signed at pickup" : "Signed at delivery"))
+                            .foregroundStyle(neededNow ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
                     }
                 }
-                ForEach(waiting) { doc in
-                    Button {
-                        previewURL = OfflineQueue.fileURL(for: doc)
-                    } label: {
-                        LabeledContent {
-                            Text("Not sent yet").foregroundStyle(.orange)
-                        } label: {
-                            Label(kind.label, systemImage: "doc.text").foregroundStyle(.primary)
-                        }
-                    }
-                    .swipeActions {
-                        Button("Cancel", role: .destructive) {
-                            if !queue.cancelDocument(doc.id) {
-                                actionError = "It's sending right now. Remove it once it's sent."
-                            }
-                        }
-                    }
-                }
+                // The name and hint read as text, not as a link; only "Add"
+                // is in the app's color.
+                .tint(.primary)
+                .disabled(!hasIt && !load.canEdit)
             }
 
             // Everything else: lumper receipts, other papers, the rate
@@ -400,12 +378,17 @@ struct LoadScreen: View {
                     Task { await preview(bucket: "load-documents", path: doc.path, name: doc.fileName) }
                 } label: {
                     LabeledContent {
-                        Text(doc.createdAt.formatted(date: .abbreviated, time: .shortened))
-                            .foregroundStyle(.secondary)
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.title2)
+                            .foregroundStyle(.green)
+                            .accessibilityLabel("Added")
                     } label: {
-                        Label(doc.kind.documentLabel, systemImage: "doc.text").foregroundStyle(.primary)
+                        Text(doc.kind.documentLabel)
+                        Text("Added \(doc.createdAt.formatted(date: .abbreviated, time: .shortened))")
+                            .foregroundStyle(.secondary)
                     }
                 }
+                .tint(.primary)
                 .swipeActions {
                     if doc.mine && load.canEdit {
                         Button("Remove", role: .destructive) { removing = doc }
@@ -417,9 +400,9 @@ struct LoadScreen: View {
                     previewURL = OfflineQueue.fileURL(for: doc)
                 } label: {
                     LabeledContent {
-                        Text("Not sent yet").foregroundStyle(.orange)
+                        Text("Sending").foregroundStyle(.orange)
                     } label: {
-                        Label(doc.kind.label, systemImage: "doc.text").foregroundStyle(.primary)
+                        Text(doc.kind.label).foregroundStyle(.primary)
                     }
                 }
                 .swipeActions {
@@ -435,7 +418,7 @@ struct LoadScreen: View {
                 Button {
                     choosingOtherPaperwork = true
                 } label: {
-                    Label("Add other paperwork", systemImage: "plus.circle.fill")
+                    Text("Add lumper receipt or other")
                 }
                 .confirmationDialog("Add paperwork", isPresented: $choosingOtherPaperwork) {
                     Button(DocumentKind.lumperReceipt.label) { addKind = .lumperReceipt }
@@ -445,7 +428,45 @@ struct LoadScreen: View {
         } header: {
             Text("Paperwork")
         } footer: {
-            Text("Tap one to open it. Swipe left on one you added to remove it.")
+            Text("Tap a BOL or POD to view it or upload it again. Swipe left on other paperwork to remove it.")
+        }
+        .confirmationDialog(
+            paperworkChoices?.label ?? "",
+            isPresented: Binding(get: { paperworkChoices != nil }, set: { if !$0 { paperworkChoices = nil } }),
+            titleVisibility: .visible,
+            presenting: paperworkChoices
+        ) { kind in
+            let added = load.documents.filter { $0.kind == kind.rawValue }
+            let waiting = waitingDocuments.filter { $0.kind == kind }
+            ForEach(added) { doc in
+                Button(added.count > 1 ? "View \(doc.createdAt.formatted(date: .abbreviated, time: .shortened))" : "View") {
+                    Task { await preview(bucket: "load-documents", path: doc.path, name: doc.fileName) }
+                }
+            }
+            ForEach(waiting) { doc in
+                Button(waiting.count > 1 || !added.isEmpty ? "View the one sending" : "View") {
+                    previewURL = OfflineQueue.fileURL(for: doc)
+                }
+            }
+            if load.canEdit {
+                Button("Upload again") {
+                    // Waits for this dialog to close before opening the next.
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(350))
+                        addKind = kind
+                    }
+                }
+                if let doc = added.last, doc.mine {
+                    Button("Remove", role: .destructive) { removing = doc }
+                }
+                ForEach(waiting) { doc in
+                    Button("Stop sending", role: .destructive) {
+                        if !queue.cancelDocument(doc.id) {
+                            actionError = "It's sending right now. Remove it once it's sent."
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -525,7 +546,7 @@ struct LoadScreen: View {
                 Button {
                     addingExpense = true
                 } label: {
-                    Label("Add expense", systemImage: "plus.circle.fill")
+                    Text("Add expense")
                 }
             }
         } header: {
