@@ -205,6 +205,21 @@ export async function updateBroker(
   return result
 }
 
+/** On, off, or null to follow the company's setting. */
+export async function setBrokerStatusUpdates(
+  organizationId: string,
+  brokerId: string,
+  value: boolean | null
+): Promise<ActionResult> {
+  if (!(await isMember(organizationId))) {
+    return { error: NOT_MEMBER }
+  }
+  if (value !== null && typeof value !== "boolean") {
+    return { error: "Pick on, off or the company default." }
+  }
+  return update(organizationId, brokerId, { status_updates: value })
+}
+
 /** Saves a customer's notes, from the box beside their page. */
 export async function updateBrokerNotes(
   organizationId: string,
@@ -321,6 +336,7 @@ async function update(
   values: Partial<BrokerValues> & {
     do_not_use?: boolean
     do_not_use_reason?: string | null
+    status_updates?: boolean | null
   }
 ): Promise<ActionResult> {
   const supabase = await createClient()

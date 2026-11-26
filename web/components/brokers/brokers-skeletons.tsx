@@ -335,6 +335,12 @@ export function BrokerDetailSkeleton() {
           <div className="flex min-w-0 flex-col gap-4">
             <BrokerFormSkeleton editing />
             <SettingsCard
+              title="Status updates"
+              description="Emails when a driver arrives at or leaves a stop, and when the load is delivered: the time and where the driver was. Never the rate."
+            >
+              <ToggleSkeleton widths={["w-44", "w-12", "w-12"]} />
+            </SettingsCard>
+            <SettingsCard
               title="Contacts"
               description="Dispatch for loads, billing and accounting for payment."
             >

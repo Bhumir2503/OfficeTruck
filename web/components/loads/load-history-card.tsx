@@ -1,4 +1,12 @@
-import { ArrowLeft, Ban, Clock, History, RotateCcw, Send } from "lucide-react"
+import {
+  ArrowLeft,
+  Ban,
+  Clock,
+  History,
+  Mail,
+  RotateCcw,
+  Send,
+} from "lucide-react"
 
 import { LocalTime } from "@/components/loads/local-time"
 import {
@@ -27,6 +35,8 @@ function describe(event: LoadEvent) {
       return `${event.detail ?? "Unassigned"}, back to booked`
     case "stop_time":
       return event.detail ?? "Stop time entered by the office"
+    case "broker_update":
+      return event.detail ?? "Update sent to the broker"
     case "reopened":
       return `Reopened from ${label(event.from_status).toLowerCase()}, back to booked`
     default:
@@ -41,6 +51,7 @@ const ICONS = {
   reopened: RotateCcw,
   status: History,
   stop_time: Clock,
+  broker_update: Mail,
 }
 
 /** Every status change on the load, newest first, with who made it. */

@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
+import { BrokerUpdatesSetting } from "@/components/settings/broker-updates-setting"
 import { CompanyProfileSection } from "@/components/settings/company-profile-form"
 import { DeleteOrganization } from "@/components/settings/delete-organization"
 import { LeaveOrganization } from "@/components/settings/leave-organization"
@@ -28,7 +29,7 @@ export default async function GeneralSettingsPage({
     await createClient()
   )
     .from("organizations")
-    .select("icon_url")
+    .select("icon_url, broker_updates")
     .eq("id", organization.id)
     .single()
 
@@ -51,6 +52,11 @@ export default async function GeneralSettingsPage({
       />
       <CompanyProfileSection section="contact" {...props} />
       <CompanyProfileSection section="address" {...props} />
+      <BrokerUpdatesSetting
+        organizationId={organization.id}
+        enabled={org?.broker_updates ?? false}
+        canEdit={canManage(organization)}
+      />
       <OrganizationUrlForm
         organizationId={organization.id}
         slug={organization.slug}

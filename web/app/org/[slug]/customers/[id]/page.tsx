@@ -12,6 +12,7 @@ import { BrokerForm } from "@/components/brokers/broker-form"
 import { BrokerPaymentHistory } from "@/components/brokers/broker-payment-history"
 import { CustomerGlance } from "@/components/brokers/customer-glance"
 import { CustomerNotes } from "@/components/brokers/customer-notes"
+import { CustomerUpdatesCard } from "@/components/brokers/customer-updates-card"
 import { CustomerStatusMenu } from "@/components/brokers/customer-status-menu"
 import {
   CUSTOMER_TAB_LABELS,
@@ -61,6 +62,7 @@ import { getBrokerInvoices } from "@/lib/invoices"
 import { formatRate, formatStopDate } from "@/lib/load-format"
 import { getOrganization } from "@/lib/organizations"
 import { formatPhone } from "@/lib/phone"
+import { createClient } from "@/lib/supabase/server"
 
 async function brokerFor(
   params: PageProps<"/org/[slug]/customers/[id]">["params"]
@@ -318,12 +320,18 @@ export default async function BrokerPage({
   const asked = parseCustomerTab((await searchParams).tab)
   const tab = tabs.includes(asked) ? asked : "overview"
   const today = localToday()
-  const [contacts, loads, factoring, invoices] = await Promise.all([
-    getBrokerContacts(organization.id, broker.id),
-    getBrokerLoads(organization.id, broker.id),
-    getFactoringCompany(organization.id),
-    getBrokerInvoices(organization.id, broker.id),
-  ])
+  const [contacts, loads, factoring, invoices, { data: org }] =
+    await Promise.all([
+      getBrokerContacts(organization.id, broker.id),
+      getBrokerLoads(organization.id, broker.id),
+      getFactoringCompany(organization.id),
+      getBrokerInvoices(organization.id, broker.id),
+      (await createClient())
+        .from("organizations")
+        .select("broker_updates")
+        .eq("id", organization.id)
+        .maybeSingle(),
+    ])
   const booked = loads.filter((load) => load.status !== "cancelled")
 
   const subtitle = [
@@ -422,6 +430,7 @@ export default async function BrokerPage({
                     key={JSON.stringify({
                       ...broker,
                       notes: null,
+                      status_updates: null,
                       fmcsa: null,
                       updated_at: null,
                     })}
@@ -430,6 +439,23 @@ export default async function BrokerPage({
                     broker={broker}
                     factoring={factoring}
                     factoringHref={factoringHref}
+                  />
+                  <CustomerUpdatesCard
+                    organizationId={organization.id}
+                    brokerId={broker.id}
+                    value={broker.status_updates}
+                    companyDefault={org?.broker_updates ?? false}
+                    recipients={[
+                      ...new Set(
+                        contacts
+                          .filter(
+                            (contact) =>
+                              contact.role === "dispatch" && contact.email
+                          )
+                          .map((contact) => contact.email!.toLowerCase())
+                      ),
+                    ]}
+                    settingsHref={`/org/${organization.slug}/settings`}
                   />
                   <ContactsCard
                     organizationId={organization.id}
@@ -499,6 +525,7 @@ const CUSTOMER_TAB_SKELETONS = {
       <FieldsCardSkeleton title="Mailing address" fields={4} />
       <FieldsCardSkeleton title="Billing" fields={4} />
       <FieldsCardSkeleton title="Factoring" fields={1} />
+      <FieldsCardSkeleton title="Status updates" fields={1} />
     </TabSkeleton>
   ),
   loads: (
