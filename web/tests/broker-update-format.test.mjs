@@ -151,3 +151,52 @@ describe("updateHistoryDetail", () => {
     )
   })
 })
+
+describe("detention notices", () => {
+  const waiting = stop({
+    position: 2,
+    kind: "delivery",
+    facility: "Publix",
+    location: "Atlanta, GA",
+    arrived_at: "2026-12-03T19:22:00Z",
+    arrived_source: "driver",
+    arrived_latitude: 33.749,
+    arrived_longitude: -84.388,
+  })
+
+  it("warns before free time runs out, with the rate from the rate con", () => {
+    const message = brokerUpdateMessage({
+      ...base,
+      event: "detention_soon",
+      stop: waiting,
+      detention: { freeHours: 2, rate: 75 },
+    })
+    assert.equal(
+      message.subject,
+      "Load SM-107: detention starts 3:22 PM CST at delivery 2 of 2"
+    )
+    assert.deepEqual(message.lines.slice(0, 2), [
+      "Our driver arrived at delivery 2 of 2 (Publix, Atlanta, GA) at Dec 3, 2026, 1:22 PM CST and is still waiting.",
+      "Free time (2 h) ends at Dec 3, 2026, 3:22 PM CST. Detention starts then at $75.00/hour, per the rate confirmation.",
+    ])
+    assert.match(message.lines[2], /^Driver's location at check-in: https:/)
+  })
+
+  it("says detention started and asks for the authorization number", () => {
+    const message = brokerUpdateMessage({
+      ...base,
+      event: "detention_started",
+      stop: waiting,
+      detention: { freeHours: 1.5, rate: null },
+    })
+    assert.equal(
+      message.subject,
+      "Load SM-107: detention started at delivery 2 of 2"
+    )
+    assert.deepEqual(message.lines.slice(0, 3), [
+      "Our driver has been at delivery 2 of 2 (Publix, Atlanta, GA) since Dec 3, 2026, 1:22 PM CST.",
+      "Free time (1.5 h) ended at Dec 3, 2026, 2:52 PM CST. Detention is running.",
+      "Please reply with your detention authorization number.",
+    ])
+  })
+})

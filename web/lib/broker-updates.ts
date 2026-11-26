@@ -80,7 +80,9 @@ async function sendOne(
     await Promise.all([
       admin
         .from("loads")
-        .select("id, reference, broker_id, rate_con_from")
+        .select(
+          "id, reference, broker_id, rate_con_from, detention_free_hours, detention_rate"
+        )
         .eq("id", update.load_id)
         .maybeSingle(),
       admin
@@ -121,6 +123,20 @@ async function sendOne(
     update.event === "delivered"
       ? (list.at(-1) ?? null)
       : (list.find((item) => item.id === update.stop_id) ?? null)
+  // A detention notice is moot once the driver has left: the charge
+  // covers it.
+  const detention =
+    update.event === "detention_soon" || update.event === "detention_started"
+  if (detention && (!stop?.arrived_at || stop.departed_at)) {
+    return fail(
+      admin,
+      update,
+      load.reference,
+      "The driver left before it went out.",
+      dryRun,
+      true
+    )
+  }
   const message = brokerUpdateMessage({
     companyName: organization.name,
     timeZone: organization.time_zone ?? "America/Chicago",
@@ -129,6 +145,14 @@ async function sendOne(
     stop,
     stopCount: list.length,
     at: update.created_at,
+    detention:
+      load.detention_free_hours === null
+        ? null
+        : {
+            freeHours: Number(load.detention_free_hours),
+            rate:
+              load.detention_rate === null ? null : Number(load.detention_rate),
+          },
   })
   if (dryRun) {
     return { id: update.id, load: load.reference, to, message, sent: false }

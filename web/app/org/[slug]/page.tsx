@@ -3,8 +3,9 @@ import { notFound } from "next/navigation"
 import { AttentionList } from "@/components/dashboard/attention-list"
 import { MonthSnapshot } from "@/components/dashboard/month-snapshot"
 import { MovingLoads } from "@/components/dashboard/moving-loads"
+import { OnTheClock } from "@/components/dashboard/on-the-clock"
 import { OnboardingDialog } from "@/components/onboarding-dialog"
-import { getAttention, getMovingLoads } from "@/lib/dashboard"
+import { getAttention, getMovingLoads, getWaitingStops } from "@/lib/dashboard"
 import { balanceDue } from "@/lib/invoice-format"
 import { canManage, getOrganization } from "@/lib/organizations"
 import { inPeriod, totals } from "@/lib/report-format"
@@ -28,9 +29,10 @@ export default async function DashboardPage({
 
   const base = `/org/${organization.slug}`
   const { today, items, invoices } = await getAttention(organization.id)
-  const [moving, reportLoads] = await Promise.all([
+  const [moving, reportLoads, waiting] = await Promise.all([
     getMovingLoads(organization.id, today),
     getReportLoads(organization.id),
+    getWaitingStops(organization.id),
   ])
 
   const month = totals(
@@ -50,6 +52,7 @@ export default async function DashboardPage({
     <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
       <div className="grid grid-cols-1 gap-4 px-4 md:gap-6 lg:px-6 @5xl/main:grid-cols-3">
         <div className="flex flex-col gap-4 md:gap-6 @5xl/main:col-span-2">
+          <OnTheClock stops={waiting} loadsBase={`${base}/loads`} />
           <AttentionList items={items} base={base} />
           <MovingLoads loads={moving} loadsBase={`${base}/loads`} />
         </div>

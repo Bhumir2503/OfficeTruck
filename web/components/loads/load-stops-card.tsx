@@ -1,5 +1,6 @@
 "use client"
 
+import { DetentionClock } from "@/components/loads/detention-clock"
 import { cn } from "cn"
 import { format } from "date-fns"
 import {
@@ -758,6 +759,8 @@ export function LoadStopsCard({
                       {stop.notes}
                     </p>
                   )}
+                  {/* The driver's still there: the clock on free time. */}
+                  <DetentionClock stop={stop} terms={load} className="pt-1" />
                 </div>
               </div>
               <div className="flex shrink-0 flex-col gap-2 pl-10 text-sm sm:items-end sm:pl-0">

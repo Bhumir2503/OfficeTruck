@@ -186,3 +186,81 @@ export async function getMovingLoads(
     (a, b) => rank[a.status] - rank[b.status] || next(a).localeCompare(next(b))
   )
 }
+
+/** A driver at a stop now, on a load with free time on it. */
+export type WaitingStop = {
+  id: string
+  position: number
+  kind: "pickup" | "delivery"
+  facility: string | null
+  location: string
+  arrived_at: string
+  departed_at: null
+  load: {
+    id: string
+    reference: string
+    detention_free_hours: number
+    detention_rate: number | null
+    driver_name: string | null
+  }
+}
+
+/**
+ * Drivers checked in at a stop and not out yet, on loads with detention
+ * terms: the ones whose free time is running. Longest wait first. Arrivals
+ * more than a day old are left out (a check-out nobody entered).
+ */
+export async function getWaitingStops(
+  organizationId: string
+): Promise<WaitingStop[]> {
+  const supabase = await createClient()
+  const since = new Date(Date.now() - 24 * 3_600_000).toISOString()
+  const { data: stops, error } = await supabase
+    .from("load_stops")
+    .select("id, load_id, position, kind, facility, location, arrived_at")
+    .eq("organization_id", organizationId)
+    .not("arrived_at", "is", null)
+    .is("departed_at", null)
+    .gt("arrived_at", since)
+    .order("arrived_at")
+  if (error) throw error
+  if (!stops.length) return []
+  const { data: loads, error: loadsError } = await supabase
+    .from("loads")
+    .select(
+      "id, reference, status, detention_free_hours, detention_rate, driver_name, driver:drivers!loads_driver_fkey (full_name)"
+    )
+    .eq("organization_id", organizationId)
+    .in(
+      "id",
+      stops.map((stop) => stop.load_id)
+    )
+    .in("status", ["dispatched", "loaded"])
+    .not("detention_free_hours", "is", null)
+  if (loadsError) throw loadsError
+  const byId = new Map(loads.map((load) => [load.id, load]))
+  return stops.flatMap((stop) => {
+    const load = byId.get(stop.load_id)
+    if (!load) return []
+    const driver = load.driver as unknown as { full_name: string } | null
+    return [
+      {
+        id: stop.id,
+        position: stop.position,
+        kind: stop.kind,
+        facility: stop.facility,
+        location: stop.location,
+        arrived_at: stop.arrived_at as string,
+        departed_at: null,
+        load: {
+          id: load.id,
+          reference: load.reference,
+          detention_free_hours: Number(load.detention_free_hours),
+          detention_rate:
+            load.detention_rate === null ? null : Number(load.detention_rate),
+          driver_name: driver?.full_name ?? load.driver_name,
+        },
+      },
+    ]
+  })
+}
