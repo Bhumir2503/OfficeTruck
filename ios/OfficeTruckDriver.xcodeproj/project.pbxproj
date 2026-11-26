@@ -24,6 +24,7 @@
 		7E90DAE590B06CE25DAB52CC /* PayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A3E872C0629148E4766F4D2 /* PayView.swift */; };
 		8DAC0EB7CBE26E8D4D7DAECA /* TripsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0A33E628EE17C3991F2E848 /* TripsView.swift */; };
 		9D67D25AC45739DC656659CF /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 0FAEC068E9AAD3D8724CA89B /* Lottie */; };
+		A798463288FEFB8BAA2ED8DF /* CheckInLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F804D7682F115B3A58CD6F47 /* CheckInLocation.swift */; };
 		B821E67C97468CFDE1BD71D8 /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39366105CA8CCF401D6F513D /* Formatting.swift */; };
 		C66AF7C675554F319F8DCA3B /* SendCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAA8E6A83362A5FE0A358017 /* SendCardView.swift */; };
 		CC310C8D2B0E2D14135755A8 /* OfficeTruckDriverApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82F6D77869384EB21AE9BC6D /* OfficeTruckDriverApp.swift */; };
@@ -53,6 +54,7 @@
 		B64C94BD588CA035C8E2C16C /* OfficeTruckDriver.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = OfficeTruckDriver.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C0A33E628EE17C3991F2E848 /* TripsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripsView.swift; sourceTree = "<group>"; };
 		F0CF3C4F008D37C87E5C9E69 /* SupabaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseService.swift; sourceTree = "<group>"; };
+		F804D7682F115B3A58CD6F47 /* CheckInLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckInLocation.swift; sourceTree = "<group>"; };
 		FAA8E6A83362A5FE0A358017 /* SendCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendCardView.swift; sourceTree = "<group>"; };
 		FD62A3A84301E2E9A003FA80 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -155,6 +157,7 @@
 		AAEEFEB0BA7ABB18BC79963B /* Core */ = {
 			isa = PBXGroup;
 			children = (
+				F804D7682F115B3A58CD6F47 /* CheckInLocation.swift */,
 				6A4FF66F8728F85F6F28FF96 /* DemoBackend.swift */,
 				021061EA99F776A5A93FEE86 /* DocumentPDF.swift */,
 				41D4D9559A6CF9472D0D8B50 /* DriverAPI.swift */,
@@ -274,6 +277,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A798463288FEFB8BAA2ED8DF /* CheckInLocation.swift in Sources */,
 				5F1C2C7E516641215C35B9F0 /* DQFileView.swift in Sources */,
 				7CDA828000B16030E1F9C6E5 /* DemoBackend.swift in Sources */,
 				12F334A72B4DCDD1E7DB096E /* DocumentPDF.swift in Sources */,
@@ -311,6 +315,7 @@
 				INFOPLIST_FILE = OfficeTruckDriver/Resources/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = OfficeTruck;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scan BOLs, PODs and receipts for your loads.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Saves where you are when you check in or out at a stop, so your carrier can show how long you waited (detention).";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
@@ -460,6 +465,7 @@
 				INFOPLIST_FILE = OfficeTruckDriver/Resources/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = OfficeTruck;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scan BOLs, PODs and receipts for your loads.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Saves where you are when you check in or out at a stop, so your carrier can show how long you waited (detention).";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;

@@ -18,6 +18,11 @@ struct PendingCheckIn: Codable, Identifiable, Sendable {
     /// signal keeps its real time and a resend is recognized by the server.
     let tappedAt: Date
     let odometer: Int?
+    /// Where the phone was, if it allowed location and had a fix.
+    var latitude: Double? = nil
+    var longitude: Double? = nil
+    /// How far off the fix may be, in meters.
+    var locationAccuracy: Double? = nil
 }
 
 /// A scanned document waiting to reach the server. The PDF waits on disk

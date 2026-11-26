@@ -64,13 +64,20 @@ struct DriverAPI: Sendable {
             let event: String
             let tapped_at: String
             let odometer: Int?
+            // Left out when there's no fix, so the server's defaults apply.
+            let latitude: Double?
+            let longitude: Double?
+            let location_accuracy: Double?
         }
         let params = Params(
             target_stop: checkIn.stopID,
             event: checkIn.event.rawValue,
             // "2026-11-25T14:03:11.123Z": milliseconds, so a resend matches.
             tapped_at: Date.ISO8601FormatStyle(includingFractionalSeconds: true).format(checkIn.tappedAt),
-            odometer: checkIn.odometer
+            odometer: checkIn.odometer,
+            latitude: checkIn.latitude,
+            longitude: checkIn.longitude,
+            location_accuracy: checkIn.locationAccuracy
         )
         try await client.rpc("record_my_stop_event", params: params).execute()
     }

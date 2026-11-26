@@ -46,6 +46,12 @@ struct LoadScreen: View {
             }
         }
         .task(id: queue.deliveredCount) { await fetch() }
+        // A fresh location is kept ready while a load that can be checked in
+        // is on screen, and only then.
+        .task(id: canCheckIn) {
+            if canCheckIn { CheckInLocation.shared.start() } else { CheckInLocation.shared.stop() }
+        }
+        .onDisappear { CheckInLocation.shared.stop() }
         .quickLookPreview($previewURL)
         .alert(
             removing.map { "Remove the \($0.kind.documentLabel)?" } ?? "",
@@ -80,7 +86,7 @@ struct LoadScreen: View {
             Button(request.event == .arrived ? "Arrived" : "Departed") { record(request) }
                 .keyboardShortcut(.defaultAction)
         } message: { _ in
-            Text("This records \(Date.now.formatted(date: .omitted, time: .shortened)). Only dispatch can change it after.")
+            Text("This records \(Date.now.formatted(date: .omitted, time: .shortened))\(CheckInLocation.shared.allowed ? " with your location" : ""). Only dispatch can change it after.")
         }
         .alert(
             missingPaperwork.map { "No \($0.kind.label) yet" } ?? "",
@@ -423,14 +429,29 @@ struct LoadScreen: View {
         queue.enqueueDocument(loadID: load.id, organizationID: load.organization.id, kind: kind, pdf: pdf)
     }
 
+    private var canCheckIn: Bool {
+        if case .loaded(let detail) = load { detail.canEdit } else { false }
+    }
+
+    /// Queues the check-in with where the phone is. The time is the tap;
+    /// the location waits up to a few seconds for a fix, and goes without
+    /// one rather than hold the check-in up.
     private func record(_ request: CheckInRequest) {
-        queue.enqueue(PendingCheckIn(
-            loadID: request.loadID,
-            stopID: request.stopID,
-            event: request.event,
-            tappedAt: .now,
-            odometer: Int(odometer.filter(\.isNumber))
-        ))
+        let tapped = Date.now
+        let reading = Int(odometer.filter(\.isNumber))
+        Task {
+            let fix = await CheckInLocation.shared.fix()
+            queue.enqueue(PendingCheckIn(
+                loadID: request.loadID,
+                stopID: request.stopID,
+                event: request.event,
+                tappedAt: tapped,
+                odometer: reading,
+                latitude: fix?.coordinate.latitude,
+                longitude: fix?.coordinate.longitude,
+                locationAccuracy: fix?.horizontalAccuracy
+            ))
+        }
     }
 
     private func fetch() async {
