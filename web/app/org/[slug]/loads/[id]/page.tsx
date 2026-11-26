@@ -119,6 +119,8 @@ export default async function LoadPage({
                   <LoadStatusMenu
                     organizationId={organization.id}
                     load={load}
+                    canDelete={canManage(organization)}
+                    listHref={base}
                   />
                 }
                 notice={

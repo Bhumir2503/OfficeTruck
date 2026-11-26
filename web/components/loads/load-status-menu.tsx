@@ -2,11 +2,13 @@
 
 import { cn } from "cn"
 import { ChevronDownIcon } from "lucide-react"
+import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
 import {
   cancelLoad,
+  deleteLoad,
   markLoadComplete,
   markLoadTonu,
   reopenLoad,
@@ -271,8 +273,14 @@ function actionsFor(status: LoadStatus, manual: boolean): StatusAction[][] {
 export function LoadStatusMenu({
   organizationId,
   load,
+  canDelete = false,
+  listHref,
 }: {
   organizationId: string
+  /** Owners and admins can delete a load entered by mistake. */
+  canDelete?: boolean
+  /** Where to go once it's deleted: the loads list. */
+  listHref?: string
   load: {
     id: string
     reference: string
@@ -284,12 +292,28 @@ export function LoadStatusMenu({
   const [pending, setPending] = useState(false)
   const [canceling, setCanceling] = useState(false)
   const [markingTonu, setMarkingTonu] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const router = useRouter()
   // Marked complete by hand and still waiting on proof: "Completed" instead
   // of "Delivered". Past delivered (invoiced, paid) the usual name shows.
   const manual = !!load.completed_manually && load.status === "delivered"
   const statusLabel = manual ? "Completed" : LOAD_STATUS_LABELS[load.status]
   const groups = actionsFor(load.status, manual)
+  const hasMenu = groups.length > 0 || canDelete
+
+  async function remove() {
+    setPending(true)
+    const result = await deleteLoad(organizationId, load.id)
+    setPending(false)
+    if ("error" in result) {
+      toast.error(result.error)
+      return
+    }
+    setDeleting(false)
+    toast.success(`Load ${result.reference} deleted.`)
+    if (listHref) router.push(listHref)
+  }
 
   async function run(action: StatusAction) {
     if (action.kind === "cancel") {
@@ -354,7 +378,7 @@ export function LoadStatusMenu({
     <>
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger
-          disabled={pending || groups.length === 0}
+          disabled={pending || !hasMenu}
           aria-label={`Status of load ${load.reference}: ${statusLabel}${manual ? ", marked complete by hand" : ""}`}
           title={
             manual
@@ -364,15 +388,13 @@ export function LoadStatusMenu({
           className={cn(
             "inline-flex h-6 items-center gap-1 rounded-4xl pr-1.5 pl-2.5 text-xs font-medium whitespace-nowrap outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-100",
             STATUS_STYLES[load.status],
-            groups.length === 0 && "pr-2.5"
+            !hasMenu && "pr-2.5"
           )}
         >
           <span className={cn(isFallenThrough(load.status) && "line-through")}>
             {statusLabel}
           </span>
-          {groups.length > 0 && (
-            <ChevronDownIcon className="size-3 opacity-70" />
-          )}
+          {hasMenu && <ChevronDownIcon className="size-3 opacity-70" />}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="min-w-52">
           {groups.map((group, index) => (
@@ -409,6 +431,21 @@ export function LoadStatusMenu({
               ))}
             </DropdownMenuGroup>
           ))}
+          {canDelete && (
+            <DropdownMenuGroup>
+              {groups.length > 0 && <DropdownMenuSeparator />}
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => {
+                  // Close the menu first, or it stays open over the popup.
+                  setMenuOpen(false)
+                  setDeleting(true)
+                }}
+              >
+                Delete load
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
       <Dialog open={canceling} onOpenChange={setCanceling}>
@@ -425,6 +462,34 @@ export function LoadStatusMenu({
             load={load}
             onDone={() => setCanceling(false)}
           />
+        </DialogContent>
+      </Dialog>
+      <Dialog open={deleting} onOpenChange={setDeleting}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete load {load.reference}?</DialogTitle>
+            <DialogDescription>
+              Its stops, check-ins, charges, paperwork and expenses are deleted
+              too, and this can&apos;t be undone. A load that&apos;s invoiced or
+              on a paid pay statement can&apos;t be deleted; cancel it instead.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={pending}
+              onClick={() => setDeleting(false)}
+            >
+              Keep it
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={pending}
+              onClick={() => void remove()}
+            >
+              {pending ? "Deleting…" : "Delete load"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
       <Dialog open={markingTonu} onOpenChange={setMarkingTonu}>
