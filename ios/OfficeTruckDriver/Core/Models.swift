@@ -98,6 +98,9 @@ struct LoadDetail: Decodable, Identifiable, Sendable {
         let note: String?
         let receiptPath: String?
         let receiptType: String?
+        /// The driver added it, so they can remove it. Missing from older
+        /// servers.
+        let mine: Bool?
     }
 }
 

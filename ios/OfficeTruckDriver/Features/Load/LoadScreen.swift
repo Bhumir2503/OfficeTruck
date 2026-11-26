@@ -24,6 +24,7 @@ struct LoadScreen: View {
     /// A paperwork file open in Quick Look.
     @State private var previewURL: URL?
     @State private var removing: LoadDetail.LoadDocument?
+    @State private var removingExpense: LoadDetail.Expense?
     @State private var actionError: String?
     @State private var addingExpense = false
     @State private var showingInfo = false
@@ -71,6 +72,16 @@ struct LoadScreen: View {
             case "bol": Text("If it was the only BOL, the load goes back to not loaded.")
             default: Text("The office won't see it anymore.")
             }
+        }
+        .alert(
+            removingExpense.map { "Remove this \((ExpenseKind(rawValue: $0.kind) ?? .other).label.lowercased()) expense?" } ?? "",
+            isPresented: Binding(get: { removingExpense != nil }, set: { if !$0 { removingExpense = nil } }),
+            presenting: removingExpense
+        ) { expense in
+            Button("Remove", role: .destructive) { Task { await removeExpense(expense) } }
+            Button("Cancel", role: .cancel) {}
+        } message: { expense in
+            Text("\(expense.amount.dollars) on \(WallClock.day(expense.spentOn)). The office won't pay it back.")
         }
         .alert("Couldn't do that", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK") {}
@@ -507,6 +518,18 @@ struct LoadScreen: View {
                     }
                 }
                 .disabled(expense.receiptPath == nil)
+                // No full swipe, so a long swipe can't remove it by accident.
+                .swipeActions(allowsFullSwipe: false) {
+                    if load.canEdit && expense.mine == true {
+                        Button("Remove", systemImage: "trash", role: .destructive) { removingExpense = expense }
+                    }
+                    if let path = expense.receiptPath {
+                        Button("View", systemImage: "eye") {
+                            Task { await preview(bucket: "load-documents", path: path, name: "\(kind.label) receipt") }
+                        }
+                        .tint(.blue)
+                    }
+                }
             }
             ForEach(waiting) { expense in
                 Button {
@@ -527,11 +550,15 @@ struct LoadScreen: View {
                         }
                     }
                 }
-                .swipeActions {
-                    Button("Cancel", role: .destructive) {
+                .swipeActions(allowsFullSwipe: false) {
+                    Button("Stop sending", systemImage: "xmark", role: .destructive) {
                         if !queue.cancelExpense(expense.id) {
-                            actionError = "It's sending right now."
+                            actionError = "It's sending right now. Remove it once it's sent."
                         }
+                    }
+                    if expense.hasReceipt {
+                        Button("View", systemImage: "eye") { previewURL = OfflineQueue.receiptURL(for: expense) }
+                            .tint(.blue)
                     }
                 }
             }
@@ -551,7 +578,7 @@ struct LoadScreen: View {
         } header: {
             Text("Expenses")
         } footer: {
-            Text("Fuel, tolls, scales and anything else you paid for yourself. The office pays it back on your settlement.")
+            Text("Fuel, tolls, scales and anything else you paid for yourself. The office pays it back on your settlement. Swipe left on one to view the receipt or remove it.")
         }
     }
 
@@ -560,6 +587,17 @@ struct LoadScreen: View {
             previewURL = try await api.downloadForPreview(bucket: bucket, path: path, name: name)
         } catch {
             actionError = "It couldn't be opened. Check your signal and try again."
+        }
+    }
+
+    private func removeExpense(_ expense: LoadDetail.Expense) async {
+        do {
+            try await api.removeExpense(expense.id)
+            await fetch()
+        } catch let error as PostgrestError {
+            actionError = error.message
+        } catch {
+            actionError = "It wasn't removed. Check your signal and try again."
         }
     }
 

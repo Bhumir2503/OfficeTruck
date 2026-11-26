@@ -264,6 +264,15 @@ struct DriverAPI: Sendable {
         try await client.rpc("remove_my_load_document", params: ["target_document": id]).execute()
     }
 
+    /// Removes an expense the driver added, while the load is on the road
+    /// and before a paid pay statement covers it.
+    func removeExpense(_ id: UUID) async throws {
+        #if DEBUG
+        if DemoBackend.isOn { return DemoBackend.removeExpense(id) }
+        #endif
+        try await client.rpc("remove_my_expense", params: ["target_expense": id]).execute()
+    }
+
     /// Takes back a DQ upload the office hasn't confirmed.
     func removeDQDocument(_ id: UUID) async throws {
         #if DEBUG
