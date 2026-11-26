@@ -15,6 +15,8 @@ struct LoadSummary: Decodable, Identifiable, Hashable, Sendable {
     let pickupStart: String
     let deliveryLocation: String
     let deliveryStart: String
+    /// End of the last stop's window, if it has one (older servers leave it out).
+    let deliveryEnd: String?
     let deliveredOn: String?
     let truck: String?
     let trailerNumber: String?
@@ -22,6 +24,27 @@ struct LoadSummary: Decodable, Identifiable, Hashable, Sendable {
     let stopsDeparted: Int
 
     var isOnTheRoad: Bool { status.isOnTheRoad }
+
+    /// The other loads still to drive whose time on the road overlaps each
+    /// one's: the office's check (`web/lib/dispatch-format.ts`), from the
+    /// first appointment to the end of the last, compared as written.
+    /// The office is warned, not stopped, so the driver hears it too.
+    static func overlaps(in trips: [LoadSummary]) -> [UUID: [String]] {
+        let scheduled = trips.filter { $0.status == .dispatched || $0.status == .loaded }
+        func window(_ trip: LoadSummary) -> (start: Substring, end: Substring) {
+            (trip.pickupStart.prefix(16), (trip.deliveryEnd ?? trip.deliveryStart).prefix(16))
+        }
+        var result: [UUID: [String]] = [:]
+        for trip in scheduled {
+            let a = window(trip)
+            let others = scheduled.filter { other in
+                let b = window(other)
+                return other.id != trip.id && a.start < b.end && b.start < a.end
+            }
+            if !others.isEmpty { result[trip.id] = others.map(\.reference) }
+        }
+        return result
+    }
 }
 
 /// `my_load(id)`.

@@ -9,6 +9,8 @@ import SwiftUI
 /// their own sections.
 struct LoadScreen: View {
     let loadID: UUID
+    /// Other loads of the driver's at the same time as this one, from Trips.
+    var overlaps: [String] = []
 
     @State private var load: Loadable<LoadDetail> = .loading
     @State private var checkIn: CheckInRequest?
@@ -142,6 +144,22 @@ struct LoadScreen: View {
         let next = nextStop(load, pending: pending)
 
         return List {
+            // Dispatch was warned when it booked them; the driver needs to
+            // hear it too, before driving to the wrong one first.
+            if !overlaps.isEmpty && (load.status == .dispatched || load.status == .loaded) {
+                Section {
+                    Label {
+                        Text("This load's times overlap \(overlaps.formatted(.list(type: .and))). Call dispatch to check which comes first.")
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                    }
+                    if let phone = load.organization.phone, let url = telURL(phone) {
+                        Link(destination: url) {
+                            Label("Call dispatch", systemImage: "phone")
+                        }
+                    }
+                }
+            }
             ForEach(load.stops) { stop in
                 let arrived = stop.arrivedAt ?? pending.first { $0.stopID == stop.id && $0.event == .arrived }?.tappedAt
                 let departed = stop.departedAt ?? pending.first { $0.stopID == stop.id && $0.event == .departed }?.tappedAt
@@ -715,6 +733,8 @@ struct MissingPaperwork {
 /// The check-in the driver is confirming.
 struct CheckInRequest {
     let loadID: UUID
+    /// Other loads of the driver's at the same time as this one, from Trips.
+    var overlaps: [String] = []
     let stopID: UUID
     let event: StopEvent
     let place: String

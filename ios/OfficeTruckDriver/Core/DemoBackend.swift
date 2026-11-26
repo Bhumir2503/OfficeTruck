@@ -9,6 +9,8 @@ enum DemoBackend {
     static let isOn = ProcessInfo.processInfo.arguments.contains("-demo")
     /// Add `-two-carriers` too to see a driver who drives for two companies.
     static let twoCarriers = ProcessInfo.processInfo.arguments.contains("-two-carriers")
+    /// Adds a load at the same time as QA-1004, to see the overlap note.
+    static let overlap = ProcessInfo.processInfo.arguments.contains("-overlap")
     /// Add `-signed-out` too to start at sign-in. No text is sent; any
     /// 6-digit code signs in.
     static let startsSignedOut = ProcessInfo.processInfo.arguments.contains("-signed-out")
@@ -137,7 +139,7 @@ enum DemoBackend {
           "status": "\(status)", "pickup_location": "Memphis, TN", "pickup_start": "2026-11-25T08:00:00",
           "delivery_location": "Atlanta, GA", "delivery_start": "2026-11-26T14:00:00",
           "delivered_on": null, "truck": "T-101", "trailer_number": "53-220",
-          "stop_count": 2, "stops_departed": \(departed.count)}, \(upcomingLoad)\(twoCarriers ? secondCarrierLoad : "")]
+          "stop_count": 2, "stops_departed": \(departed.count)}, \(upcomingLoad)\(twoCarriers ? secondCarrierLoad : "")\(overlap ? overlappingLoad : "")]
         """.utf8)
     }
 
@@ -156,6 +158,14 @@ enum DemoBackend {
          "stop_count": 2, "stops_departed": 0}
         """
     }
+
+    private static let overlappingLoad = """
+    , {"id": "11111111-0000-0000-0000-000000000004", "organization_name": "Acme Freight", "reference": "QA-1012",
+       "status": "dispatched", "pickup_location": "Birmingham, AL", "pickup_start": "2026-11-26T09:00:00",
+       "delivery_location": "Jacksonville, FL", "delivery_start": "2026-11-26T18:00:00",
+       "delivered_on": null, "truck": "T-101", "trailer_number": null,
+       "stop_count": 2, "stops_departed": 0}
+    """
 
     private static let secondCarrierLoad = """
     , {"id": "11111111-0000-0000-0000-000000000002", "organization_name": "Bluegrass Haulers", "reference": "BG-310",
