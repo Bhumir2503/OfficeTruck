@@ -80,6 +80,13 @@ final class OfflineQueue {
     private(set) var pendingExpenses: [PendingExpense] = []
     /// Why the server turned down a check-in or document, for an alert.
     var rejections: [String] = []
+    /// Check-ins a send was tried for and couldn't reach the server (or left
+    /// from an earlier run). Only these show as not sent, so a check-in that
+    /// goes through right away never flashes as unsent.
+    private(set) var unsent: Set<UUID> = []
+    /// Check-ins sent this run. Screens keep counting them until they reload
+    /// the load from the server, so the time doesn't blink to "—" between.
+    private(set) var sent: [PendingCheckIn] = []
     /// Goes up each time something reaches the server, so screens reload.
     private(set) var deliveredCount = 0
 
@@ -93,6 +100,7 @@ final class OfflineQueue {
 
     private init() {
         pending = Self.read(checkInsURL) ?? []
+        unsent = Set(pending.map(\.id))
         pendingDocuments = Self.read(documentsURL) ?? []
         pendingExpenses = Self.read(expensesURL) ?? []
         monitor.pathUpdateHandler = { path in
@@ -102,8 +110,9 @@ final class OfflineQueue {
         monitor.start(queue: DispatchQueue(label: "OfflineQueue.network"))
     }
 
+    /// The load's check-ins tapped on this phone: queued, then sent this run.
     func checkIns(for loadID: UUID) -> [PendingCheckIn] {
-        pending.filter { $0.loadID == loadID }
+        (pending + sent).filter { $0.loadID == loadID }
     }
 
     func documents(for loadID: UUID) -> [PendingDocument] {
@@ -218,11 +227,34 @@ final class OfflineQueue {
         while let next = pending.first {
             do {
                 try await api.recordStopEvent(next)
+                sent.append(next)
             } catch let error as PostgrestError {
-                rejections.append(error.message)
+                // Only the odometer was turned down (say, lower than the
+                // truck's last reading): keep the check-in, drop the reading.
+                if next.odometer != nil, ["lower", "higher", "below_truck", "range"].contains(error.hint ?? "") {
+                    let withoutReading = PendingCheckIn(
+                        id: next.id, loadID: next.loadID, stopID: next.stopID, event: next.event,
+                        tappedAt: next.tappedAt, odometer: nil,
+                        latitude: next.latitude, longitude: next.longitude, locationAccuracy: next.locationAccuracy
+                    )
+                    do {
+                        try await api.recordStopEvent(withoutReading)
+                        sent.append(withoutReading)
+                        rejections.append("Your check-in was saved, but not the odometer. \(error.message)")
+                    } catch let error as PostgrestError {
+                        rejections.append(error.message)
+                    } catch {
+                        unsent.insert(next.id)
+                        return
+                    }
+                } else {
+                    rejections.append(error.message)
+                }
             } catch {
+                unsent.insert(next.id)
                 return
             }
+            unsent.remove(next.id)
             pending.removeFirst()
             deliveredCount += 1
             save()

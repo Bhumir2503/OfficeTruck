@@ -57,7 +57,7 @@ struct DriverAPI: Sendable {
     /// same stop, event and tap time again.
     func recordStopEvent(_ checkIn: PendingCheckIn) async throws {
         #if DEBUG
-        if DemoBackend.isOn { return DemoBackend.record(checkIn) }
+        if DemoBackend.isOn { return try DemoBackend.record(checkIn) }
         #endif
         struct Params: Encodable {
             let target_stop: UUID

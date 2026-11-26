@@ -15,6 +15,8 @@ struct LoadScreen: View {
     @State private var load: Loadable<LoadDetail> = .loading
     @State private var checkIn: CheckInRequest?
     @State private var odometer = ""
+    /// A check-in whose odometer was lower than the truck's last reading.
+    @State private var lowReading: CheckInRequest?
     /// Paperwork being added: the kind picked, then how.
     @State private var addKind: DocumentKind?
     /// Checking out without the stop's BOL or POD: warn first.
@@ -36,6 +38,63 @@ struct LoadScreen: View {
     private let api = DriverAPI()
 
     var body: some View {
+        screen
+            .alert(
+                checkIn.map { "\($0.event == .arrived ? "Arrived at" : "Leaving") \($0.place)?" } ?? "",
+                isPresented: Binding(get: { checkIn != nil }, set: { if !$0 { checkIn = nil } }),
+                presenting: checkIn
+            ) { request in
+                if request.asksOdometer {
+                    TextField(request.minimumOdometer.map { "Odometer, \($0.formatted()) or more" } ?? "Odometer (optional)",
+                              text: $odometer)
+                        .keyboardType(.numberPad)
+                }
+                Button("Cancel", role: .cancel) {}
+                // The preferred action is drawn in the app's green. A reading
+                // lower than the truck's last one asks again instead.
+                Button(request.event == .arrived ? "Arrived" : "Departed") {
+                    if isTooLow(odometer, for: request) {
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(350))
+                            lowReading = request
+                        }
+                    } else {
+                        record(request)
+                    }
+                }
+                .keyboardShortcut(.defaultAction)
+            } message: { request in
+                let when = "This records \(Date.now.formatted(date: .omitted, time: .shortened))\(CheckInLocation.shared.allowed ? " with your location" : ""). Only dispatch can change it after."
+                if request.asksOdometer, let minimum = request.minimumOdometer {
+                    Text("The truck's last odometer reading was \(minimum.formatted()) mi. A new one can't be lower.\n\n\(when)")
+                } else {
+                    Text(when)
+                }
+            }
+            .alert(
+                "Odometer too low",
+                isPresented: Binding(get: { lowReading != nil }, set: { if !$0 { lowReading = nil } }),
+                presenting: lowReading
+            ) { request in
+                // Each choice waits for this alert to close before the next opens.
+                Button("Enter it again") {
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(350))
+                        checkIn = request
+                    }
+                }
+                .keyboardShortcut(.defaultAction)
+                Button("\(request.event == .arrived ? "Arrive" : "Depart") without it") {
+                    odometer = ""
+                    record(request)
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: { request in
+                Text("\(Int(odometer.filter(\.isNumber))?.formatted() ?? odometer) mi is lower than the truck's last reading, \((request.minimumOdometer ?? 0).formatted()) mi. Odometers only go up. Check it and enter it again.")
+            }
+    }
+
+    private var screen: some View {
         Group {
             switch load {
             case .loading:
@@ -89,22 +148,6 @@ struct LoadScreen: View {
             Button("OK") {}
         } message: {
             Text(actionError ?? "")
-        }
-        .alert(
-            checkIn.map { "\($0.event == .arrived ? "Arrived at" : "Leaving") \($0.place)?" } ?? "",
-            isPresented: Binding(get: { checkIn != nil }, set: { if !$0 { checkIn = nil } }),
-            presenting: checkIn
-        ) { request in
-            if request.asksOdometer {
-                TextField("Odometer (optional)", text: $odometer)
-                    .keyboardType(.numberPad)
-            }
-            Button("Cancel", role: .cancel) {}
-            // The preferred action is drawn in the app's green.
-            Button(request.event == .arrived ? "Arrived" : "Departed") { record(request) }
-                .keyboardShortcut(.defaultAction)
-        } message: { _ in
-            Text("This records \(Date.now.formatted(date: .omitted, time: .shortened))\(CheckInLocation.shared.allowed ? " with your location" : ""). Only dispatch can change it after.")
         }
         .alert(
             missingPaperwork.map { "No \($0.kind.label) yet" } ?? "",
@@ -161,9 +204,11 @@ struct LoadScreen: View {
                 }
             }
             ForEach(load.stops) { stop in
-                let arrived = stop.arrivedAt ?? pending.first { $0.stopID == stop.id && $0.event == .arrived }?.tappedAt
-                let departed = stop.departedAt ?? pending.first { $0.stopID == stop.id && $0.event == .departed }?.tappedAt
-                let waiting = pending.contains { $0.stopID == stop.id }
+                let arrivedTap = pending.first { $0.stopID == stop.id && $0.event == .arrived }
+                let departedTap = pending.first { $0.stopID == stop.id && $0.event == .departed }
+                let arrived = stop.arrivedAt ?? arrivedTap?.tappedAt
+                let departed = stop.departedAt ?? departedTap?.tappedAt
+                let reading = odometerReading(stop, arrivedTap: arrivedTap, departedTap: departedTap)
                 let isNext = load.canEdit && stop.id == next?.id
 
                 Section {
@@ -179,14 +224,18 @@ struct LoadScreen: View {
                         LabeledContent("Phone") { Link(phone, destination: url) }
                     }
                     if let notes = stop.notes { Text(notes).foregroundStyle(.secondary) }
-                    LabeledContent("Arrived", value: arrived?.formatted(date: .omitted, time: .shortened) ?? "—")
-                    LabeledContent("Departed", value: departed?.formatted(date: .omitted, time: .shortened) ?? "—")
-                    if let reading = stop.departedOdometer ?? stop.arrivedOdometer {
-                        LabeledContent("Odometer", value: "\(reading.formatted()) mi")
+                    LabeledContent("Arrived") {
+                        checkInValue(arrived?.formatted(date: .omitted, time: .shortened) ?? "—",
+                                     unsent: stop.arrivedAt == nil && isUnsent(arrivedTap))
                     }
-                    if waiting {
-                        Label("Saved on this phone. Sends when you have signal.", systemImage: "icloud.and.arrow.up")
-                            .foregroundStyle(.orange)
+                    LabeledContent("Departed") {
+                        checkInValue(departed?.formatted(date: .omitted, time: .shortened) ?? "—",
+                                     unsent: stop.departedAt == nil && isUnsent(departedTap))
+                    }
+                    if let reading {
+                        LabeledContent("Odometer") {
+                            checkInValue("\(reading.miles.formatted()) mi", unsent: reading.unsent)
+                        }
                     }
                 } header: {
                     // The next stop's header is in the tint color.
@@ -633,8 +682,56 @@ struct LoadScreen: View {
             event: event,
             place: stop.facility ?? stop.location,
             asksOdometer: (event == .arrived && stop.position == load.stops.first?.position)
-                || (event == .departed && stop.position == load.stops.last?.position)
+                || (event == .departed && stop.position == load.stops.last?.position),
+            minimumOdometer: minimumOdometer(load)
         )
+    }
+
+    /// The lowest reading a new check-in may have: the truck's last one before
+    /// this load, or the highest already taken on it (readings only go up, and
+    /// the next one asked for is always later on the load).
+    private func minimumOdometer(_ load: LoadDetail) -> Int? {
+        let taken = load.stops.flatMap { [$0.arrivedOdometer, $0.departedOdometer] }
+            + queue.checkIns(for: load.id).map(\.odometer)
+        return ([load.truckOdometer] + taken).compactMap { $0 }.max()
+    }
+
+    /// A typed reading below the minimum. Empty is fine: it's optional.
+    private func isTooLow(_ text: String, for request: CheckInRequest) -> Bool {
+        guard request.asksOdometer, let minimum = request.minimumOdometer,
+              let reading = Int(text.filter(\.isNumber)) else { return false }
+        return reading < minimum
+    }
+
+    /// A check-in the phone tried to send and couldn't. One still going out
+    /// right after the tap isn't, so it doesn't flash as unsent.
+    private func isUnsent(_ tap: PendingCheckIn?) -> Bool {
+        tap.map { queue.unsent.contains($0.id) } ?? false
+    }
+
+    /// The stop's odometer: the departure's if there is one, else the
+    /// arrival's, counting readings still on this phone.
+    private func odometerReading(
+        _ stop: LoadDetail.Stop, arrivedTap: PendingCheckIn?, departedTap: PendingCheckIn?
+    ) -> (miles: Int, unsent: Bool)? {
+        if let miles = stop.departedOdometer { return (miles, false) }
+        if let miles = departedTap?.odometer { return (miles, isUnsent(departedTap)) }
+        if let miles = stop.arrivedOdometer { return (miles, false) }
+        if let miles = arrivedTap?.odometer { return (miles, isUnsent(arrivedTap)) }
+        return nil
+    }
+
+    /// A check-in time or reading. One that hasn't reached the office yet is
+    /// orange with a crossed-out cloud beside it; it goes once there's signal.
+    @ViewBuilder
+    private func checkInValue(_ text: String, unsent: Bool) -> some View {
+        if unsent {
+            Text("\(Image(systemName: "icloud.slash")) \(text)")
+                .foregroundStyle(.orange)
+                .accessibilityLabel("\(text), not sent yet")
+        } else {
+            Text(text)
+        }
     }
 
     private func telURL(_ phone: String) -> URL? {
@@ -727,12 +824,13 @@ struct MissingPaperwork {
 /// The check-in the driver is confirming.
 struct CheckInRequest {
     let loadID: UUID
-    /// Other loads of the driver's at the same time as this one, from Trips.
-    var overlaps: [String] = []
     let stopID: UUID
     let event: StopEvent
     let place: String
     let asksOdometer: Bool
+    /// The lowest reading allowed: the truck's last one, or a later one
+    /// already taken on this load. Nil when there's none yet.
+    let minimumOdometer: Int?
 }
 
 /// An expense the driver paid out of pocket: what for, how much, the day,

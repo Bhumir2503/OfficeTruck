@@ -62,6 +62,9 @@ struct LoadDetail: Decodable, Identifiable, Sendable {
     let notes: String?
     let miles: Int?
     let truck: String?
+    /// The truck's last odometer reading before this load, if it has one. A
+    /// new reading can't be lower (the server checks too).
+    let truckOdometer: Int?
     let organization: Organization
     let driverPay: DriverPay?
     let stops: [Stop]
