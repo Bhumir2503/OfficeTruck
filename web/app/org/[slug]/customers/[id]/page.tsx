@@ -12,7 +12,7 @@ import { BrokerForm } from "@/components/brokers/broker-form"
 import { BrokerPaymentHistory } from "@/components/brokers/broker-payment-history"
 import { CustomerGlance } from "@/components/brokers/customer-glance"
 import { CustomerNotes } from "@/components/brokers/customer-notes"
-import { CustomerUpdatesCard } from "@/components/brokers/customer-updates-card"
+import { CustomerAutomationCard } from "@/components/brokers/customer-automation-card"
 import { CustomerStatusMenu } from "@/components/brokers/customer-status-menu"
 import {
   CUSTOMER_TAB_LABELS,
@@ -328,7 +328,7 @@ export default async function BrokerPage({
       getBrokerInvoices(organization.id, broker.id),
       (await createClient())
         .from("organizations")
-        .select("broker_updates")
+        .select("broker_updates, auto_invoice")
         .eq("id", organization.id)
         .maybeSingle(),
     ])
@@ -431,6 +431,7 @@ export default async function BrokerPage({
                       ...broker,
                       notes: null,
                       status_updates: null,
+                      auto_invoice: null,
                       fmcsa: null,
                       updated_at: null,
                     })}
@@ -440,21 +441,59 @@ export default async function BrokerPage({
                     factoring={factoring}
                     factoringHref={factoringHref}
                   />
-                  <CustomerUpdatesCard
+                  <CustomerAutomationCard
                     organizationId={organization.id}
                     brokerId={broker.id}
+                    field="auto_invoice"
+                    title="Automatic invoicing"
+                    description="Once a delivered load's rate con, BOL and POD are in, the invoice is made and the packet emailed. Unpaid invoices get reminders if that's on in Settings."
+                    value={broker.auto_invoice}
+                    companyDefault={org?.auto_invoice ?? false}
+                    whenOn={
+                      broker.factored ? (
+                        "Packets go to your factoring company."
+                      ) : broker.invoice_method === "portal" ? (
+                        "They take invoices through a portal: you'll get a draft to upload."
+                      ) : broker.billing_emails.length ? (
+                        <>Goes to {broker.billing_emails.join(", ")}.</>
+                      ) : (
+                        <span className="text-amber-700 dark:text-amber-300">
+                          No billing email yet: invoices are left as drafts.
+                        </span>
+                      )
+                    }
+                    whenOff="You'll invoice their loads yourself."
+                    settingsHref={`/org/${organization.slug}/settings`}
+                  />
+                  <CustomerAutomationCard
+                    organizationId={organization.id}
+                    brokerId={broker.id}
+                    field="status_updates"
+                    title="Status updates"
+                    description="Emails when a driver arrives at or leaves a stop, and when the load is delivered: the time and where the driver was. Never the rate."
                     value={broker.status_updates}
                     companyDefault={org?.broker_updates ?? false}
-                    recipients={[
-                      ...new Set(
-                        contacts
-                          .filter(
-                            (contact) =>
-                              contact.role === "dispatch" && contact.email
-                          )
-                          .map((contact) => contact.email!.toLowerCase())
-                      ),
-                    ]}
+                    whenOn={(() => {
+                      const recipients = [
+                        ...new Set(
+                          contacts
+                            .filter(
+                              (contact) =>
+                                contact.role === "dispatch" && contact.email
+                            )
+                            .map((contact) => contact.email!.toLowerCase())
+                        ),
+                      ]
+                      return recipients.length ? (
+                        <>Goes to {recipients.join(", ")}.</>
+                      ) : (
+                        <span className="text-amber-700 dark:text-amber-300">
+                          No dispatch contact with an email yet. Updates go to
+                          whoever sent each rate con instead.
+                        </span>
+                      )
+                    })()}
+                    whenOff="They won't get automatic updates."
                     settingsHref={`/org/${organization.slug}/settings`}
                   />
                   <ContactsCard
@@ -525,6 +564,7 @@ const CUSTOMER_TAB_SKELETONS = {
       <FieldsCardSkeleton title="Mailing address" fields={4} />
       <FieldsCardSkeleton title="Billing" fields={4} />
       <FieldsCardSkeleton title="Factoring" fields={1} />
+      <FieldsCardSkeleton title="Automatic invoicing" fields={1} />
       <FieldsCardSkeleton title="Status updates" fields={1} />
     </TabSkeleton>
   ),
