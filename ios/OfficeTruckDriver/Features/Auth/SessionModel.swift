@@ -123,6 +123,10 @@ final class SessionModel {
             return
         }
         #endif
+        // This phone stops getting the signed-out driver's pushes.
+        if let token = PushCenter.shared.token {
+            try? await DriverAPI().removePushToken(token)
+        }
         try? await client.auth.signOut()
         state = .signedOut
     }

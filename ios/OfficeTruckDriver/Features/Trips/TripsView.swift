@@ -12,11 +12,14 @@ struct TripsView: View {
     /// Load number, city or carrier to find a trip by.
     @State private var search = ""
     @State private var searching = false
+    /// The open load, so a tapped push can open one.
+    @State private var path: [UUID] = []
+    private let push = PushCenter.shared
     private let queue = OfflineQueue.shared
     private let api = DriverAPI()
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             Group {
                 switch loads {
                 case .loading:
@@ -101,6 +104,20 @@ struct TripsView: View {
                 }
             }
             .task(id: queue.deliveredCount) { await fetch() }
+            // Notifications: asked once signed in; the token goes to the
+            // server whenever iOS hands over a new one.
+            .task { await push.requestAndRegister() }
+            .onChange(of: push.token, initial: true) { _, token in
+                guard let token else { return }
+                Task { try? await api.registerPushToken(token) }
+            }
+            // A tapped push opens its load (and the list reloads to show it).
+            .onChange(of: push.openLoad, initial: true) { _, id in
+                guard let id else { return }
+                push.openLoad = nil
+                path = [id]
+                Task { await fetch() }
+            }
         }
     }
 

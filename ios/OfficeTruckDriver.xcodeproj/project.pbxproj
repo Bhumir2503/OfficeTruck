@@ -313,6 +313,7 @@
 				DEVELOPMENT_TEAM = HJ38J55HQM;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = OfficeTruckDriver/Resources/Info.plist;
+				CODE_SIGN_ENTITLEMENTS = OfficeTruckDriver/Resources/OfficeTruckDriver.entitlements;
 				INFOPLIST_KEY_CFBundleDisplayName = OfficeTruck;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scan BOLs, PODs and receipts for your loads.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Saves where you are when you check in or out at a stop, so your carrier can show how long you waited (detention).";
@@ -462,6 +463,7 @@
 				DEVELOPMENT_TEAM = HJ38J55HQM;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = OfficeTruckDriver/Resources/Info.plist;
+				CODE_SIGN_ENTITLEMENTS = OfficeTruckDriver/Resources/OfficeTruckDriver.entitlements;
 				INFOPLIST_KEY_CFBundleDisplayName = OfficeTruck;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scan BOLs, PODs and receipts for your loads.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Saves where you are when you check in or out at a stop, so your carrier can show how long you waited (detention).";

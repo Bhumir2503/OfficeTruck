@@ -45,6 +45,7 @@ import {
   tonuSchema,
   type TonuValues,
 } from "@/lib/schemas/load"
+import { notifyLoadDispatched } from "@/lib/push"
 import { createClient } from "@/lib/supabase/server"
 
 export type ActionResult = { error: string } | { ok: true }
@@ -789,8 +790,8 @@ export type DispatchResult =
 
 /**
  * Dispatches a booked load that has its truck and driver: records the load
- * as it was dispatched and moves it to Dispatched. Nothing is sent to the
- * driver; the office tells them.
+ * as it was dispatched and moves it to Dispatched, and pushes a notification
+ * to the driver's phones (when push is set up; see lib/push).
  */
 export async function dispatchLoad(
   organizationId: string,
@@ -808,6 +809,7 @@ export async function dispatchLoad(
     return { error: rpcError(error) }
   }
 
+  await notifyLoadDispatched(supabase, loadId)
   refresh()
   return { ok: true, warning: await overlapWarning(organizationId, loadId) }
 }
@@ -1156,7 +1158,8 @@ export type SaveAssignmentResult =
 /**
  * Saves the truck, driver and miles. A booked load that ends up with a truck
  * and driver is dispatched to them; changing a dispatched load's driver
- * takes the old one off first. Nothing is sent to either driver.
+ * takes the old one off first. The driver it's dispatched to gets a push
+ * notification (when push is set up; see lib/push).
  */
 export async function saveAssignment(
   organizationId: string,
@@ -1187,6 +1190,9 @@ export async function saveAssignment(
     }
   }
 
+  if (data.driver_name) {
+    await notifyLoadDispatched(supabase, loadId)
+  }
   refresh()
   return {
     ok: true,
