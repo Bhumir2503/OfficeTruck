@@ -29,6 +29,11 @@ import { RouteMilesField } from "@/components/loads/route-miles-field"
 import { StopsEditor } from "@/components/loads/stops-editor"
 import { TruckSelect } from "@/components/loads/truck-select"
 import { DriverSelect } from "@/components/loads/driver-select"
+import {
+  AssignmentSuggestions,
+  type PlanInput,
+  useAssignmentPlan,
+} from "@/components/loads/assignment-suggestions"
 import { ComplianceWarning } from "@/components/loads/compliance-warning"
 import { useZodForm } from "@/hooks/use-zod-form"
 import type { BrokerOption } from "@/lib/brokers"
@@ -72,6 +77,29 @@ function lastStopDay(form: HTMLFormElement | null) {
     .filter((day) => /^\d{4}-\d{2}-\d{2}$/.test(day))
     .sort()
   return days.at(-1) ?? null
+}
+
+/** What to plan the assignment from: the first pickup and the last stop. */
+function planFrom(form: HTMLFormElement | null): PlanInput | null {
+  const value = (name: string) =>
+    form?.querySelector<HTMLInputElement>(`input[name="${name}"]`)?.value ?? ""
+  const location = value("stops.0.location").trim()
+  const start = value("stops.0.appointment_start")
+  if (!location || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(start)) return null
+  const last = Array.from(
+    form?.querySelectorAll<HTMLInputElement>(
+      'input[name^="stops."][name$=".appointment_start"], input[name^="stops."][name$=".appointment_end"]'
+    ) ?? []
+  )
+    .map((input) => input.value.slice(0, 16))
+    .filter((time) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(time))
+    .sort()
+    .at(-1)
+  return {
+    pickupLocation: location,
+    pickupStart: start.slice(0, 16),
+    deliveryEnd: last ?? null,
+  }
 }
 
 function localToday() {
@@ -131,6 +159,14 @@ export function NewLoadForm({
   // The last stop's day, to warn about a CDL or medical card that runs out
   // before the load is done.
   const [until, setUntil] = useState<string | null>(null)
+  // The pickup and last stop to find the best truck and driver for.
+  const [planInput, setPlanInput] = useState<PlanInput | null>(null)
+  const notePlan = (form: HTMLFormElement | null) => {
+    const next = planFrom(form)
+    setPlanInput((current) =>
+      JSON.stringify(current) === JSON.stringify(next) ? current : next
+    )
+  }
   // The rate con, held here until the load is saved, and a local link to
   // open it while filling in the form.
   const [rateCon, setRateCon] = useState<File | null>(null)
@@ -162,9 +198,13 @@ export function NewLoadForm({
   // Which read is current, so a replaced or removed file's result is ignored.
   const readId = useRef(0)
   const formRef = useRef<HTMLFormElement>(null)
+  const plan = useAssignmentPlan(organizationId, planInput, { delay: 800 })
   // Bumped when stops change, so loaded miles are worked out again.
   const [stopsVersion, setStopsVersion] = useState(0)
-  const stopsChanged = () => setStopsVersion((version) => version + 1)
+  const stopsChanged = () => {
+    setStopsVersion((version) => version + 1)
+    notePlan(formRef.current)
+  }
   /** The first stop in the form: where empty miles end. */
   const firstPickup = () => {
     const field = (name: string) =>
@@ -301,6 +341,7 @@ export function NewLoadForm({
   function update(form: HTMLFormElement | null) {
     revalidate(form)
     setUntil(lastStopDay(form))
+    notePlan(form)
   }
 
   // After a fill remounts the editors, re-check the form with the new values.
@@ -420,6 +461,21 @@ export function NewLoadForm({
               description="Truck and driver can stay empty until the load is dispatched."
               contentClassName="grid gap-5 sm:grid-cols-2"
             >
+              <div className="sm:col-span-2">
+                <AssignmentSuggestions
+                  {...plan}
+                  onRefresh={() => void plan.refresh()}
+                  trucks={trucks}
+                  drivers={drivers}
+                  truckId={truckId}
+                  driverId={driverId}
+                  onUse={(truck, driver) => {
+                    setTruckId(truck)
+                    setDriverId(driver)
+                    setDriverPicked(true)
+                  }}
+                />
+              </div>
               <Field data-invalid={!!errors.truck_id}>
                 <FieldLabel htmlFor="load-truck-id">Truck</FieldLabel>
                 <TruckSelect
@@ -427,6 +483,8 @@ export function NewLoadForm({
                   trucks={trucks}
                   organizationId={organizationId}
                   load={{ pickup: firstPickup }}
+                  value={truckId}
+                  points={plan.plan?.points}
                   until={until}
                   invalid={!!errors.truck_id}
                   onPick={(truck) => {
@@ -457,6 +515,7 @@ export function NewLoadForm({
                   id="load-driver-id"
                   drivers={drivers}
                   until={until}
+                  availability={plan.plan?.drivers}
                   value={driverId}
                   onValueChange={(value) => {
                     setDriverId(value)

@@ -190,12 +190,15 @@ export function unflatten(value: unknown) {
   return out
 }
 
-function required(label: string, max: number) {
-  return z
-    .string()
-    .trim()
-    .min(1, `Enter ${label}.`)
-    .max(max, `Must be ${max} characters or fewer.`)
+function required(label: string, max: number, missing?: string) {
+  return (
+    z
+      // Missing altogether (a picker left empty) reads like a blank one.
+      .string({ error: missing ?? `Enter ${label}.` })
+      .trim()
+      .min(1, `Enter ${label}.`)
+      .max(max, `Must be ${max} characters or fewer.`)
+  )
 }
 
 /** Trims a text field and turns a blank one into null. */
@@ -331,7 +334,7 @@ export type LoadAssignmentValues = z.output<typeof loadAssignmentSchema>
 // sent the rate con. Shared by New Load and the load page.
 const brokerFields = {
   broker_id: id("Choose a broker."),
-  broker_name: required("the broker", 120),
+  broker_name: required("the broker", 120, "Choose a broker."),
   rate_con_from: z.preprocess(
     (value) =>
       typeof value === "string" && value.trim() !== ""

@@ -1,5 +1,6 @@
 "use server"
 
+import { type AssignmentPlan, assignmentPlan } from "@/lib/assignment-plan"
 import { refresh } from "next/cache"
 
 import { isStale } from "@/lib/broker-format"
@@ -518,6 +519,46 @@ export async function getTruckStartingPoints(
     deliveryEnd = (load.delivery_end ?? load.delivery_start) as string
   }
   return truckStartingPoints({
+    organizationId,
+    pickupLocation,
+    pickupStart,
+    deliveryEnd,
+    excludeLoadId: input.loadId,
+  })
+}
+
+/**
+ * Who should run a load: the best truck and driver pairs, with where every
+ * truck and driver will be. A saved load (`loadId`) uses its saved stops;
+ * New Load sends its first pickup and last stop from the form.
+ */
+export async function getAssignmentPlan(
+  organizationId: string,
+  input: {
+    loadId?: string
+    pickupLocation?: string
+    pickupStart?: string | null
+    deliveryEnd?: string | null
+  }
+): Promise<AssignmentPlan | null> {
+  if (!(await isMember(organizationId))) return null
+  let pickupLocation = String(input.pickupLocation ?? "").slice(0, 200)
+  let pickupStart = input.pickupStart ? String(input.pickupStart) : null
+  let deliveryEnd = input.deliveryEnd ? String(input.deliveryEnd) : null
+  if (input.loadId) {
+    const supabase = await createClient()
+    const { data: load } = await supabase
+      .from("loads")
+      .select("pickup_location, pickup_start, delivery_start, delivery_end")
+      .eq("organization_id", organizationId)
+      .eq("id", input.loadId)
+      .maybeSingle()
+    if (!load) return null
+    pickupLocation = load.pickup_location as string
+    pickupStart = load.pickup_start as string
+    deliveryEnd = (load.delivery_end ?? load.delivery_start) as string
+  }
+  return assignmentPlan({
     organizationId,
     pickupLocation,
     pickupStart,

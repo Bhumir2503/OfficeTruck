@@ -112,8 +112,12 @@ export type TruckStartingPoint = {
   freeAt: string | null
   /** Empty miles to the pickup; null when they couldn't be worked out. */
   emptyMiles: number | null
+  /** Driving time for those miles, in hours; null when not known. */
+  emptyHours: number | null
   /** Another scheduled load on this truck at the same time, if any. */
   busyWith: string | null
+  /** The load it's hauling right now, if any. */
+  inTransitWith: string | null
 }
 
 /**
@@ -199,6 +203,9 @@ export async function truckStartingPoints({
           )
         : null,
       busyWith: busy ? (busy.reference as string) : null,
+      inTransitWith:
+        (mine.find((load) => load.status === "loaded")?.reference as
+          string | undefined) ?? null,
     }
   })
 
@@ -207,27 +214,31 @@ export async function truckStartingPoints({
   const origins = [
     ...new Set(points.map((point) => point.origin).filter(Boolean)),
   ] as string[]
-  const miles = new Map<string, number | null>()
+  const miles = new Map<string, { miles: number; hours: number } | null>()
   await Promise.all(
     origins.map(async (origin) => {
       if (!pickup) return miles.set(origin, null)
       if (origin.trim().toLowerCase() === pickup.toLowerCase()) {
-        return miles.set(origin, 0)
+        return miles.set(origin, { miles: 0, hours: 0 })
       }
       const route = await routeMiles([origin, pickup]).catch(() => null)
-      miles.set(origin, route?.ok ? route.miles : null)
+      miles.set(
+        origin,
+        route?.ok ? { miles: route.miles, hours: route.hours } : null
+      )
     })
   )
 
   return points.map(({ origin, ...point }) => ({
     ...point,
     from: origin ? shortPlace(origin) : null,
-    emptyMiles: origin ? (miles.get(origin) ?? null) : null,
+    emptyMiles: origin ? (miles.get(origin)?.miles ?? null) : null,
+    emptyHours: origin ? (miles.get(origin)?.hours ?? null) : null,
   }))
 }
 
 /** "Kroger DC, 2500 Main St, Dallas, TX 75201" → "Dallas, TX" */
-function shortPlace(address: string) {
+export function shortPlace(address: string) {
   const parts = address
     .split(",")
     .map((part) => part.trim())
