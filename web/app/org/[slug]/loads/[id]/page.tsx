@@ -10,7 +10,10 @@ import { LoadDetailsCard } from "@/components/loads/load-details-card"
 import { LoadExpensesCard } from "@/components/loads/load-expenses-card"
 import { LoadHistoryCard } from "@/components/loads/load-history-card"
 import { LoadSidePanel } from "@/components/loads/load-side-panel"
-import { LoadStatusMenu } from "@/components/loads/load-status-menu"
+import {
+  LoadStatusBadge,
+  LoadStatusMenu,
+} from "@/components/loads/load-status-menu"
 import { LoadStopsCard } from "@/components/loads/load-stops-card"
 import { LOAD_TAB_SKELETONS } from "@/components/loads/loads-skeletons"
 import {
@@ -97,50 +100,54 @@ export default async function LoadPage({
           <ArrowLeft />
           All loads
         </Link>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="text-2xl font-semibold tracking-tight">
+                Load {load.reference}
+              </h2>
+              <LoadStatusBadge
+                status={load.status}
+                label={
+                  load.completed_manually && load.status === "delivered"
+                    ? "Completed"
+                    : undefined
+                }
+              />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {load.broker ? (
+                <Link
+                  href={`/org/${organization.slug}/customers/${load.broker.id}`}
+                  className="hover:underline"
+                >
+                  {load.broker_name}
+                </Link>
+              ) : (
+                (load.broker_name ?? "No broker yet")
+              )}
+            </p>
+          </div>
+          <LoadStatusMenu
+            organizationId={organization.id}
+            load={load}
+            canDelete={canManage(organization)}
+            listHref={base}
+            trigger="button"
+          />
+        </div>
         <PageTabsProvider>
+          <PageTabBar
+            label="Load sections"
+            active={tab}
+            tabs={LOAD_TABS.map((t) => ({
+              key: t,
+              label: LOAD_TAB_LABELS[t],
+              href: loadTabHref(loadHref, t),
+            }))}
+          />
           <div className="grid items-start gap-6 @4xl/main:grid-cols-[minmax(0,1fr)_20rem] @6xl/main:grid-cols-[minmax(0,1fr)_24rem]">
             <div className="flex min-w-0 flex-col gap-6">
-              <LoadDetailsCard
-                organizationId={organization.id}
-                load={load}
-                description={
-                  load.broker ? (
-                    <Link
-                      href={`/org/${organization.slug}/customers/${load.broker.id}`}
-                      className="hover:underline"
-                    >
-                      {load.broker_name}
-                    </Link>
-                  ) : (
-                    load.broker_name
-                  )
-                }
-                statusMenu={
-                  <LoadStatusMenu
-                    organizationId={organization.id}
-                    load={load}
-                    canDelete={canManage(organization)}
-                    listHref={base}
-                  />
-                }
-                notice={
-                  load.status === "cancelled" && load.cancel_reason ? (
-                    <p className="mb-5 rounded-lg bg-muted px-4 py-3 text-sm">
-                      <span className="font-medium">Cancelled:</span>{" "}
-                      {load.cancel_reason}
-                    </p>
-                  ) : null
-                }
-              />
-              <PageTabBar
-                label="Load sections"
-                active={tab}
-                tabs={LOAD_TABS.map((t) => ({
-                  key: t,
-                  label: LOAD_TAB_LABELS[t],
-                  href: loadTabHref(loadHref, t),
-                }))}
-              />
               <PageTabPanel
                 active={tab}
                 className="flex min-w-0 flex-col gap-6"
@@ -148,6 +155,18 @@ export default async function LoadPage({
               >
                 {tab === "trip" && (
                   <>
+                    <LoadDetailsCard
+                      organizationId={organization.id}
+                      load={load}
+                      notice={
+                        load.status === "cancelled" && load.cancel_reason ? (
+                          <p className="mb-5 rounded-lg bg-muted px-4 py-3 text-sm">
+                            <span className="font-medium">Cancelled:</span>{" "}
+                            {load.cancel_reason}
+                          </p>
+                        ) : null
+                      }
+                    />
                     <LoadAssignmentForm
                       // Remount when the assignment changes elsewhere (unassigning), so
                       // the pickers don't keep the old truck and driver.

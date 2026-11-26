@@ -53,9 +53,12 @@ import {
 
 export function LoadStatusBadge({
   status,
+  label,
   className,
 }: {
   status: LoadStatus
+  /** In place of the status's name, e.g. "Completed". */
+  label?: string
   className?: string
 }) {
   return (
@@ -67,7 +70,7 @@ export function LoadStatusBadge({
         className
       )}
     >
-      {LOAD_STATUS_LABELS[status]}
+      {label ?? LOAD_STATUS_LABELS[status]}
     </span>
   )
 }
@@ -275,8 +278,14 @@ export function LoadStatusMenu({
   load,
   canDelete = false,
   listHref,
+  trigger = "badge",
 }: {
   organizationId: string
+  /**
+   * The badge itself opens the menu (the loads list), or a Change status
+   * button beside the badge does (the load page's header).
+   */
+  trigger?: "badge" | "button"
   /** Owners and admins can delete a load entered by mistake. */
   canDelete?: boolean
   /** Where to go once it's deleted: the loads list. */
@@ -377,26 +386,43 @@ export function LoadStatusMenu({
   return (
     <>
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-        <DropdownMenuTrigger
-          disabled={pending || !hasMenu}
-          aria-label={`Status of load ${load.reference}: ${statusLabel}${manual ? ", marked complete by hand" : ""}`}
-          title={
-            manual
-              ? "Marked complete by hand. No POD or last stop time yet."
-              : undefined
-          }
-          className={cn(
-            "inline-flex h-6 items-center gap-1 rounded-4xl pr-1.5 pl-2.5 text-xs font-medium whitespace-nowrap outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-100",
-            STATUS_STYLES[load.status],
-            !hasMenu && "pr-2.5"
-          )}
+        {trigger === "button" ? (
+          hasMenu && (
+            <DropdownMenuTrigger
+              disabled={pending}
+              render={<Button variant="outline" size="sm" className="w-fit" />}
+            >
+              Change status
+              <ChevronDownIcon />
+            </DropdownMenuTrigger>
+          )
+        ) : (
+          <DropdownMenuTrigger
+            disabled={pending || !hasMenu}
+            aria-label={`Status of load ${load.reference}: ${statusLabel}${manual ? ", marked complete by hand" : ""}`}
+            title={
+              manual
+                ? "Marked complete by hand. No POD or last stop time yet."
+                : undefined
+            }
+            className={cn(
+              "inline-flex h-6 items-center gap-1 rounded-4xl pr-1.5 pl-2.5 text-xs font-medium whitespace-nowrap outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-100",
+              STATUS_STYLES[load.status],
+              !hasMenu && "pr-2.5"
+            )}
+          >
+            <span
+              className={cn(isFallenThrough(load.status) && "line-through")}
+            >
+              {statusLabel}
+            </span>
+            {hasMenu && <ChevronDownIcon className="size-3 opacity-70" />}
+          </DropdownMenuTrigger>
+        )}
+        <DropdownMenuContent
+          align={trigger === "button" ? "end" : "start"}
+          className="min-w-52"
         >
-          <span className={cn(isFallenThrough(load.status) && "line-through")}>
-            {statusLabel}
-          </span>
-          {hasMenu && <ChevronDownIcon className="size-3 opacity-70" />}
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="min-w-52">
           {groups.map((group, index) => (
             <DropdownMenuGroup key={index}>
               {index > 0 && <DropdownMenuSeparator />}
