@@ -2,7 +2,16 @@
 
 import { cn } from "cn"
 import { format } from "date-fns"
-import { Clock, Gauge, LogIn, LogOut, Pencil, Timer } from "lucide-react"
+import {
+  Clock,
+  Copy,
+  Gauge,
+  LogIn,
+  LogOut,
+  MapPin,
+  Pencil,
+  Timer,
+} from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
 
@@ -46,6 +55,71 @@ import {
 /** The office can enter times once the load is dispatched. */
 const canEnterTimes = (status: LoadStatus) =>
   status !== "booked" && status !== "cancelled"
+
+/** Where the driver's phone was at a check-in or check-out, if it saved one. */
+function checkInPlace(stop: LoadStop, event: TimeEvent) {
+  const latitude =
+    event === "arrived" ? stop.arrived_latitude : stop.departed_latitude
+  const longitude =
+    event === "arrived" ? stop.arrived_longitude : stop.departed_longitude
+  const accuracy =
+    event === "arrived"
+      ? stop.arrived_location_accuracy_m
+      : stop.departed_location_accuracy_m
+  if (latitude === null || longitude === null) return null
+  return {
+    coordinates: `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`,
+    accuracy: accuracy === null ? null : `±${Math.round(accuracy)} m`,
+    url: `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`,
+  }
+}
+
+// For the broker: the date, time and zone spelled out, so it reads right
+// wherever they are.
+const brokerFormat = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  timeZoneName: "short",
+})
+
+/**
+ * A stop's check-in and check-out as plain text to paste to a broker: when,
+ * where the driver's phone was (with a map link) and the time on site.
+ */
+function brokerSummary(load: { reference: string }, stop: LoadStop) {
+  const line = (event: TimeEvent) => {
+    const at = event === "arrived" ? stop.arrived_at : stop.departed_at
+    const label = event === "arrived" ? "Arrived" : "Departed"
+    if (!at) return `${label}: not yet`
+    const place = checkInPlace(stop, event)
+    const source =
+      event === "arrived" ? stop.arrived_source : stop.departed_source
+    const how =
+      source === "driver"
+        ? place
+          ? ` (driver's phone at ${place.coordinates}${place.accuracy ? `, ${place.accuracy}` : ""}: ${place.url})`
+          : " (checked in by the driver)"
+        : source === "eld"
+          ? " (from the ELD)"
+          : " (entered by dispatch)"
+    return `${label}: ${brokerFormat.format(new Date(at))}${how}`
+  }
+  const onSite = stopDetention(stop, {
+    detention_free_hours: null,
+    detention_rate: null,
+  })
+  return [
+    `Load ${load.reference} · Stop ${stop.position} (${STOP_KIND_LABELS[stop.kind].toLowerCase()})${stop.stop_number ? ` #${stop.stop_number}` : ""}`,
+    [stop.facility, stop.location].filter(Boolean).join(", "),
+    `Appointment: ${formatStopWindow(stop.appointment_start, stop.appointment_end, stop.appointment_type)}`,
+    line("arrived"),
+    line("departed"),
+    ...(onSite ? [`Time on site: ${formatDuration(onSite.onSite)}`] : []),
+  ].join("\n")
+}
 
 const SOURCE_LABELS: Record<StopTimeSource, string> = {
   driver: "Driver",
@@ -228,6 +302,7 @@ function StopTime({
   const note = saved === OFFICE_NOTE ? null : saved
   const Icon = event === "arrived" ? LogIn : LogOut
   const word = event === "arrived" ? "In" : "Out"
+  const place = checkInPlace(stop, event)
 
   if (at) {
     return (
@@ -263,6 +338,19 @@ function StopTime({
           <span className="max-w-64 truncate text-xs text-muted-foreground">
             {note}
           </span>
+        )}
+        {place && (
+          <a
+            href={place.url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            title={place.coordinates}
+          >
+            <MapPin className="size-3" />
+            Driver&apos;s location
+            {place.accuracy && <span>· {place.accuracy}</span>}
+          </a>
         )}
       </div>
     )
@@ -507,7 +595,12 @@ export function LoadStopsCard({
   billedNotes: string[]
   load: Pick<
     Load,
-    "id" | "status" | "detention_free_hours" | "detention_rate" | "miles"
+    | "id"
+    | "reference"
+    | "status"
+    | "detention_free_hours"
+    | "detention_rate"
+    | "miles"
   >
   stops: LoadStop[]
 }) {
@@ -539,6 +632,17 @@ export function LoadStopsCard({
   function enter(stop: LoadStop, event: TimeEvent) {
     setEntering({ stop, event })
     setTimeOpen(true)
+  }
+
+  async function copyForBroker(stop: LoadStop) {
+    try {
+      await navigator.clipboard.writeText(brokerSummary(load, stop))
+      toast.success(`Stop ${stop.position} copied. Paste it to the broker.`)
+    } catch {
+      toast.error(
+        "It couldn't be copied. Check the browser allows the clipboard."
+      )
+    }
   }
 
   async function billDetention(stop: LoadStop, hours: number, amount: number) {
@@ -690,6 +794,17 @@ export function LoadStopsCard({
                     />
                   )}
                 </div>
+                {stop.arrived_at && (
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    className="self-start sm:self-end"
+                    onClick={() => copyForBroker(stop)}
+                  >
+                    <Copy />
+                    Copy for broker
+                  </Button>
+                )}
                 {detention && (
                   <div className="flex flex-wrap items-center gap-2 text-muted-foreground sm:justify-end">
                     <Timer className="size-3.5" />
