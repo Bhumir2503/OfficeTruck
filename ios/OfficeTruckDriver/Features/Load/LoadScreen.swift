@@ -28,8 +28,6 @@ struct LoadScreen: View {
     @State private var addingExpense = false
     @State private var showingInfo = false
     @State private var choosingOtherPaperwork = false
-    /// The BOL or POD whose View / Upload again choices are showing.
-    @State private var paperworkChoices: DocumentKind?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     private let queue = OfflineQueue.shared
     private let api = DriverAPI()
@@ -327,9 +325,9 @@ struct LoadScreen: View {
     }
 
     /// The load's paperwork: one row each for the BOL and POD the load
-    /// needs, then anything else (lumper receipts and the like). A BOL or POD
-    /// not added yet is tapped to add it; one that's in has a checkmark and
-    /// is tapped to view it or upload it again.
+    /// needs, then anything else (lumper receipts and the like). A missing
+    /// BOL or POD is tapped to add it; one that's in has a checkmark, opens
+    /// on a tap, and swipes left to View, Upload again or Remove.
     @ViewBuilder
     private func paperwork(_ load: LoadDetail, next: LoadDetail.Stop?, pending: [PendingCheckIn]) -> some View {
         let waitingDocuments = queue.documents(for: load.id)
@@ -343,9 +341,17 @@ struct LoadScreen: View {
                 let neededNow = !hasIt && next.map {
                     $0.isPickup == (kind == .bol) && arrivedTime($0, pending: pending) != nil
                 } == true
+                // The newest copy: what View opens and Remove takes away.
+                let view = {
+                    if let doc = waiting.last {
+                        previewURL = OfflineQueue.fileURL(for: doc)
+                    } else if let doc = added.last {
+                        Task { await preview(bucket: "load-documents", path: doc.path, name: doc.fileName) }
+                    }
+                }
 
                 Button {
-                    if hasIt { paperworkChoices = kind } else if load.canEdit { addKind = kind }
+                    if hasIt { view() } else if load.canEdit { addKind = kind }
                 } label: {
                     LabeledContent {
                         if !waiting.isEmpty {
@@ -360,7 +366,7 @@ struct LoadScreen: View {
                         }
                     } label: {
                         Text(kind.label).foregroundStyle(.primary)
-                        Text(added.last.map { "Added \($0.createdAt.formatted(date: .abbreviated, time: .shortened))" }
+                        Text(added.last.map { "Added \($0.createdAt.formatted(.dateTime.month().day().hour().minute()))" }
                              ?? (kind == .bol ? "Signed at pickup" : "Signed at delivery"))
                             .foregroundStyle(neededNow ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
                     }
@@ -369,14 +375,35 @@ struct LoadScreen: View {
                 // is in the app's color.
                 .tint(.primary)
                 .disabled(!hasIt && !load.canEdit)
+                // No full swipe, so a long swipe can't remove it by accident.
+                .swipeActions(allowsFullSwipe: false) {
+                    if hasIt {
+                        if load.canEdit {
+                            if let doc = waiting.last {
+                                Button("Stop sending", systemImage: "xmark", role: .destructive) {
+                                    if !queue.cancelDocument(doc.id) {
+                                        actionError = "It's sending right now. Remove it once it's sent."
+                                    }
+                                }
+                            } else if let doc = added.last, doc.mine {
+                                Button("Remove", systemImage: "trash", role: .destructive) { removing = doc }
+                            }
+                            Button("Upload again", systemImage: "arrow.clockwise") { addKind = kind }
+                                .tint(.orange)
+                        }
+                        Button("View", systemImage: "eye", action: view)
+                            .tint(.blue)
+                    }
+                }
             }
 
             // Everything else: lumper receipts, other papers, the rate
             // confirmation when the driver may see it.
             ForEach(load.documents.filter { $0.kind != "bol" && $0.kind != "pod" }) { doc in
-                Button {
+                let view = {
                     Task { await preview(bucket: "load-documents", path: doc.path, name: doc.fileName) }
-                } label: {
+                }
+                Button { _ = view() } label: {
                     LabeledContent {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.title2)
@@ -384,15 +411,23 @@ struct LoadScreen: View {
                             .accessibilityLabel("Added")
                     } label: {
                         Text(doc.kind.documentLabel)
-                        Text("Added \(doc.createdAt.formatted(date: .abbreviated, time: .shortened))")
+                        Text("Added \(doc.createdAt.formatted(.dateTime.month().day().hour().minute()))")
                             .foregroundStyle(.secondary)
                     }
                 }
                 .tint(.primary)
-                .swipeActions {
-                    if doc.mine && load.canEdit {
-                        Button("Remove", role: .destructive) { removing = doc }
+                .swipeActions(allowsFullSwipe: false) {
+                    if load.canEdit {
+                        if doc.mine {
+                            Button("Remove", systemImage: "trash", role: .destructive) { removing = doc }
+                        }
+                        if let kind = DocumentKind(rawValue: doc.kind) {
+                            Button("Upload again", systemImage: "arrow.clockwise") { addKind = kind }
+                                .tint(.orange)
+                        }
                     }
+                    Button("View", systemImage: "eye") { _ = view() }
+                        .tint(.blue)
                 }
             }
             ForEach(waitingDocuments.filter { $0.kind != .bol && $0.kind != .pod }) { doc in
@@ -405,12 +440,14 @@ struct LoadScreen: View {
                         Text(doc.kind.label).foregroundStyle(.primary)
                     }
                 }
-                .swipeActions {
-                    Button("Cancel", role: .destructive) {
+                .swipeActions(allowsFullSwipe: false) {
+                    Button("Stop sending", systemImage: "xmark", role: .destructive) {
                         if !queue.cancelDocument(doc.id) {
                             actionError = "It's sending right now. Remove it once it's sent."
                         }
                     }
+                    Button("View", systemImage: "eye") { previewURL = OfflineQueue.fileURL(for: doc) }
+                        .tint(.blue)
                 }
             }
 
@@ -428,45 +465,7 @@ struct LoadScreen: View {
         } header: {
             Text("Paperwork")
         } footer: {
-            Text("Tap a BOL or POD to view it or upload it again. Swipe left on other paperwork to remove it.")
-        }
-        .confirmationDialog(
-            paperworkChoices?.label ?? "",
-            isPresented: Binding(get: { paperworkChoices != nil }, set: { if !$0 { paperworkChoices = nil } }),
-            titleVisibility: .visible,
-            presenting: paperworkChoices
-        ) { kind in
-            let added = load.documents.filter { $0.kind == kind.rawValue }
-            let waiting = waitingDocuments.filter { $0.kind == kind }
-            ForEach(added) { doc in
-                Button(added.count > 1 ? "View \(doc.createdAt.formatted(date: .abbreviated, time: .shortened))" : "View") {
-                    Task { await preview(bucket: "load-documents", path: doc.path, name: doc.fileName) }
-                }
-            }
-            ForEach(waiting) { doc in
-                Button(waiting.count > 1 || !added.isEmpty ? "View the one sending" : "View") {
-                    previewURL = OfflineQueue.fileURL(for: doc)
-                }
-            }
-            if load.canEdit {
-                Button("Upload again") {
-                    // Waits for this dialog to close before opening the next.
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(350))
-                        addKind = kind
-                    }
-                }
-                if let doc = added.last, doc.mine {
-                    Button("Remove", role: .destructive) { removing = doc }
-                }
-                ForEach(waiting) { doc in
-                    Button("Stop sending", role: .destructive) {
-                        if !queue.cancelDocument(doc.id) {
-                            actionError = "It's sending right now. Remove it once it's sent."
-                        }
-                    }
-                }
-            }
+            Text("Swipe left on paperwork to view it, upload it again or remove it.")
         }
     }
 
