@@ -91,6 +91,8 @@ struct LoadDetail: Decodable, Identifiable, Sendable {
     /// The truck's last odometer reading before this load, if it has one. A
     /// new reading can't be lower (the server checks too).
     let truckOdometer: Int?
+    /// Hours a stop is free before detention starts; nil when not set.
+    let detentionFreeHours: Double?
     /// The truck on the load, for the info sheet.
     let truckDetails: Truck?
     let organization: Organization
@@ -129,9 +131,32 @@ struct LoadDetail: Decodable, Identifiable, Sendable {
         }
     }
 
+    /// The driver's pay on this load (locked when they were assigned).
+    /// Worked out like the web (`web/lib/driver-format.ts`): per mile times
+    /// the load's miles, or the flat amount. A percent is of the load's rate,
+    /// which the app never reads, so it has no dollar figure.
     struct DriverPay: Decodable, Sendable {
         let type: String
         let rate: Double
+
+        /// "$0.55 / mile", "25% of the load", "$500.00 / load".
+        var label: String {
+            switch type {
+            case "per_mile": "\(rate.formatted(.currency(code: "USD").precision(.fractionLength(2...3)))) / mile"
+            case "percent": "\(rate.formatted())% of the load"
+            default: "\(rate.dollars) / load"
+            }
+        }
+
+        /// What the load pays the driver, before deductions; nil for a
+        /// percent, or per mile without miles.
+        func amount(miles: Int?) -> Double? {
+            switch type {
+            case "per_mile": miles.map { rate * Double($0) }
+            case "flat": rate
+            default: nil
+            }
+        }
     }
 
     struct Stop: Decodable, Identifiable, Sendable {
