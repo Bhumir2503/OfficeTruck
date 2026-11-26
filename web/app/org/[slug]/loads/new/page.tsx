@@ -9,17 +9,25 @@ import { getBrokerOptions } from "@/lib/brokers"
 import { getDriverOptions } from "@/lib/drivers"
 import { getFactoringCompany } from "@/lib/factoring"
 import { getOrganization } from "@/lib/organizations"
+import { getInboxItem } from "@/lib/rate-con-inbox-data"
 import { getTruckOptions } from "@/lib/trucks"
 
 export const metadata: Metadata = { title: "New load" }
 
 export default async function NewLoadPage({
   params,
+  searchParams,
 }: PageProps<"/org/[slug]/loads/new">) {
   const organization = await getOrganization((await params).slug)
   if (!organization) {
     notFound()
   }
+  // Starting from a rate con that came in by email.
+  const { inbox } = await searchParams
+  const item =
+    typeof inbox === "string"
+      ? await getInboxItem(organization.id, inbox)
+      : null
 
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
@@ -46,6 +54,18 @@ export default async function NewLoadPage({
           brokersHref={`/org/${organization.slug}/customers`}
           factoringName={
             (await getFactoringCompany(organization.id))?.name ?? null
+          }
+          fromInbox={
+            item && item.status !== "used"
+              ? {
+                  id: item.id,
+                  url: item.url,
+                  fileName: item.file_name,
+                  contentType: item.content_type,
+                  extraction: item.extraction,
+                  sender: item.sender_email,
+                }
+              : null
           }
         />
       </div>

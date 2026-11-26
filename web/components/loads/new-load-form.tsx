@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
 import { createLoad } from "@/app/org/[slug]/loads/actions"
+import { markInboxUsed } from "@/app/org/[slug]/loads/inbox-actions"
 import { readRateConFile } from "@/app/org/[slug]/loads/rate-con-actions"
 import { SettingsCard } from "@/components/settings/settings-card"
 import { Badge } from "@/components/ui/badge"
@@ -47,6 +48,7 @@ import {
 import type { TruckOption } from "@/lib/trucks"
 import {
   type FilledField,
+  type RateConExtraction,
   type RateConFill,
   rateConToForm,
 } from "@/lib/rate-con-format"
@@ -137,6 +139,7 @@ export function NewLoadForm({
   brokers,
   brokersHref,
   factoringName,
+  fromInbox = null,
 }: {
   organizationId: string
   /** /org/<slug>/loads */
@@ -151,6 +154,16 @@ export function NewLoadForm({
   /** /org/<slug>/customers */
   brokersHref: string
   factoringName: string | null
+  /** A rate con from the email inbox to start from: attached and read. */
+  fromInbox?: {
+    id: string
+    url: string | null
+    fileName: string
+    contentType: string
+    extraction: RateConExtraction | null
+    /** Who emailed it, for the sender check. */
+    sender: string | null
+  } | null
 }) {
   const router = useRouter()
   const [driverId, setDriverId] = useState<string | null>(null)
@@ -304,6 +317,48 @@ export function NewLoadForm({
     setRateCon(null)
   }
 
+  // From the inbox: attach its file, and fill the form from what was
+  // already read, as if the person had dropped it here and pressed Fill.
+  const startedFromInbox = useRef(false)
+  useEffect(() => {
+    if (!fromInbox || startedFromInbox.current) return
+    startedFromInbox.current = true
+    void (async () => {
+      let file: File | null = null
+      if (fromInbox.url) {
+        try {
+          const response = await fetch(fromInbox.url)
+          if (response.ok) {
+            file = new File([await response.blob()], fromInbox.fileName, {
+              type: fromInbox.contentType,
+            })
+            setRateCon(file)
+          }
+        } catch {
+          // The form still fills in; the rate con can be attached by hand.
+        }
+      }
+      if (fromInbox.extraction) {
+        const next = rateConToForm(
+          {
+            ...fromInbox.extraction,
+            // Who emailed it is who the broker check is about.
+            sender_email: fromInbox.sender ?? fromInbox.extraction.sender_email,
+          },
+          brokers
+        )
+        if (next.filled.length) {
+          setFill(next)
+          setFillKey((key) => key + 1)
+          stopsChanged()
+          if (file) setFilledFrom(file)
+        }
+      }
+    })()
+    // Once, on arrival from the inbox.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const { errors, formError, pending, formProps, revalidate } = useZodForm(
     loadSchema,
     async (values) => {
@@ -331,6 +386,9 @@ export function NewLoadForm({
       }
       if (result.warning) {
         toast.warning(result.warning)
+      }
+      if (fromInbox) {
+        await markInboxUsed(organizationId, fromInbox.id, result.id)
       }
       router.push(`${base}/${result.id}`)
     }

@@ -1,6 +1,6 @@
 "use client"
 
-import { ArrowRight, PackagePlus, Search } from "lucide-react"
+import { ArrowRight, Inbox, PackagePlus, Search } from "lucide-react"
 import Link from "next/link"
 import { useMemo, useState } from "react"
 
@@ -41,6 +41,7 @@ export function LoadsTable({
   payments,
   context,
   base,
+  inboxWaiting = 0,
 }: {
   loads: Load[]
   /** What the row actions need: the org, drivers, trucks. */
@@ -49,7 +50,23 @@ export function LoadsTable({
   payments: Record<string, PaymentDue>
   /** /org/<slug>/loads */
   base: string
+  /** Rate cons in the email inbox waiting to become loads. */
+  inboxWaiting?: number
 }) {
+  const inboxLink = (
+    <Link
+      href={`${base}/inbox`}
+      className={buttonVariants({ variant: "outline", size: "sm" })}
+    >
+      <Inbox />
+      Rate con inbox
+      {inboxWaiting > 0 && (
+        <span className="rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground tabular-nums">
+          {inboxWaiting}
+        </span>
+      )}
+    </Link>
+  )
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState<Filter>("all")
 
@@ -80,7 +97,8 @@ export function LoadsTable({
           Add your first load from its rate confirmation, and track it from
           booked to invoiced here.
         </SettingsEmptyState>
-        <div className="mt-4 flex justify-center">
+        <div className="mt-4 flex justify-center gap-2">
+          {inboxLink}
           <Link href={`${base}/new`} className={buttonVariants()}>
             <PackagePlus />
             New load
@@ -97,10 +115,13 @@ export function LoadsTable({
       title="All loads"
       description="Search by load number or broker, or filter by status."
       action={
-        <Link href={`${base}/new`} className={buttonVariants({ size: "sm" })}>
-          <PackagePlus />
-          New load
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          {inboxLink}
+          <Link href={`${base}/new`} className={buttonVariants({ size: "sm" })}>
+            <PackagePlus />
+            New load
+          </Link>
+        </div>
       }
       contentClassName="@container px-0 pb-0"
       footer={
