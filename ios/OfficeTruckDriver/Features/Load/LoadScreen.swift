@@ -3,9 +3,10 @@ import QuickLook
 import Supabase
 import SwiftUI
 
-/// One load: its stops, details and paperwork. On a load that's on the road,
-/// Check in / Check out for the next stop is pinned to the bottom, and
-/// paperwork is added from the toolbar.
+/// One load: its stops, details, a paperwork checklist and the driver's
+/// expenses. On a load that's on the road, Check in / Check out for the
+/// next stop is pinned to the bottom; paperwork and expenses are added from
+/// their own sections.
 struct LoadScreen: View {
     let loadID: UUID
 
@@ -24,6 +25,9 @@ struct LoadScreen: View {
     @State private var previewURL: URL?
     @State private var removing: LoadDetail.LoadDocument?
     @State private var actionError: String?
+    @State private var addingExpense = false
+    @State private var choosingOtherPaperwork = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     private let queue = OfflineQueue.shared
     private let api = DriverAPI()
 
@@ -178,14 +182,12 @@ struct LoadScreen: View {
                 Section("Notes") { Text(notes) }
             }
 
-            paperwork(load)
+            paperwork(load, next: next, pending: pending)
+            expenses(load)
         }
         .refreshable { await fetch() }
         .navigationTitle("Load \(load.reference)")
         .navigationBarTitleDisplayMode(.inline)
-        // Toolbar: a More menu (calls, directions, the stop's number), and
-        // add paperwork with what the next stop usually needs first (BOL at
-        // a pickup, POD at a delivery).
         .toolbar {
             // More: calls, directions and the stop's number, the things a
             // driver reaches for at a stop.
@@ -220,18 +222,6 @@ struct LoadScreen: View {
                     }
                 } label: {
                     Label("More", systemImage: "ellipsis")
-                }
-            }
-            if load.canEdit {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        let first: DocumentKind = (next ?? load.stops.last)?.isPickup == true ? .bol : .pod
-                        ForEach([first] + DocumentKind.allCases.filter { $0 != first }) { kind in
-                            Button(kind.label) { addKind = kind }
-                        }
-                    } label: {
-                        Label("Add paperwork", systemImage: "doc.badge.plus")
-                    }
                 }
             }
         }
@@ -296,6 +286,9 @@ struct LoadScreen: View {
             )
             .ignoresSafeArea()
         }
+        .sheet(isPresented: $addingExpense) {
+            AddExpenseView(load: load)
+        }
         .photosPicker(isPresented: $choosingPhotos, selection: $photoItems, maxSelectionCount: 10, matching: .images)
         .onChange(of: photoItems) { _, items in
             guard !items.isEmpty, let kind = photoKind else { return }
@@ -313,18 +306,96 @@ struct LoadScreen: View {
         }
     }
 
-    /// The load's paperwork. Tap to open; swipe to remove what the driver
-    /// added while the load is on the road, or cancel what hasn't gone yet.
+    /// The load's paperwork as a checklist: the BOL and POD the load needs,
+    /// each with its own Add button, then anything else (lumper receipts and
+    /// the like). Tap a copy to open it; swipe to remove one the driver
+    /// added while the load is on the road, or cancel one not sent yet.
     @ViewBuilder
-    private func paperwork(_ load: LoadDetail) -> some View {
-        Section("Paperwork") {
-            let waitingDocuments = queue.documents(for: load.id)
-            if load.documents.isEmpty && waitingDocuments.isEmpty {
-                Text("No paperwork yet").foregroundStyle(.secondary)
+    private func paperwork(_ load: LoadDetail, next: LoadDetail.Stop?, pending: [PendingCheckIn]) -> some View {
+        let waitingDocuments = queue.documents(for: load.id)
+
+        Section {
+            ForEach([DocumentKind.bol, .pod]) { kind in
+                let added = load.documents.filter { $0.kind == kind.rawValue }
+                let waiting = waitingDocuments.filter { $0.kind == kind }
+                let count = added.count + waiting.count
+                // Needed now: at the stop that hands it over, once checked in.
+                let neededNow = count == 0 && next.map {
+                    $0.isPickup == (kind == .bol) && arrivedTime($0, pending: pending) != nil
+                } == true
+
+                // Side by side; the Add button goes under the text at the
+                // largest text sizes.
+                let layout = dynamicTypeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+                    : AnyLayout(HStackLayout())
+                layout {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(kind.label).font(.headline)
+                            Text(count > 0
+                                 ? (count == 1 ? "Added" : "\(count) added")
+                                 : (kind == .bol ? "Signed at pickup" : "Signed at delivery"))
+                                .font(.subheadline)
+                                .foregroundStyle(neededNow ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                        }
+                    } icon: {
+                        Image(systemName: count > 0 ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(count > 0 ? AnyShapeStyle(.green) : AnyShapeStyle(.secondary))
+                    }
+                    .accessibilityElement(children: .combine)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    if load.canEdit {
+                        if neededNow {
+                            Button("Add") { addKind = kind }
+                                .buttonStyle(.borderedProminent)
+                                .controlSize(.large)
+                                .accessibilityLabel("Add \(kind.label)")
+                        } else {
+                            Button("Add") { addKind = kind }
+                                .buttonStyle(.bordered)
+                                .controlSize(.large)
+                                .accessibilityLabel("Add \(kind.label)")
+                        }
+                    }
+                }
+
+                ForEach(added) { doc in
+                    Button {
+                        Task { await preview(bucket: "load-documents", path: doc.path, name: doc.fileName) }
+                    } label: {
+                        Label("\(kind.label) · \(doc.createdAt.formatted(date: .abbreviated, time: .shortened))", systemImage: "doc.text")
+                            .foregroundStyle(.primary)
+                    }
+                    .swipeActions {
+                        if doc.mine && load.canEdit {
+                            Button("Remove", role: .destructive) { removing = doc }
+                        }
+                    }
+                }
+                ForEach(waiting) { doc in
+                    Button {
+                        previewURL = OfflineQueue.fileURL(for: doc)
+                    } label: {
+                        LabeledContent {
+                            Text("Not sent yet").foregroundStyle(.orange)
+                        } label: {
+                            Label(kind.label, systemImage: "doc.text").foregroundStyle(.primary)
+                        }
+                    }
+                    .swipeActions {
+                        Button("Cancel", role: .destructive) {
+                            if !queue.cancelDocument(doc.id) {
+                                actionError = "It's sending right now. Remove it once it's sent."
+                            }
+                        }
+                    }
+                }
             }
-            // Tap to open. Swipe to remove what the driver added, while
-            // the load is on the road.
-            ForEach(load.documents) { doc in
+
+            // Everything else: lumper receipts, other papers, the rate
+            // confirmation when the driver may see it.
+            ForEach(load.documents.filter { $0.kind != "bol" && $0.kind != "pod" }) { doc in
                 Button {
                     Task { await preview(bucket: "load-documents", path: doc.path, name: doc.fileName) }
                 } label: {
@@ -332,7 +403,7 @@ struct LoadScreen: View {
                         Text(doc.createdAt.formatted(date: .abbreviated, time: .shortened))
                             .foregroundStyle(.secondary)
                     } label: {
-                        Text(doc.kind.documentLabel).foregroundStyle(.primary)
+                        Label(doc.kind.documentLabel, systemImage: "doc.text").foregroundStyle(.primary)
                     }
                 }
                 .swipeActions {
@@ -341,14 +412,14 @@ struct LoadScreen: View {
                     }
                 }
             }
-            ForEach(waitingDocuments) { doc in
+            ForEach(waitingDocuments.filter { $0.kind != .bol && $0.kind != .pod }) { doc in
                 Button {
                     previewURL = OfflineQueue.fileURL(for: doc)
                 } label: {
                     LabeledContent {
                         Text("Not sent yet").foregroundStyle(.orange)
                     } label: {
-                        Text(doc.kind.label).foregroundStyle(.primary)
+                        Label(doc.kind.label, systemImage: "doc.text").foregroundStyle(.primary)
                     }
                 }
                 .swipeActions {
@@ -359,6 +430,108 @@ struct LoadScreen: View {
                     }
                 }
             }
+
+            if load.canEdit {
+                Button {
+                    choosingOtherPaperwork = true
+                } label: {
+                    Label("Add other paperwork", systemImage: "plus.circle.fill")
+                }
+                .confirmationDialog("Add paperwork", isPresented: $choosingOtherPaperwork) {
+                    Button(DocumentKind.lumperReceipt.label) { addKind = .lumperReceipt }
+                    Button("Other paperwork") { addKind = .other }
+                }
+            }
+        } header: {
+            Text("Paperwork")
+        } footer: {
+            Text("Tap one to open it. Swipe left on one you added to remove it.")
+        }
+    }
+
+    /// What the driver paid out of pocket on this load, owed back to them,
+    /// and Add expense. Tap one with a receipt to open it; swipe to cancel
+    /// one not sent yet.
+    @ViewBuilder
+    private func expenses(_ load: LoadDetail) -> some View {
+        let waiting = queue.expenses(for: load.id)
+        let total = load.expenses.reduce(0) { $0 + $1.amount } + waiting.reduce(0) { $0 + $1.amount }
+
+        Section {
+            if load.expenses.isEmpty && waiting.isEmpty && !load.canEdit {
+                Text("No expenses").foregroundStyle(.secondary)
+            }
+            ForEach(load.expenses) { expense in
+                let kind = ExpenseKind(rawValue: expense.kind) ?? .other
+                Button {
+                    if let path = expense.receiptPath {
+                        Task { await preview(bucket: "load-documents", path: path, name: "\(kind.label) receipt") }
+                    }
+                } label: {
+                    LabeledContent {
+                        Text(expense.amount.dollars)
+                            .font(.body.monospacedDigit())
+                            .foregroundStyle(.primary)
+                    } label: {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(kind.label).foregroundStyle(.primary)
+                                Text(([WallClock.day(expense.spentOn)] + [expense.note].compactMap { $0 }
+                                      + (expense.receiptPath != nil ? ["Receipt"] : [])).joined(separator: " · "))
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: kind.systemImage)
+                        }
+                    }
+                }
+                .disabled(expense.receiptPath == nil)
+            }
+            ForEach(waiting) { expense in
+                Button {
+                    if expense.hasReceipt { previewURL = OfflineQueue.receiptURL(for: expense) }
+                } label: {
+                    LabeledContent {
+                        Text(expense.amount.dollars)
+                            .font(.body.monospacedDigit())
+                            .foregroundStyle(.primary)
+                    } label: {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(expense.kind.label).foregroundStyle(.primary)
+                                Text("Not sent yet").font(.subheadline).foregroundStyle(.orange)
+                            }
+                        } icon: {
+                            Image(systemName: expense.kind.systemImage)
+                        }
+                    }
+                }
+                .swipeActions {
+                    Button("Cancel", role: .destructive) {
+                        if !queue.cancelExpense(expense.id) {
+                            actionError = "It's sending right now."
+                        }
+                    }
+                }
+            }
+            if load.expenses.count + waiting.count > 1 {
+                LabeledContent("Total") {
+                    Text(total.dollars).font(.headline.monospacedDigit()).foregroundStyle(.primary)
+                }
+                .font(.headline)
+            }
+            if load.canEdit {
+                Button {
+                    addingExpense = true
+                } label: {
+                    Label("Add expense", systemImage: "plus.circle.fill")
+                }
+            }
+        } header: {
+            Text("Expenses")
+        } footer: {
+            Text("Fuel, tolls, scales and anything else you paid for yourself. The office pays it back on your settlement.")
         }
     }
 
@@ -408,6 +581,16 @@ struct LoadScreen: View {
         return components?.url
     }
 
+    /// When the driver checked in at a stop, counting a tap still queued.
+    private func arrivedTime(_ stop: LoadDetail.Stop, pending: [PendingCheckIn]) -> Date? {
+        stop.arrivedAt ?? pending.first { $0.stopID == stop.id && $0.event == .arrived }?.tappedAt
+    }
+
+    /// When the driver checked out of a stop, counting a tap still queued.
+    private func departedTime(_ stop: LoadDetail.Stop, pending: [PendingCheckIn]) -> Date? {
+        stop.departedAt ?? pending.first { $0.stopID == stop.id && $0.event == .departed }?.tappedAt
+    }
+
     /// The first stop the driver hasn't left yet, counting taps still queued.
     private func nextStop(_ load: LoadDetail, pending: [PendingCheckIn]) -> LoadDetail.Stop? {
         load.stops.first { stop in
@@ -418,7 +601,7 @@ struct LoadScreen: View {
     private func appointment(_ stop: LoadDetail.Stop) -> String {
         switch stop.appointmentType {
         case "tbd": "To be scheduled"
-        case "window": "\(WallClock.format(stop.appointmentStart)) – \(stop.appointmentEnd.map(WallClock.format) ?? "")"
+        case "window": stop.appointmentEnd.map { WallClock.window(stop.appointmentStart, $0) } ?? WallClock.format(stop.appointmentStart)
         default: WallClock.format(stop.appointmentStart)
         }
     }
@@ -478,6 +661,157 @@ struct CheckInRequest {
     let event: StopEvent
     let place: String
     let asksOdometer: Bool
+}
+
+/// An expense the driver paid out of pocket: what for, how much, the day,
+/// and a receipt if they have one. Queued like a scan, so it goes even
+/// with no signal.
+struct AddExpenseView: View {
+    let load: LoadDetail
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var kind: ExpenseKind = .fuel
+    @State private var amountText = ""
+    @State private var spentOn = Date.now
+    @State private var note = ""
+    @State private var pages: [UIImage] = []
+    @State private var scanning = false
+    @State private var choosingPhotos = false
+    @State private var photoItems: [PhotosPickerItem] = []
+    @State private var error: String?
+    @FocusState private var amountFocused: Bool
+    private let queue = OfflineQueue.shared
+
+    /// The amount typed, in dollars and cents; nil until it's a real amount.
+    private var amount: Double? {
+        guard let value = try? Decimal(amountText.replacingOccurrences(of: "$", with: ""), format: .number),
+              value > 0, value <= 99_999_999.99 else { return nil }
+        return (NSDecimalNumber(decimal: value).doubleValue * 100).rounded() / 100
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Picker("Type", selection: $kind) {
+                        ForEach(ExpenseKind.allCases) { kind in
+                            Label(kind.label, systemImage: kind.systemImage).tag(kind)
+                        }
+                    }
+                    LabeledContent("Amount") {
+                        TextField("$0.00", text: $amountText)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .font(.title3.monospacedDigit())
+                            .focused($amountFocused)
+                    }
+                    DatePicker("Paid on", selection: $spentOn, in: ...Date.now, displayedComponents: .date)
+                    TextField("Note (optional)", text: $note, axis: .vertical)
+                        .onChange(of: note) { _, text in
+                            if text.count > 200 { note = String(text.prefix(200)) }
+                        }
+                }
+
+                Section {
+                    if let first = pages.first {
+                        Image(uiImage: first)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: .infinity, maxHeight: 220)
+                            .clipShape(.rect(cornerRadius: 8))
+                            .accessibilityLabel("Receipt")
+                        if pages.count > 1 {
+                            LabeledContent("Pages", value: "\(pages.count)")
+                        }
+                        Button("Remove receipt", role: .destructive) { pages = [] }
+                    } else {
+                        if DocumentScanner.isAvailable {
+                            Button {
+                                scanning = true
+                            } label: {
+                                Label("Scan receipt", systemImage: "doc.viewfinder")
+                            }
+                        }
+                        Button {
+                            choosingPhotos = true
+                        } label: {
+                            Label("Choose from Photos", systemImage: "photo.on.rectangle")
+                        }
+                    }
+                } header: {
+                    Text("Receipt")
+                } footer: {
+                    Text("The office pays it back on your settlement. A receipt helps them approve it.")
+                }
+
+                if let error {
+                    Section {
+                        Label(error, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.red)
+                    }
+                }
+            }
+            .navigationTitle("Add expense")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add", action: add)
+                        .disabled(amount == nil)
+                }
+            }
+            .onAppear { amountFocused = true }
+            .fullScreenCover(isPresented: $scanning) {
+                DocumentScanner(
+                    onScan: { scanned in
+                        pages = scanned
+                        scanning = false
+                    },
+                    onCancel: { scanning = false }
+                )
+                .ignoresSafeArea()
+            }
+            .photosPicker(isPresented: $choosingPhotos, selection: $photoItems, maxSelectionCount: 5, matching: .images)
+            .onChange(of: photoItems) { _, items in
+                guard !items.isEmpty else { return }
+                photoItems = []
+                Task {
+                    var picked: [UIImage] = []
+                    for item in items {
+                        if let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) {
+                            picked.append(image)
+                        }
+                    }
+                    pages = picked
+                }
+            }
+        }
+    }
+
+    private func add() {
+        guard let amount else { return }
+        var receipt: Data?
+        if !pages.isEmpty {
+            guard let pdf = DocumentPDF.make(from: pages) else {
+                error = "That receipt couldn't be read. Take it again."
+                return
+            }
+            receipt = pdf
+        }
+        let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        queue.enqueueExpense(
+            loadID: load.id,
+            organizationID: load.organization.id,
+            kind: kind,
+            amount: amount,
+            spentOn: WallClock.string(from: spentOn),
+            note: trimmed.isEmpty ? nil : trimmed,
+            receipt: receipt
+        )
+        dismiss()
+    }
 }
 
 extension String {

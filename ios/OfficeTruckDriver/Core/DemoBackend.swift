@@ -25,6 +25,25 @@ enum DemoBackend {
     /// Documents added this run.
     nonisolated(unsafe) private static var documents: [PendingDocument] = []
 
+    /// Expenses added this run.
+    nonisolated(unsafe) private static var expenses: [PendingExpense] = []
+
+    static func addExpense(_ expense: PendingExpense) {
+        expenses.append(expense)
+    }
+
+    private static var expensesJSON: String {
+        let rows = expenses.map { e in
+            """
+            {"id": "\(e.id.uuidString.lowercased())", "kind": "\(e.kind.rawValue)", "amount": \(e.amount),
+             "spent_on": "\(e.spentOn)", "note": \(e.note.flatMap { try? JSONEncoder().encode($0) }.flatMap { String(data: $0, encoding: .utf8) } ?? "null"),
+             "receipt_path": \(e.hasReceipt ? "\"\(e.receiptPath)\"" : "null"),
+             "receipt_type": \(e.hasReceipt ? "\"application/pdf\"" : "null")}
+            """
+        }
+        return "[" + rows.joined(separator: ",") + "]"
+    }
+
     /// CDL and medical cards sent this run: kind → expiration date.
     nonisolated(unsafe) private static var sentCards: [CardKind: String] = [:]
     /// DQ items given an upload this run.
@@ -157,7 +176,7 @@ enum DemoBackend {
             "notes": "Dock 4", "arrived_at": \(time(a1)), "departed_at": \(time(d1)),
             "arrived_odometer": \(odometer(a1)), "departed_odometer": \(odometer(d1))}
          ],
-         "documents": \(documentsJSON), "expenses": []}
+         "documents": \(documentsJSON), "expenses": \(expensesJSON)}
         """.utf8)
     }
 
