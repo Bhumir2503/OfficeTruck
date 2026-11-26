@@ -94,13 +94,13 @@ struct TripsView: View {
     }
 
     /// Other loads at the same time as each one, by load.
-    private var overlaps: [UUID: [String]] {
+    private var overlaps: [UUID: [Overlap]] {
         if case .loaded(let trips) = loads { LoadSummary.overlaps(in: trips) } else { [:] }
     }
 
     /// The carrier's name shows only for drivers who drive for more than one.
     /// A load at the same time as another says which, in orange.
-    private func tripRow(_ trip: LoadSummary, showsCarrier: Bool, overlaps: [String]) -> some View {
+    private func tripRow(_ trip: LoadSummary, showsCarrier: Bool, overlaps: [Overlap]) -> some View {
         NavigationLink(value: trip.id) {
             VStack(alignment: .leading) {
                 LabeledContent(trip.reference, value: trip.status.label)
@@ -112,7 +112,7 @@ struct TripsView: View {
                     .foregroundStyle(.secondary)
                 if !overlaps.isEmpty {
                     // Icon inline, so the line stays flush with the ones above.
-                    Text("\(Image(systemName: "exclamationmark.triangle.fill")) Same time as \(overlaps.formatted(.list(type: .and)))")
+                    Text("\(Image(systemName: "exclamationmark.triangle.fill")) \(overlaps.map(\.short).joined(separator: "; "))")
                         .font(.callout)
                         .foregroundStyle(.orange)
                 }

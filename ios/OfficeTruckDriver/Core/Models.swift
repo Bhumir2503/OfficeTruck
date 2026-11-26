@@ -26,24 +26,50 @@ struct LoadSummary: Decodable, Identifiable, Hashable, Sendable {
     var isOnTheRoad: Bool { status.isOnTheRoad }
 
     /// The other loads still to drive whose time on the road overlaps each
-    /// one's: the office's check (`web/lib/dispatch-format.ts`), from the
-    /// first appointment to the end of the last, compared as written.
-    /// The office is warned, not stopped, so the driver hears it too.
-    static func overlaps(in trips: [LoadSummary]) -> [UUID: [String]] {
+    /// one's, with why: the office's check (`web/lib/dispatch-format.ts`),
+    /// from the first appointment to the end of the last, compared as
+    /// written. The office is warned, not stopped, so the driver hears it too.
+    static func overlaps(in trips: [LoadSummary]) -> [UUID: [Overlap]] {
         let scheduled = trips.filter { $0.status == .dispatched || $0.status == .loaded }
-        func window(_ trip: LoadSummary) -> (start: Substring, end: Substring) {
-            (trip.pickupStart.prefix(16), (trip.deliveryEnd ?? trip.deliveryStart).prefix(16))
-        }
-        var result: [UUID: [String]] = [:]
+        var result: [UUID: [Overlap]] = [:]
         for trip in scheduled {
-            let a = window(trip)
-            let others = scheduled.filter { other in
-                let b = window(other)
-                return other.id != trip.id && a.start < b.end && b.start < a.end
+            let found = scheduled.compactMap { other -> Overlap? in
+                guard other.id != trip.id,
+                      trip.windowStart < other.windowEnd, other.windowStart < trip.windowEnd else { return nil }
+                return Overlap(load: trip, other: other)
             }
-            if !others.isEmpty { result[trip.id] = others.map(\.reference) }
+            if !found.isEmpty { result[trip.id] = found }
         }
         return result
+    }
+
+    var windowStart: Substring { pickupStart.prefix(16) }
+    var windowEnd: Substring { (deliveryEnd ?? deliveryStart).prefix(16) }
+
+    /// When it's due at the delivery: by the end of a window, or at the time.
+    var deliveryDue: String {
+        deliveryEnd.map { "by \(WallClock.format($0))" } ?? "on \(WallClock.format(deliveryStart))"
+    }
+}
+
+/// Two loads on the road at once, said from one load's side: whichever
+/// starts later picks up before the other delivers.
+struct Overlap: Sendable {
+    /// For the Trips row: "Picks up before QA-2002 delivers".
+    let short: String
+    /// For the load screen, with places and times.
+    let long: String
+
+    init(load: LoadSummary, other: LoadSummary) {
+        if load.windowStart >= other.windowStart {
+            short = "Picks up before \(other.reference) delivers"
+            long = "This load picks up in \(load.pickupLocation) on \(WallClock.format(load.pickupStart)), "
+                + "before \(other.reference) delivers in \(other.deliveryLocation) \(other.deliveryDue)."
+        } else {
+            short = "\(other.reference) picks up before this delivers"
+            long = "\(other.reference) picks up in \(other.pickupLocation) on \(WallClock.format(other.pickupStart)), "
+                + "before this load delivers in \(load.deliveryLocation) \(load.deliveryDue)."
+        }
     }
 }
 
