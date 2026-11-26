@@ -83,13 +83,16 @@ final class OfflineQueue {
     private(set) var pendingExpenses: [PendingExpense] = []
     /// Why the server turned down a check-in or document, for an alert.
     var rejections: [String] = []
-    /// Check-ins a send was tried for and couldn't reach the server (or left
-    /// from an earlier run). Only these show as not sent, so a check-in that
-    /// goes through right away never flashes as unsent.
+    /// Queued check-ins, documents and expenses that couldn't reach the
+    /// server on the last try (or were left from an earlier run). Only these
+    /// show as not sent; anything else queued is going out now and shows a
+    /// spinner, so nothing flashes as unsent on its way.
     private(set) var unsent: Set<UUID> = []
-    /// Check-ins sent this run. Screens keep counting them until they reload
-    /// the load from the server, so the time doesn't blink to "—" between.
+    /// Sent this run. Screens keep counting them until they reload the load
+    /// from the server, so nothing blinks back to "—" or "Add" in between.
     private(set) var sent: [PendingCheckIn] = []
+    private(set) var sentDocuments: [PendingDocument] = []
+    private(set) var sentExpenses: [PendingExpense] = []
     /// Goes up each time something reaches the server, so screens reload.
     private(set) var deliveredCount = 0
 
@@ -103,7 +106,7 @@ final class OfflineQueue {
 
     private init() {
         pending = Self.read(checkInsURL) ?? []
-        unsent = Set(pending.map(\.id))
+        unsent = Set(pending.map(\.id) + pendingDocuments.map(\.id) + pendingExpenses.map(\.id))
         pendingDocuments = Self.read(documentsURL) ?? []
         pendingExpenses = Self.read(expensesURL) ?? []
         monitor.pathUpdateHandler = { path in
@@ -116,6 +119,12 @@ final class OfflineQueue {
     /// The load's check-ins tapped on this phone: queued, then sent this run.
     func checkIns(for loadID: UUID) -> [PendingCheckIn] {
         (pending + sent).filter { $0.loadID == loadID }
+    }
+
+    /// Every queued item waits: the first couldn't get through, and the rest
+    /// go after it.
+    private func stall() {
+        unsent.formUnion(pending.map(\.id) + pendingDocuments.map(\.id) + pendingExpenses.map(\.id))
     }
 
     func documents(for loadID: UUID) -> [PendingDocument] {
@@ -248,14 +257,14 @@ final class OfflineQueue {
                     } catch let error as PostgrestError {
                         rejections.append(error.message)
                     } catch {
-                        unsent.insert(next.id)
+                        stall()
                         return
                     }
                 } else {
                     rejections.append(error.message)
                 }
             } catch {
-                unsent.insert(next.id)
+                stall()
                 return
             }
             unsent.remove(next.id)
@@ -270,13 +279,16 @@ final class OfflineQueue {
             defer { uploadingID = nil }
             do {
                 try await api.uploadDocument(next, file: file)
+                sentDocuments.append(next)
             } catch let error as PostgrestError {
                 rejections.append(error.message)
             } catch let error as StorageError where error.statusCode?.hasPrefix("4") == true {
                 rejections.append("The \(next.kind.label) upload was turned down: \(error.message)")
             } catch {
+                stall()
                 return
             }
+            unsent.remove(next.id)
             try? FileManager.default.removeItem(at: file)
             pendingDocuments.removeAll { $0.id == next.id }
             deliveredCount += 1
@@ -289,13 +301,16 @@ final class OfflineQueue {
             defer { uploadingID = nil }
             do {
                 try await api.addExpense(next, receipt: next.hasReceipt ? file : nil)
+                sentExpenses.append(next)
             } catch let error as PostgrestError {
                 rejections.append(error.message)
             } catch let error as StorageError where error.statusCode?.hasPrefix("4") == true {
                 rejections.append("The \(next.kind.label.lowercased()) receipt was turned down: \(error.message)")
             } catch {
+                stall()
                 return
             }
+            unsent.remove(next.id)
             try? FileManager.default.removeItem(at: file)
             pendingExpenses.removeAll { $0.id == next.id }
             deliveredCount += 1

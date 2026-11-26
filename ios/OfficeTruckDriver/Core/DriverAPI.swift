@@ -87,7 +87,7 @@ struct DriverAPI: Sendable {
     /// returns the same document for the same path.
     func uploadDocument(_ document: PendingDocument, file: URL) async throws {
         #if DEBUG
-        if DemoBackend.isOn { return DemoBackend.addDocument(document) }
+        if DemoBackend.isOn { return try await DemoBackend.addDocument(document) }
         #endif
         do {
             try await client.storage.from("load-documents").upload(
@@ -123,7 +123,7 @@ struct DriverAPI: Sendable {
     /// expense for the same client id.
     func addExpense(_ expense: PendingExpense, receipt: URL?) async throws {
         #if DEBUG
-        if DemoBackend.isOn { return DemoBackend.addExpense(expense) }
+        if DemoBackend.isOn { return try await DemoBackend.addExpense(expense) }
         #endif
         if let receipt {
             do {

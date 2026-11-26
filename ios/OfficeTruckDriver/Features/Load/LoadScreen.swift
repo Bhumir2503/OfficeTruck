@@ -440,7 +440,11 @@ struct LoadScreen: View {
     /// on a tap, and swipes left to View, Upload again or Remove.
     @ViewBuilder
     private func paperwork(_ load: LoadDetail, next: LoadDetail.Stop?, pending: [PendingCheckIn]) -> some View {
+        // Queued, plus ones just sent that the load hasn't come back with yet.
         let waitingDocuments = queue.documents(for: load.id)
+            + queue.sentDocuments.filter { doc in
+                doc.loadID == load.id && !load.documents.contains { $0.path == doc.storagePath }
+            }
 
         Section {
             ForEach([DocumentKind.bol, .pod]) { kind in
@@ -464,8 +468,8 @@ struct LoadScreen: View {
                     if hasIt { view() } else if load.canEdit { addKind = kind }
                 } label: {
                     LabeledContent {
-                        if !waiting.isEmpty {
-                            Text("Sending").foregroundStyle(.orange)
+                        if let doc = waiting.last {
+                            uploadStatus(doc.id)
                         } else if hasIt {
                             Text("View").foregroundStyle(Color.accentColor)
                         } else if load.canEdit {
@@ -539,7 +543,7 @@ struct LoadScreen: View {
                     previewURL = OfflineQueue.fileURL(for: doc)
                 } label: {
                     LabeledContent {
-                        Text("Sending").foregroundStyle(.orange)
+                        uploadStatus(doc.id)
                     } label: {
                         Text(doc.kind.label).foregroundStyle(.primary)
                     }
@@ -579,6 +583,9 @@ struct LoadScreen: View {
     @ViewBuilder
     private func expenses(_ load: LoadDetail) -> some View {
         let waiting = queue.expenses(for: load.id)
+            + queue.sentExpenses.filter { sent in
+                sent.loadID == load.id && !load.expenses.contains { $0.id == sent.id }
+            }
         // Only what the driver paid comes back to them; company-paid ones
         // are there for their receipts.
         let owed = load.expenses.filter { !$0.companyPaid }.map(\.amount)
@@ -643,8 +650,11 @@ struct LoadScreen: View {
                         Label {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(expense.kind.label).foregroundStyle(.primary)
-                                Text(expense.companyPaid == true ? "Company paid · Not sent yet" : "Not sent yet")
-                                    .font(.subheadline).foregroundStyle(.orange)
+                                HStack(spacing: 6) {
+                                    if expense.companyPaid == true { Text("Company paid ·").foregroundStyle(.secondary) }
+                                    uploadStatus(expense.id)
+                                }
+                                .font(.subheadline)
                             }
                         } icon: {
                             Image(systemName: expense.kind.systemImage)
@@ -760,6 +770,23 @@ struct LoadScreen: View {
         if let miles = stop.arrivedOdometer { return (miles, false) }
         if let miles = arrivedTap?.odometer { return (miles, isUnsent(arrivedTap)) }
         return nil
+    }
+
+    /// A queued upload: a spinner while it's going out, or orange "Not sent"
+    /// once a try couldn't reach the server (it goes when there's signal).
+    @ViewBuilder
+    private func uploadStatus(_ id: UUID) -> some View {
+        if queue.unsent.contains(id) {
+            Text("\(Image(systemName: "icloud.slash")) Not sent")
+                .foregroundStyle(.orange)
+                .accessibilityLabel("Not sent yet")
+        } else {
+            HStack(spacing: 6) {
+                ProgressView()
+                Text("Uploading")
+            }
+            .foregroundStyle(.secondary)
+        }
     }
 
     /// A date the truck's paperwork runs out: orange within 30 days, red

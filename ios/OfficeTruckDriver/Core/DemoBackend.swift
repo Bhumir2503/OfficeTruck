@@ -35,8 +35,15 @@ enum DemoBackend {
     /// Expenses added this run.
     nonisolated(unsafe) private static var expenses: [PendingExpense] = []
 
-    static func addExpense(_ expense: PendingExpense) {
+    /// Uploads take a moment, like on a real connection, so the spinner shows.
+    static func addExpense(_ expense: PendingExpense) async throws {
+        try await upload()
         expenses.append(expense)
+    }
+
+    private static func upload() async throws {
+        if offline { throw URLError(.notConnectedToInternet) }
+        try await Task.sleep(for: .seconds(2))
     }
 
     static func removeExpense(_ id: UUID) {
@@ -108,7 +115,8 @@ enum DemoBackend {
         return "[" + rows.joined(separator: ",") + "]"
     }
 
-    static func addDocument(_ document: PendingDocument) {
+    static func addDocument(_ document: PendingDocument) async throws {
+        try await upload()
         documents.append(document)
     }
 
