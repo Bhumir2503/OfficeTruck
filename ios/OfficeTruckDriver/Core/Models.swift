@@ -152,6 +152,12 @@ struct LoadDetail: Decodable, Identifiable, Sendable {
         /// The driver added it, so they can remove it. Missing from older
         /// servers.
         let mine: Bool?
+        /// "driver" (paid back on their settlement) or "company" (a receipt
+        /// for the office). Missing from older servers, which only sent the
+        /// driver's.
+        let paidBy: String?
+
+        var companyPaid: Bool { paidBy == "company" }
     }
 }
 

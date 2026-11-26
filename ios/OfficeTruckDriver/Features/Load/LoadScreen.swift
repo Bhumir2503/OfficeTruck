@@ -579,7 +579,11 @@ struct LoadScreen: View {
     @ViewBuilder
     private func expenses(_ load: LoadDetail) -> some View {
         let waiting = queue.expenses(for: load.id)
-        let total = load.expenses.reduce(0) { $0 + $1.amount } + waiting.reduce(0) { $0 + $1.amount }
+        // Only what the driver paid comes back to them; company-paid ones
+        // are there for their receipts.
+        let owed = load.expenses.filter { !$0.companyPaid }.map(\.amount)
+            + waiting.filter { $0.companyPaid != true }.map(\.amount)
+        let total = owed.reduce(0, +)
 
         Section {
             if load.expenses.isEmpty && waiting.isEmpty && !load.canEdit {
@@ -600,8 +604,10 @@ struct LoadScreen: View {
                         Label {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(kind.label).foregroundStyle(.primary)
-                                Text(([WallClock.day(expense.spentOn)] + [expense.note].compactMap { $0 }
-                                      + (expense.receiptPath != nil ? ["Receipt"] : [])).joined(separator: " · "))
+                                Text(([WallClock.day(expense.spentOn)] + (expense.companyPaid ? ["Company paid"] : [])
+                                      + [expense.note].compactMap { $0 }
+                                      // A company-paid one always has its receipt.
+                                      + (expense.receiptPath != nil && !expense.companyPaid ? ["Receipt"] : [])).joined(separator: " · "))
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
                             }
@@ -610,6 +616,7 @@ struct LoadScreen: View {
                         }
                     }
                 }
+                .tint(.primary)
                 .disabled(expense.receiptPath == nil)
                 // No full swipe, so a long swipe can't remove it by accident.
                 .swipeActions(allowsFullSwipe: false) {
@@ -636,13 +643,15 @@ struct LoadScreen: View {
                         Label {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(expense.kind.label).foregroundStyle(.primary)
-                                Text("Not sent yet").font(.subheadline).foregroundStyle(.orange)
+                                Text(expense.companyPaid == true ? "Company paid · Not sent yet" : "Not sent yet")
+                                    .font(.subheadline).foregroundStyle(.orange)
                             }
                         } icon: {
                             Image(systemName: expense.kind.systemImage)
                         }
                     }
                 }
+                .tint(.primary)
                 .swipeActions(allowsFullSwipe: false) {
                     Button("Stop sending", systemImage: "xmark", role: .destructive) {
                         if !queue.cancelExpense(expense.id) {
@@ -655,8 +664,8 @@ struct LoadScreen: View {
                     }
                 }
             }
-            if load.expenses.count + waiting.count > 1 {
-                LabeledContent("Total") {
+            if !owed.isEmpty && load.expenses.count + waiting.count > 1 {
+                LabeledContent("Paid back to you") {
                     Text(total.dollars).font(.headline.monospacedDigit()).foregroundStyle(.primary)
                 }
                 .font(.headline)
@@ -671,7 +680,7 @@ struct LoadScreen: View {
         } header: {
             Text("Expenses")
         } footer: {
-            Text("Fuel, tolls, scales and anything else you paid for yourself. The office pays it back on your settlement. Swipe left on one to view the receipt or remove it.")
+            Text("Fuel, tolls, scales and the like. What you paid yourself comes back on your settlement; for what the company paid, add the receipt so the office has it. Swipe left on one to view the receipt or remove it.")
         }
     }
 
@@ -884,6 +893,7 @@ struct AddExpenseView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var kind: ExpenseKind = .fuel
+    @State private var companyPaid = false
     @State private var amountText = ""
     @State private var spentOn = Date.now
     @State private var note = ""
@@ -905,6 +915,19 @@ struct AddExpenseView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    // Who paid decides whether it comes back on the settlement.
+                    Picker("Paid by", selection: $companyPaid) {
+                        Text("Me").tag(false)
+                        Text("Company").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+                } header: {
+                    Text("Who paid?")
+                }
+
                 Section {
                     Picker("Type", selection: $kind) {
                         ForEach(ExpenseKind.allCases) { kind in
@@ -952,9 +975,11 @@ struct AddExpenseView: View {
                         }
                     }
                 } header: {
-                    Text("Receipt")
+                    Text(companyPaid ? "Receipt (needed)" : "Receipt")
                 } footer: {
-                    Text("The office pays it back on your settlement. A receipt helps them approve it.")
+                    Text(companyPaid
+                         ? "The company paid, so nothing comes back to you. The receipt goes to the office for its records."
+                         : "The office pays it back on your settlement. A receipt helps them approve it.")
                 }
 
                 if let error {
@@ -971,8 +996,9 @@ struct AddExpenseView: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
+                    // A company-paid expense is only here for its receipt.
                     Button("Add", action: add)
-                        .disabled(amount == nil)
+                        .disabled(amount == nil || (companyPaid && pages.isEmpty))
                 }
             }
             .onAppear { amountFocused = true }
@@ -1021,7 +1047,8 @@ struct AddExpenseView: View {
             amount: amount,
             spentOn: WallClock.string(from: spentOn),
             note: trimmed.isEmpty ? nil : trimmed,
-            receipt: receipt
+            receipt: receipt,
+            companyPaid: companyPaid
         )
         dismiss()
     }
