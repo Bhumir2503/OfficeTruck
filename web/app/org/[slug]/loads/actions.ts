@@ -11,7 +11,7 @@ import {
   expenseSchema,
   type ExpenseValues,
 } from "@/lib/load-expense-format"
-import { getMyOrganizations, getUser } from "@/lib/organizations"
+import { canManage, getMyOrganizations, getUser } from "@/lib/organizations"
 import {
   estimateEmptyMiles,
   type EmptyMilesEstimate,
@@ -291,6 +291,46 @@ export async function cancelLoad(
 
   refresh()
   return { ok: true }
+}
+
+/**
+ * Deletes a load entered by mistake, with its stops, check-ins, charges,
+ * paperwork and expenses. Owners and admins only. The database refuses a
+ * load that's invoiced or on a paid pay statement; cancel those instead.
+ * Its files are cleared from storage after.
+ */
+export async function deleteLoad(
+  organizationId: string,
+  loadId: string
+): Promise<{ error: string } | { ok: true; reference: string }> {
+  const organization = (await getMyOrganizations()).find(
+    (org) => org.id === organizationId
+  )
+  if (!organization || !canManage(organization)) {
+    return { error: "Only owners and admins can delete loads." }
+  }
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc("delete_load", {
+    target_load: loadId,
+  })
+  if (error) {
+    return { error: rpcError(error) }
+  }
+
+  // The rows are what count; files left behind are only clutter.
+  const folder = `${organizationId}/${loadId}`
+  const { data: files } = await supabase.storage
+    .from("load-documents")
+    .list(folder, { limit: 1000 })
+  if (files?.length) {
+    await supabase.storage
+      .from("load-documents")
+      .remove(files.map((file) => `${folder}/${file.name}`))
+      .catch(() => {})
+  }
+
+  refresh()
+  return { ok: true, reference: data as string }
 }
 
 /**
