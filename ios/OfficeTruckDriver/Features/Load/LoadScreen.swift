@@ -456,9 +456,13 @@ struct LoadScreen: View {
                     $0.isPickup == (kind == .bol) && arrivedTime($0, pending: pending) != nil
                 } == true
                 // The newest copy: what View opens and Remove takes away.
+                // The copy on this phone while it's there (queued or not sent
+                // yet), so the driver can always see what they scanned.
+                let local = waiting.last.map { OfflineQueue.fileURL(for: $0) }
+                    .flatMap { FileManager.default.fileExists(atPath: $0.path) ? $0 : nil }
                 let view = {
-                    if let doc = waiting.last {
-                        previewURL = OfflineQueue.fileURL(for: doc)
+                    if let local {
+                        previewLocal(local, name: kind.label)
                     } else if let doc = added.last {
                         Task { await preview(bucket: "load-documents", path: doc.path, name: doc.fileName) }
                     }
@@ -468,18 +472,21 @@ struct LoadScreen: View {
                     if hasIt { view() } else if load.canEdit { addKind = kind }
                 } label: {
                     LabeledContent {
-                        if let doc = waiting.last {
-                            uploadStatus(doc.id)
-                        } else if hasIt {
+                        if hasIt {
                             Text("View").foregroundStyle(Color.accentColor)
                         } else if load.canEdit {
                             Text("Add").foregroundStyle(Color.accentColor)
                         }
                     } label: {
                         Text(kind.label).foregroundStyle(.primary)
-                        Text(added.last.map { "Added \($0.createdAt.formatted(.dateTime.month().day().hour().minute()))" }
-                             ?? (kind == .bol ? "Signed at pickup" : "Signed at delivery"))
-                            .foregroundStyle(neededNow ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                        // Uploading, or not sent yet; either way it's viewable.
+                        if let doc = waiting.last {
+                            uploadStatus(doc.id)
+                        } else {
+                            Text(added.last.map { "Added \($0.createdAt.formatted(.dateTime.month().day().hour().minute()))" }
+                                 ?? (kind == .bol ? "Signed at pickup" : "Signed at delivery"))
+                                .foregroundStyle(neededNow ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                        }
                     }
                 }
                 // The name and hint read as text, not as a link; only "Add"
@@ -540,21 +547,23 @@ struct LoadScreen: View {
             }
             ForEach(waitingDocuments.filter { $0.kind != .bol && $0.kind != .pod }) { doc in
                 Button {
-                    previewURL = OfflineQueue.fileURL(for: doc)
+                    previewLocal(OfflineQueue.fileURL(for: doc), name: doc.kind.label)
                 } label: {
                     LabeledContent {
-                        uploadStatus(doc.id)
+                        Text("View").foregroundStyle(Color.accentColor)
                     } label: {
                         Text(doc.kind.label).foregroundStyle(.primary)
+                        uploadStatus(doc.id)
                     }
                 }
+                .tint(.primary)
                 .swipeActions(allowsFullSwipe: false) {
                     Button("Stop sending", systemImage: "xmark", role: .destructive) {
                         if !queue.cancelDocument(doc.id) {
                             actionError = "It's sending right now. Remove it once it's sent."
                         }
                     }
-                    Button("View", systemImage: "eye") { previewURL = OfflineQueue.fileURL(for: doc) }
+                    Button("View", systemImage: "eye") { previewLocal(OfflineQueue.fileURL(for: doc), name: doc.kind.label) }
                         .tint(.blue)
                 }
             }
@@ -640,7 +649,7 @@ struct LoadScreen: View {
             }
             ForEach(waiting) { expense in
                 Button {
-                    if expense.hasReceipt { previewURL = OfflineQueue.receiptURL(for: expense) }
+                    if expense.hasReceipt { previewLocal(OfflineQueue.receiptURL(for: expense), name: "\(expense.kind.label) receipt") }
                 } label: {
                     LabeledContent {
                         Text(expense.amount.dollars)
@@ -669,7 +678,7 @@ struct LoadScreen: View {
                         }
                     }
                     if expense.hasReceipt {
-                        Button("View", systemImage: "eye") { previewURL = OfflineQueue.receiptURL(for: expense) }
+                        Button("View", systemImage: "eye") { previewLocal(OfflineQueue.receiptURL(for: expense), name: "\(expense.kind.label) receipt") }
                             .tint(.blue)
                     }
                 }
@@ -692,6 +701,14 @@ struct LoadScreen: View {
         } footer: {
             Text("Fuel, tolls, scales and the like. What you paid yourself comes back on your settlement; for what the company paid, add the receipt so the office has it. Swipe left on one to view the receipt or remove it.")
         }
+    }
+
+    /// Opens a copy still on this phone under its name ("BOL"), not the
+    /// queue's file id.
+    private func previewLocal(_ file: URL, name: String) {
+        let named = URL.temporaryDirectory.appending(path: "\(name).pdf")
+        try? FileManager.default.removeItem(at: named)
+        previewURL = (try? FileManager.default.copyItem(at: file, to: named)) != nil ? named : file
     }
 
     private func preview(bucket: String, path: String, name: String) async {
@@ -772,14 +789,16 @@ struct LoadScreen: View {
         return nil
     }
 
-    /// A queued upload: a spinner while it's going out, or orange "Not sent"
-    /// once a try couldn't reach the server (it goes when there's signal).
+    /// A queued upload, shown under its name: a spinner while it's going out,
+    /// or orange "Not sent yet" once a try couldn't reach the server (it goes
+    /// when there's signal). The row still says View either way.
     @ViewBuilder
     private func uploadStatus(_ id: UUID) -> some View {
         if queue.unsent.contains(id) {
-            Text("\(Image(systemName: "icloud.slash")) Not sent")
+            // Reassuring: the copy is safe on the phone and goes on its own.
+            Text("\(Image(systemName: "icloud.slash")) Not sent yet · saved on this phone")
                 .foregroundStyle(.orange)
-                .accessibilityLabel("Not sent yet")
+                .accessibilityLabel("Not sent yet. Saved on this phone; it sends when you have signal.")
         } else {
             HStack(spacing: 6) {
                 ProgressView()
