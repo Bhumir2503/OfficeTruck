@@ -330,6 +330,9 @@ struct LoadScreen: View {
                 .padding(.bottom, 8)
             }
         }
+        // The keyboard (the odometer field in the check-in alert) covers the
+        // button instead of pushing it up over the alert.
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         .alert(
             addKind.map { "Add \($0.label)" } ?? "",
             isPresented: Binding(get: { addKind != nil }, set: { if !$0 { addKind = nil } }),
