@@ -65,6 +65,8 @@ struct LoadDetail: Decodable, Identifiable, Sendable {
     /// The truck's last odometer reading before this load, if it has one. A
     /// new reading can't be lower (the server checks too).
     let truckOdometer: Int?
+    /// The truck on the load, for the info sheet.
+    let truckDetails: Truck?
     let organization: Organization
     let driverPay: DriverPay?
     let stops: [Stop]
@@ -76,6 +78,29 @@ struct LoadDetail: Decodable, Identifiable, Sendable {
         let name: String
         let phone: String?
         let timeZone: String
+    }
+
+    /// What a driver is asked for at a scale or an inspection. Dates are
+    /// days as written ("2026-11-20").
+    struct Truck: Decodable, Sendable {
+        let unitNumber: String
+        let year: Int?
+        let make: String?
+        let model: String?
+        let vin: String?
+        let plateNumber: String?
+        let plateState: String?
+        let odometer: Int?
+        let odometerOn: String?
+        /// When the annual inspection was last done; it's due a year later.
+        let annualInspectionOn: String?
+        let registrationExpiresOn: String?
+
+        /// "2022 Freightliner Cascadia", or nil when none of it is known.
+        var description: String? {
+            let parts = [year.map(String.init), make, model].compactMap { $0 }
+            return parts.isEmpty ? nil : parts.joined(separator: " ")
+        }
     }
 
     struct DriverPay: Decodable, Sendable {

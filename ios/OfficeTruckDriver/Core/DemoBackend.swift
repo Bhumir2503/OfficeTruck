@@ -197,7 +197,7 @@ enum DemoBackend {
         let a0 = arrived[stopIDs[0]], d0 = departed[stopIDs[0]]
         let a1 = arrived[stopIDs[1]], d1 = departed[stopIDs[1]]
         return Data("""
-        {"id": "\(loadID)", "reference": "QA-1004", "status": "\(status)", "can_edit": true, "truck_odometer": \(truckOdometer),
+        {"id": "\(loadID)", "reference": "QA-1004", "status": "\(status)", "can_edit": true, "truck_odometer": \(truckOdometer), "truck_details": {"unit_number": "T-101", "year": 2022, "make": "Freightliner", "model": "Cascadia", "vin": "1FUJGLDR7NLAB1234", "plate_number": "TRK4821", "plate_state": "TN", "odometer": \(truckOdometer), "odometer_on": "2026-11-20", "annual_inspection_on": "2025-12-10", "registration_expires_on": "2027-03-31"},
          "broker_name": "QA Test Broker", "reference_numbers": "PO 88123", "equipment": "dry_van",
          "commodity": "Paper goods", "weight_lbs": 38000, "trailer_number": "53-220",
          "notes": "Check in at the guard shack. No overnight parking.", "miles": 382, "truck": "T-101",

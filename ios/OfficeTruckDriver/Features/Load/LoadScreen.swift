@@ -368,22 +368,51 @@ struct LoadScreen: View {
                     }
                     Section("Details") {
                         LabeledContent("Status", value: load.status.label)
-                        if let truck = load.truck { LabeledContent("Truck", value: truck) }
-                        if let trailer = load.trailerNumber { LabeledContent("Trailer", value: trailer) }
                         if let commodity = load.commodity { LabeledContent("Commodity", value: commodity) }
                         if let weight = load.weightLbs { LabeledContent("Weight", value: "\(weight.formatted()) lbs") }
                         if let miles = load.miles { LabeledContent("Miles", value: miles.formatted()) }
                     }
+                    // What a scale or an inspection asks for, and when the
+                    // truck's paperwork runs out.
+                    if let truck = load.truckDetails {
+                        Section("Truck") {
+                            LabeledContent("Unit", value: truck.unitNumber)
+                            if let description = truck.description { Text(description) }
+                            if let plate = truck.plateNumber {
+                                LabeledContent("Plate", value: [plate, truck.plateState].compactMap { $0 }.joined(separator: " · "))
+                            }
+                            if let vin = truck.vin {
+                                LabeledContent("VIN") {
+                                    Text(vin).monospaced().textSelection(.enabled)
+                                }
+                            }
+                            if let odometer = truck.odometer {
+                                LabeledContent("Odometer") {
+                                    Text("\(odometer.formatted()) mi")
+                                    if let day = truck.odometerOn { Text("Read \(WallClock.day(day))") }
+                                }
+                            }
+                            if let done = truck.annualInspectionOn {
+                                dueRow("Inspection due", WallClock.addingYear(to: done))
+                            }
+                            if let expires = truck.registrationExpiresOn {
+                                dueRow("Registration expires", expires)
+                            }
+                            if let trailer = load.trailerNumber { LabeledContent("Trailer", value: trailer) }
+                        }
+                    } else if load.truck != nil || load.trailerNumber != nil {
+                        Section("Truck") {
+                            if let truck = load.truck { LabeledContent("Unit", value: truck) }
+                            if let trailer = load.trailerNumber { LabeledContent("Trailer", value: trailer) }
+                        }
+                    }
                 }
                 .navigationTitle("Load \(load.reference)")
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") { showingInfo = false }
-                    }
-                }
             }
-            .presentationDetents([.medium, .large])
+            // Full height; swiped down to close.
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $addingExpense) {
             AddExpenseView(load: load)
@@ -722,6 +751,17 @@ struct LoadScreen: View {
         if let miles = stop.arrivedOdometer { return (miles, false) }
         if let miles = arrivedTap?.odometer { return (miles, isUnsent(arrivedTap)) }
         return nil
+    }
+
+    /// A date the truck's paperwork runs out: orange within 30 days, red
+    /// once it's past.
+    private func dueRow(_ title: String, _ day: String) -> some View {
+        let days = WallClock.daysUntil(day) ?? .max
+        return LabeledContent(title) {
+            Text(WallClock.fullDay(day))
+                .foregroundStyle(days < 0 ? .red : days <= 30 ? .orange : .secondary)
+                .accessibilityValue(days < 0 ? "Past due" : days <= 30 ? "Due soon" : "")
+        }
     }
 
     /// A check-in time or reading. One that hasn't reached the office yet is
