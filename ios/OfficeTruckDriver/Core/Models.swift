@@ -88,12 +88,19 @@ struct LoadDetail: Decodable, Identifiable, Sendable {
         let mine: Bool
     }
 
+    /// Money the driver paid out of pocket on this load (or added
+    /// themselves), owed back to them.
     struct Expense: Decodable, Identifiable, Sendable {
         let id: UUID
         let kind: String
         let amount: Double
         let spentOn: String
         let note: String?
+        let receiptPath: String?
+        let receiptType: String?
+        /// The driver added it, so they can remove it. Missing from older
+        /// servers.
+        let mine: Bool?
     }
 }
 
@@ -148,6 +155,37 @@ enum DocumentKind: String, Codable, CaseIterable, Identifiable, Sendable {
         case .pod: "POD"
         case .lumperReceipt: "Lumper receipt"
         case .other: "Other"
+        }
+    }
+}
+
+/// `load_expenses.kind`.
+enum ExpenseKind: String, Codable, CaseIterable, Identifiable, Sendable {
+    case fuel, tolls, scale, parking, lumper, repair, other
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .fuel: "Fuel"
+        case .tolls: "Tolls"
+        case .scale: "Scale"
+        case .parking: "Parking"
+        case .lumper: "Lumper"
+        case .repair: "Repair"
+        case .other: "Other"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .fuel: "fuelpump"
+        case .tolls: "road.lanes"
+        case .scale: "scalemass"
+        case .parking: "parkingsign"
+        case .lumper: "shippingbox"
+        case .repair: "wrench.and.screwdriver"
+        case .other: "receipt"
         }
     }
 }

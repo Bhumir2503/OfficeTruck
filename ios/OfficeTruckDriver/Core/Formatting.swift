@@ -38,6 +38,22 @@ enum WallClock {
         return display.string(from: date)
     }
 
+    private static let interval: DateIntervalFormatter = {
+        let formatter = DateIntervalFormatter()
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateTemplate = "EEE MMM d h:mm a"
+        return formatter
+    }()
+
+    /// An appointment window, the day written once when it's the same:
+    /// "Thu, Nov 26, 2:00 – 6:00 PM".
+    static func window(_ start: String, _ end: String) -> String {
+        guard let from = parser.date(from: String(start.prefix(19))),
+              let to = parser.date(from: String(end.prefix(19))), to >= from
+        else { return "\(format(start)) – \(format(end))" }
+        return interval.string(from: from, to: to)
+    }
+
     /// "2026-11-16" → "Nov 16, 2026".
     static func fullDay(_ text: String) -> String {
         guard let date = dayOnly.date(from: text) else { return text }

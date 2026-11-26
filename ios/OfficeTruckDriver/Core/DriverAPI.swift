@@ -117,6 +117,50 @@ struct DriverAPI: Sendable {
         )).execute()
     }
 
+    /// An expense the driver paid out of pocket. Uploads the receipt to the
+    /// load's folder first, if there is one. Safe to retry: a receipt
+    /// already uploaded (409) moves on, and the server returns the same
+    /// expense for the same client id.
+    func addExpense(_ expense: PendingExpense, receipt: URL?) async throws {
+        #if DEBUG
+        if DemoBackend.isOn { return DemoBackend.addExpense(expense) }
+        #endif
+        if let receipt {
+            do {
+                try await client.storage.from("load-documents").upload(
+                    expense.receiptPath,
+                    fileURL: receipt,
+                    options: FileOptions(contentType: "application/pdf", upsert: false)
+                )
+            } catch let error as StorageError where error.statusCode == "409" {
+                // Uploaded on an earlier try that lost its connection.
+            }
+        }
+
+        struct Params: Encodable {
+            let target_load: UUID
+            let kind: String
+            let amount: Double
+            let spent_on: String
+            let note: String?
+            let receipt_path: String?
+            let receipt_name: String?
+            let receipt_type: String?
+            let client_id: UUID
+        }
+        try await client.rpc("add_my_expense", params: Params(
+            target_load: expense.loadID,
+            kind: expense.kind.rawValue,
+            amount: expense.amount,
+            spent_on: expense.spentOn,
+            note: expense.note,
+            receipt_path: receipt == nil ? nil : expense.receiptPath,
+            receipt_name: receipt == nil ? nil : "\(expense.kind.label) receipt \(expense.spentOn).pdf",
+            receipt_type: receipt == nil ? nil : "application/pdf",
+            client_id: expense.id
+        )).execute()
+    }
+
     /// The signed-in driver, once per carrier they drive for (usually one).
     func myProfile() async throws -> [DriverProfile] {
         #if DEBUG
@@ -218,6 +262,15 @@ struct DriverAPI: Sendable {
         if DemoBackend.isOn { return DemoBackend.removeDocument(id) }
         #endif
         try await client.rpc("remove_my_load_document", params: ["target_document": id]).execute()
+    }
+
+    /// Removes an expense the driver added, while the load is on the road
+    /// and before a paid pay statement covers it.
+    func removeExpense(_ id: UUID) async throws {
+        #if DEBUG
+        if DemoBackend.isOn { return DemoBackend.removeExpense(id) }
+        #endif
+        try await client.rpc("remove_my_expense", params: ["target_expense": id]).execute()
     }
 
     /// Takes back a DQ upload the office hasn't confirmed.
