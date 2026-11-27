@@ -8,6 +8,14 @@ import {
 import { complianceItems, expiry, today as getToday } from "@/lib/driver-format"
 import { getDqDatesByDriver } from "@/lib/dq/fleet"
 import { getDrivers } from "@/lib/drivers"
+import { getIftaReminder } from "@/lib/ifta"
+import {
+  dueDate,
+  previousQuarter,
+  quarterKey,
+  quarterLabel,
+  quarterOf,
+} from "@/lib/ifta-format"
 import { COMPANY_DOCUMENT_LABELS } from "@/lib/company-document-format"
 import { getCompanyDocuments } from "@/lib/documents"
 import { getInvoices, getLoadsToInvoice } from "@/lib/invoices"
@@ -33,6 +41,8 @@ import {
 export const getAttention = cache(async (organizationId: string) => {
   const today = getToday()
   const supabase = await createClient()
+  // The IFTA return still to file: the quarter just ended.
+  const iftaQuarter = previousQuarter(quarterOf(today))
   const [
     invoices,
     ready,
@@ -43,6 +53,7 @@ export const getAttention = cache(async (organizationId: string) => {
     papers,
     dq,
     lastService,
+    ifta,
   ] = await Promise.all([
     getInvoices(organizationId),
     getLoadsToInvoice(organizationId),
@@ -60,6 +71,7 @@ export const getAttention = cache(async (organizationId: string) => {
     getCompanyDocuments(organizationId),
     getDqDatesByDriver(organizationId),
     getLastServiceByTruck(organizationId),
+    getIftaReminder(organizationId, iftaQuarter),
   ])
   if (booked.error) {
     throw booked.error
@@ -137,6 +149,22 @@ export const getAttention = cache(async (organizationId: string) => {
         expiry: expiry(paper.expires_on, today),
       },
       path: "documents",
+    })
+  }
+  // The IFTA return, for companies that keep IFTA here, until it's marked
+  // filed. Like other dates, it shows from 30 days before it's due.
+  if (ifta.inUse && !ifta.filed) {
+    const due = dueDate(iftaQuarter)
+    documents.push({
+      owner: "Company",
+      item: {
+        key: "ifta_return",
+        label: `IFTA return for ${quarterLabel(iftaQuarter)}`,
+        kind: "due",
+        due,
+        expiry: expiry(due, today),
+      },
+      path: `ifta?q=${quarterKey(iftaQuarter)}`,
     })
   }
   const items = buildAttention({

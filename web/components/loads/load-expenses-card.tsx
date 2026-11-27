@@ -29,7 +29,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+} from "@/components/ui/field"
 import {
   Select,
   SelectContent,
@@ -59,6 +64,7 @@ import {
   expenseTotals,
   type PaidBy,
 } from "@/lib/load-expense-format"
+import { IFTA_JURISDICTIONS, JURISDICTION_NAMES } from "@/lib/ifta-format"
 import type { LoadExpense } from "@/lib/load-expenses"
 import { formatRate } from "@/lib/load-format"
 
@@ -72,6 +78,11 @@ const formatDay = (day: string) =>
   dayFormat.format(new Date(`${day}T00:00:00Z`))
 
 /** Add or change one expense. Lives in the dialog, so it starts fresh each time. */
+const JURISDICTION_ITEMS = IFTA_JURISDICTIONS.map((code) => ({
+  value: code,
+  label: `${code} · ${JURISDICTION_NAMES[code]}`,
+}))
+
 function ExpenseForm({
   organizationId,
   loadId,
@@ -86,6 +97,7 @@ function ExpenseForm({
 }) {
   const [kind, setKind] = useState<ExpenseKind>(expense?.kind ?? "fuel")
   const [paidBy, setPaidBy] = useState<PaidBy>(expense?.paid_by ?? "company")
+  const [jurisdiction, setJurisdiction] = useState(expense?.jurisdiction ?? "")
   const [file, setFile] = useState<File | null>(null)
   const [dropReceipt, setDropReceipt] = useState(false)
 
@@ -135,6 +147,9 @@ function ExpenseForm({
       <fieldset disabled={pending} className="flex flex-col gap-5">
         <input type="hidden" name="kind" value={kind} />
         <input type="hidden" name="paid_by" value={paidBy} />
+        {kind === "fuel" && (
+          <input type="hidden" name="jurisdiction" value={jurisdiction} />
+        )}
         <div className="grid gap-5 sm:grid-cols-2">
           <Field>
             <FieldLabel htmlFor="expense-kind">For</FieldLabel>
@@ -209,10 +224,57 @@ function ExpenseForm({
                 : "On the company card or account."}
             </FieldDescription>
           </Field>
+          {kind === "fuel" && (
+            <>
+              <LoadTextField
+                name="gallons"
+                label="Gallons (for IFTA)"
+                inputMode="decimal"
+                placeholder="Optional, e.g. 112.5"
+                defaultValue={
+                  expense?.gallons === null || expense?.gallons === undefined
+                    ? ""
+                    : String(expense.gallons)
+                }
+                errors={errors}
+              />
+              <Field data-invalid={!!errors.jurisdiction}>
+                <FieldLabel htmlFor="expense-jurisdiction">
+                  State bought in
+                </FieldLabel>
+                <Select
+                  value={jurisdiction || null}
+                  onValueChange={(value) =>
+                    setJurisdiction((value as string | null) ?? "")
+                  }
+                  items={JURISDICTION_ITEMS}
+                >
+                  <SelectTrigger id="expense-jurisdiction" className="w-full">
+                    <SelectValue placeholder="Optional" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {JURISDICTION_ITEMS.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.jurisdiction ? (
+                  <FieldError errors={errors.jurisdiction} />
+                ) : (
+                  <FieldDescription>
+                    With the gallons, it counts on the IFTA page for the
+                    load&apos;s truck.
+                  </FieldDescription>
+                )}
+              </Field>
+            </>
+          )}
           <LoadTextField
             name="note"
             label="Note"
-            placeholder="Optional, e.g. Pilot #412, 118 gal"
+            placeholder="Optional, e.g. Pilot #412"
             defaultValue={expense?.note ?? ""}
             errors={errors}
             className="sm:col-span-2"
@@ -392,6 +454,11 @@ export function LoadExpensesCard({
                   </p>
                   <p className="flex flex-wrap items-center gap-x-2 text-muted-foreground">
                     <span>{formatDay(expense.spent_on)}</span>
+                    {expense.gallons !== null && expense.jurisdiction && (
+                      <span>
+                        {expense.gallons} gal in {expense.jurisdiction}
+                      </span>
+                    )}
                     {expense.paid_by === "driver" && (
                       <span className="rounded-4xl bg-amber-500/15 px-2 text-xs font-medium text-amber-800 dark:text-amber-200">
                         Driver paid
