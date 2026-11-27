@@ -5,6 +5,8 @@ import {
   assignmentDates,
   assignmentProblems,
   loadUntil,
+  missingDates,
+  missingSentence,
   problemSentence,
   problemShort,
 } from "../lib/assignment-compliance.ts"
@@ -155,5 +157,35 @@ describe("loadUntil", () => {
       loadUntil({ delivery_start: "2026-12-01T08:00:00", delivery_end: null }),
       "2026-12-01"
     )
+  })
+})
+
+describe("missingDates", () => {
+  it("names a CDL expiration or medical card with no date on file", () => {
+    const none = complianceItems(
+      { cdl_expires_on: null, medical_card_expires_on: null },
+      undefined,
+      TODAY
+    )
+    assert.deepEqual(missingDates(none), ["CDL expiration", "medical card"])
+    assert.equal(
+      missingSentence("Marcus Hill", missingDates(none)),
+      "Marcus Hill has no CDL expiration or medical card on file."
+    )
+    const some = complianceItems(
+      { cdl_expires_on: "2028-01-10", medical_card_expires_on: null },
+      undefined,
+      TODAY
+    )
+    assert.deepEqual(missingDates(some), ["medical card"])
+  })
+
+  it("is empty when both are on file, and never counts the yearly checks", () => {
+    const both = complianceItems(
+      { cdl_expires_on: "2028-01-10", medical_card_expires_on: "2027-03-01" },
+      undefined,
+      TODAY
+    )
+    assert.deepEqual(missingDates(both), [])
   })
 })

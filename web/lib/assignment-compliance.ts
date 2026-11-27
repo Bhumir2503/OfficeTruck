@@ -31,6 +31,25 @@ export function assignmentDates(items: ComplianceItem[]): AssignmentDate[] {
   )
 }
 
+/** The papers a driver can't legally drive without. */
+const REQUIRED = new Set(["cdl", "medical_card"])
+
+/**
+ * A driver's CDL or medical card with no date on file: "CDL expiration",
+ * "medical card". Nothing can warn that these ran out, so the picker says
+ * they're missing.
+ */
+export function missingDates(items: ComplianceItem[]): string[] {
+  return items
+    .filter((item) => REQUIRED.has(item.key) && !item.due)
+    .map((item) => (item.key === "cdl" ? "CDL expiration" : lower(item.label)))
+}
+
+/** "Marcus Hill has no CDL expiration or medical card on file." */
+export function missingSentence(owner: string, missing: readonly string[]) {
+  return `${owner} has no ${missing.join(" or ")} on file.`
+}
+
 /**
  * What stops a driver or truck from legally running a load: dates already
  * past, and dates that run out before `until`, the load's last day (a date

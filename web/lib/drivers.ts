@@ -10,6 +10,7 @@ import type {
 import {
   type AssignmentDate,
   assignmentDates,
+  missingDates,
 } from "@/lib/assignment-compliance"
 import { complianceItems, LAST_DELIVERY_DAYS, today } from "@/lib/driver-format"
 import { getDqDatesByDriver } from "@/lib/dq/fleet"
@@ -110,6 +111,8 @@ export type DriverOption = {
   pay_rate: number | null
   /** CDL, medical card and yearly checks, to warn before they're assigned. */
   compliance: AssignmentDate[]
+  /** A CDL expiration or medical card with no date on file. */
+  missing: string[]
 }
 
 export async function getDriverOptions(
@@ -131,16 +134,18 @@ export async function getDriverOptions(
     throw error
   }
   const now = today()
-  return data.map(({ cdl_expires_on, medical_card_expires_on, ...driver }) => ({
-    ...(driver as Omit<DriverOption, "compliance">),
-    compliance: assignmentDates(
-      complianceItems(
-        { cdl_expires_on, medical_card_expires_on },
-        dq[driver.id],
-        now
-      )
-    ),
-  }))
+  return data.map(({ cdl_expires_on, medical_card_expires_on, ...driver }) => {
+    const items = complianceItems(
+      { cdl_expires_on, medical_card_expires_on },
+      dq[driver.id],
+      now
+    )
+    return {
+      ...(driver as Omit<DriverOption, "compliance" | "missing">),
+      compliance: assignmentDates(items),
+      missing: missingDates(items),
+    }
+  })
 }
 
 export type DriverLoad = {
