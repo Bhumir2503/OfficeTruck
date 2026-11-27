@@ -1,0 +1,29 @@
+# main is production. Only the dev branch of this repository may merge into
+# it; the ruleset on main requires this check, so a pull request from any
+# other branch (or from a fork's "dev") can't be merged.
+name: Main only from dev
+
+on:
+  pull_request:
+    branches: [main]
+    # "edited" re-runs it when a pull request's base is changed to main.
+    types: [opened, reopened, synchronize, edited]
+
+permissions: {}
+
+jobs:
+  source-is-dev:
+    name: PR comes from dev
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the source branch
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          THIS_REPO: ${{ github.repository }}
+        run: |
+          if [ "$HEAD_REF" != "dev" ] || [ "$HEAD_REPO" != "$THIS_REPO" ]; then
+            echo "::error::Only dev can merge into main. This pull request is from $HEAD_REPO:$HEAD_REF; change its base to dev."
+            exit 1
+          fi
+          echo "From $THIS_REPO:dev. OK to merge into main."
