@@ -6,6 +6,7 @@ import {
   CircleCheckBig,
   ClockAlertIcon,
   FileWarningIcon,
+  ListTodoIcon,
   PackageIcon,
   SendIcon,
   UserRoundXIcon,
@@ -15,10 +16,20 @@ import Link from "next/link"
 import { useState } from "react"
 
 import {
-  SettingsCard,
-  SettingsCardFooter,
-} from "@/components/settings/settings-card"
-import { Button } from "@/components/ui/button"
+  EmptyRow,
+  HEAD,
+  HEAD_ROW,
+  ShowMore,
+  TableCard,
+} from "@/components/dashboard/table-panel"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import type { AttentionItem, AttentionKind } from "@/lib/dashboard-format"
 
 const ICONS: Record<AttentionKind, LucideIcon> = {
@@ -30,15 +41,17 @@ const ICONS: Record<AttentionKind, LucideIcon> = {
 }
 
 const TONES: Record<AttentionItem["tone"], string> = {
-  danger: "bg-destructive/10 text-destructive",
-  warning: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
-  default: "bg-muted text-muted-foreground",
+  danger:
+    "bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20 dark:bg-red-900/30 dark:text-red-400",
+  warning:
+    "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-900/30 dark:text-amber-400",
+  default: "bg-muted text-muted-foreground ring-1 ring-inset ring-border",
 }
 
-const FIRST = 8
+const FIRST = 6
 
 /** The dashboard's to-do list, most pressing first. */
-export function AttentionList({
+export function AttentionCard({
   items,
   base,
 }: {
@@ -51,87 +64,94 @@ export function AttentionList({
   const late = items.filter((item) => item.tone === "danger").length
 
   return (
-    <SettingsCard
+    <TableCard
+      icon={ListTodoIcon}
       title="To do"
-      description={
-        items.length === 0
-          ? undefined
-          : late > 0
-            ? `${items.length} open, ${late} late`
-            : `${items.length} open`
-      }
-      contentClassName={items.length ? "px-0 pb-0" : "pt-1 pb-5"}
-      footer={
-        items.length > FIRST && (
-          <SettingsCardFooter
-            hint={
-              showAll
-                ? `Showing all ${items.length}.`
-                : `Showing ${FIRST} of ${items.length}.`
-            }
-          >
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowAll((value) => !value)}
-            >
-              {showAll ? "Show fewer" : "Show all"}
-            </Button>
-          </SettingsCardFooter>
+      count={items.length}
+      actions={
+        late > 0 && (
+          <span className="inline-flex items-center rounded-md bg-red-50 px-2 py-1 text-[10px] font-medium text-red-700 ring-1 ring-red-600/20 ring-inset sm:text-xs dark:bg-red-900/30 dark:text-red-400">
+            {late} late
+          </span>
         )
       }
+      footer={
+        items.length > FIRST && (
+          <ShowMore
+            shown={shown.length}
+            total={items.length}
+            noun="items"
+            showAll={showAll}
+            onToggle={() => setShowAll((value) => !value)}
+          />
+        )
+      }
+      className="flex-1"
     >
       {items.length === 0 ? (
-        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+        <EmptyRow>
           <CircleCheckBig className="size-4 text-emerald-600" />
           All caught up.
-        </p>
+        </EmptyRow>
       ) : (
-        <ul className="divide-y border-t">
-          {shown.map((item) => {
-            const Icon = ICONS[item.kind]
-            const body = (
-              <>
-                <span
-                  className={cn(
-                    "flex size-8 shrink-0 items-center justify-center rounded-lg",
-                    TONES[item.tone]
-                  )}
+        <Table>
+          <TableHeader>
+            <TableRow className={HEAD_ROW}>
+              <TableHead className={HEAD}>What needs doing</TableHead>
+              <TableHead className="w-10">
+                <span className="sr-only">Open</span>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {shown.map((item) => {
+              const Icon = ICONS[item.kind]
+              return (
+                // The title's link covers the whole row.
+                <TableRow
+                  key={item.key}
+                  className={cn("relative", item.path && "cursor-pointer")}
                 >
-                  <Icon className="size-4" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">
-                    {item.title}
-                  </span>
-                  <span className="block truncate text-xs text-muted-foreground">
-                    {item.detail}
-                  </span>
-                </span>
-                {item.path && (
-                  <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
-                )}
-              </>
-            )
-            return (
-              <li key={item.key}>
-                {item.path ? (
-                  <Link
-                    href={`${base}/${item.path}`}
-                    className="flex items-center gap-3 px-6 py-3 transition-colors hover:bg-muted/50"
-                  >
-                    {body}
-                  </Link>
-                ) : (
-                  <div className="flex items-center gap-3 px-6 py-3">
-                    {body}
-                  </div>
-                )}
-              </li>
-            )
-          })}
-        </ul>
+                  <TableCell className="max-w-0 py-2.5">
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={cn(
+                          "flex size-7 shrink-0 items-center justify-center rounded-md",
+                          TONES[item.tone]
+                        )}
+                      >
+                        <Icon className="size-3.5" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        {item.path ? (
+                          <Link
+                            href={`${base}/${item.path}`}
+                            className="block truncate text-xs font-medium after:absolute after:inset-0 sm:text-sm"
+                          >
+                            {item.title}
+                          </Link>
+                        ) : (
+                          <span className="block truncate text-xs font-medium sm:text-sm">
+                            {item.title}
+                          </span>
+                        )}
+                        <span className="block truncate text-[10px] text-muted-foreground sm:text-xs">
+                          {item.detail}
+                        </span>
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {item.path && (
+                      <ChevronRightIcon className="size-4 text-muted-foreground" />
+                    )}
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+          </TableBody>
+        </Table>
       )}
-    </SettingsCard>
+    </TableCard>
   )
 }

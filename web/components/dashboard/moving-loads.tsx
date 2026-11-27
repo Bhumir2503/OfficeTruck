@@ -1,7 +1,17 @@
-import { cn } from "cn"
-import Link from "next/link"
+"use client"
 
-import { SettingsCard } from "@/components/settings/settings-card"
+import { cn } from "cn"
+import { TruckIcon } from "lucide-react"
+import Link from "next/link"
+import { useState } from "react"
+
+import {
+  EmptyRow,
+  HEAD,
+  HEAD_ROW,
+  ShowMore,
+  TableCard,
+} from "@/components/dashboard/table-panel"
 import {
   Table,
   TableBody,
@@ -15,11 +25,10 @@ import { formatStopWindow, STATUS_STYLES } from "@/lib/load-format"
 import { cityState } from "@/lib/report-format"
 import { LOAD_STATUS_LABELS } from "@/lib/schemas/load"
 
-const TABLE =
-  "[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6"
+const FIRST = 6
 
 /** Loads out on the road now, then the ones picking up in the next two days. */
-export function MovingLoads({
+export function MovingLoadsCard({
   loads,
   loadsBase,
 }: {
@@ -27,54 +36,70 @@ export function MovingLoads({
   /** /org/<slug>/loads */
   loadsBase: string
 }) {
+  const [showAll, setShowAll] = useState(false)
+  const shown = showAll ? loads : loads.slice(0, FIRST)
+
   return (
-    <SettingsCard
+    <TableCard
+      icon={TruckIcon}
       title="On the road"
-      contentClassName={loads.length ? "@container px-0 pb-0" : "pt-1 pb-5"}
+      count={loads.length}
+      footer={
+        loads.length > FIRST && (
+          <ShowMore
+            shown={shown.length}
+            total={loads.length}
+            noun="loads"
+            showAll={showAll}
+            onToggle={() => setShowAll((value) => !value)}
+          />
+        )
+      }
+      className="flex-1"
     >
       {loads.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
+        <EmptyRow>
           Nothing in transit or picking up in the next two days.
-        </p>
+        </EmptyRow>
       ) : (
-        <Table className={TABLE}>
-          <TableHeader className="bg-muted/40">
-            <TableRow>
-              <TableHead className="w-full">Load</TableHead>
-              <TableHead className="hidden w-px @xl:table-cell">
+        <Table>
+          <TableHeader>
+            <TableRow className={HEAD_ROW}>
+              <TableHead className={cn(HEAD, "w-full")}>Load</TableHead>
+              <TableHead className={cn(HEAD, "hidden w-px @md:table-cell")}>
                 Driver
               </TableHead>
-              <TableHead className="hidden w-px @3xl:table-cell">
+              <TableHead className={cn(HEAD, "hidden w-px @xl:table-cell")}>
                 Next stop
               </TableHead>
-              <TableHead className="w-px">Status</TableHead>
+              <TableHead className={cn(HEAD, "w-px")}>Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loads.map((load) => {
+            {shown.map((load) => {
               const delivering = load.status === "loaded"
               const driver = load.driver?.full_name ?? load.driver_name
               const truck = load.truck_link?.unit_number ?? load.truck
               return (
                 <TableRow key={load.id}>
-                  <TableCell className="max-w-0">
+                  <TableCell className="max-w-0 py-2.5">
                     <Link
                       href={`${loadsBase}/${load.id}`}
-                      className="font-medium hover:underline"
+                      className="text-xs font-medium hover:underline sm:text-sm"
                     >
                       {load.reference}
                     </Link>
-                    <p className="truncate text-xs text-muted-foreground">
+                    <p className="truncate text-[10px] text-muted-foreground sm:text-xs">
                       {cityState(load.pickup_location)} →{" "}
                       {cityState(load.delivery_location)}
                     </p>
                   </TableCell>
-                  <TableCell className="hidden whitespace-nowrap @xl:table-cell">
+                  <TableCell className="hidden text-xs whitespace-nowrap sm:text-sm @md:table-cell">
                     {driver ? (
                       <>
                         {driver}
                         {truck && (
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-[10px] text-muted-foreground sm:text-xs">
                             Truck {truck}
                           </p>
                         )}
@@ -83,11 +108,11 @@ export function MovingLoads({
                       <span className="text-muted-foreground">No driver</span>
                     )}
                   </TableCell>
-                  <TableCell className="hidden whitespace-nowrap @3xl:table-cell">
-                    <span className="text-xs text-muted-foreground">
+                  <TableCell className="hidden whitespace-nowrap @xl:table-cell">
+                    <span className="text-[10px] text-muted-foreground sm:text-xs">
                       {delivering ? "Delivery" : "Pickup"}
                     </span>
-                    <p className="text-sm">
+                    <p className="text-xs sm:text-sm">
                       {delivering
                         ? formatStopWindow(
                             load.delivery_start,
@@ -104,7 +129,7 @@ export function MovingLoads({
                   <TableCell>
                     <span
                       className={cn(
-                        "inline-flex rounded-md px-2 py-0.5 text-xs font-medium whitespace-nowrap",
+                        "inline-flex rounded-md px-2 py-1 text-[10px] font-medium whitespace-nowrap sm:text-xs",
                         STATUS_STYLES[load.status]
                       )}
                     >
@@ -117,6 +142,6 @@ export function MovingLoads({
           </TableBody>
         </Table>
       )}
-    </SettingsCard>
+    </TableCard>
   )
 }

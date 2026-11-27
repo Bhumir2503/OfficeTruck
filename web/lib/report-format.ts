@@ -282,53 +282,181 @@ const monthYearLabel = new Intl.DateTimeFormat("en-US", {
   timeZone: "UTC",
 })
 
-export type MonthPoint = {
-  /** "YYYY-MM" */
-  month: string
-  /** "Nov" */
+/** One week or month on the dashboard's charts. */
+export type SeriesPoint = {
+  /** The week's Monday or the month's first day, "YYYY-MM-DD". */
+  start: string
+  /** "Nov 16" for a week, "Nov" for a month. */
   label: string
-  /** "Nov 2026" */
+  /** "Week of Nov 16", "Nov 2026" */
   fullLabel: string
   revenue: number
-  cost: number
+  driverPay: number
+  expenses: number
   profit: number
   loads: number
 }
 
-/** Revenue, cost and profit for each of the last `count` months, oldest first. */
+const addDays = (date: string, days: number) => {
+  const d = new Date(`${date}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
+const dayLabel = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  timeZone: "UTC",
+})
+const utc = (date: string) => new Date(`${date}T00:00:00Z`)
+
+const emptyPoint = (start: string, label: string, fullLabel: string) => ({
+  start,
+  label,
+  fullLabel,
+  revenue: 0,
+  driverPay: 0,
+  expenses: 0,
+  profit: 0,
+  loads: 0,
+})
+
+function addLoad(point: SeriesPoint, load: ReportLoad) {
+  point.revenue += load.rate
+  point.driverPay += load.driver_pay ?? 0
+  point.expenses += load.expenses
+  point.profit += loadProfit(load)
+  point.loads++
+}
+
+/**
+ * The last `count` weeks (Monday to Sunday), oldest first; the last is the
+ * week `today` falls in.
+ */
+export function weeklySeries(
+  loads: ReportLoad[],
+  today: string,
+  count: number
+): SeriesPoint[] {
+  const weekday = (utc(today).getUTCDay() + 6) % 7
+  const first = addDays(today, -weekday - 7 * (count - 1))
+  const points = Array.from({ length: count }, (_, i) => {
+    const start = addDays(first, 7 * i)
+    const label = dayLabel.format(utc(start))
+    return emptyPoint(start, label, `Week of ${label}`)
+  })
+  const firstMs = utc(first).getTime()
+  for (const load of loads) {
+    if (load.delivered_on < first || load.delivered_on > today) continue
+    const days = (utc(load.delivered_on).getTime() - firstMs) / 864e5
+    addLoad(points[Math.floor(days / 7)], load)
+  }
+  return points
+}
+
+/** The last `count` months, oldest first; the last is this month. */
 export function monthlySeries(
   loads: ReportLoad[],
   today: string,
-  count = 12
-): MonthPoint[] {
+  count: number
+): SeriesPoint[] {
   const year = Number(today.slice(0, 4))
   const month = Number(today.slice(5, 7))
-  const points: MonthPoint[] = []
-  const byMonth = new Map<string, MonthPoint>()
-  for (let i = count - 1; i >= 0; i--) {
-    const start = monthStart(year, month - i)
-    const date = new Date(`${start}T00:00:00Z`)
-    const point: MonthPoint = {
-      month: start.slice(0, 7),
-      label: monthLabel.format(date),
-      fullLabel: monthYearLabel.format(date),
-      revenue: 0,
-      cost: 0,
-      profit: 0,
-      loads: 0,
-    }
-    points.push(point)
-    byMonth.set(point.month, point)
-  }
+  const points = Array.from({ length: count }, (_, i) => {
+    const start = monthStart(year, month - (count - 1 - i))
+    return emptyPoint(
+      start,
+      monthLabel.format(utc(start)),
+      monthYearLabel.format(utc(start))
+    )
+  })
+  const byMonth = new Map(points.map((p) => [p.start.slice(0, 7), p]))
   for (const load of loads) {
+    if (load.delivered_on > today) continue
     const point = byMonth.get(load.delivered_on.slice(0, 7))
-    if (!point) continue
-    point.revenue += load.rate
-    point.cost += loadCost(load)
-    point.profit += loadProfit(load)
-    point.loads++
+    if (point) addLoad(point, load)
   }
   return points
+}
+
+export const OVERVIEW_PERIODS = ["30days", "3months", "1year"] as const
+export type OverviewPeriod = (typeof OVERVIEW_PERIODS)[number]
+export const OVERVIEW_PERIOD_LABELS: Record<OverviewPeriod, string> = {
+  "30days": "30 Days",
+  "3months": "3 Months",
+  "1year": "1 Year",
+}
+
+type SeriesTotals = Pick<
+  SeriesPoint,
+  "revenue" | "driverPay" | "expenses" | "profit" | "loads"
+>
+const sumPoints = (points: SeriesPoint[]): SeriesTotals =>
+  points.reduce(
+    (total, p) => ({
+      revenue: total.revenue + p.revenue,
+      driverPay: total.driverPay + p.driverPay,
+      expenses: total.expenses + p.expenses,
+      profit: total.profit + p.profit,
+      loads: total.loads + p.loads,
+    }),
+    { revenue: 0, driverPay: 0, expenses: 0, profit: 0, loads: 0 }
+  )
+
+/**
+ * The charts for a period: 5 weeks, 13 weeks or 12 months, with the totals
+ * for it and for the same stretch just before, to show the change.
+ */
+export function overview(
+  loads: ReportLoad[],
+  today: string,
+  period: OverviewPeriod
+) {
+  const both =
+    period === "1year"
+      ? monthlySeries(loads, today, 24)
+      : weeklySeries(loads, today, period === "30days" ? 10 : 26)
+  const half = both.length / 2
+  const points = both.slice(half)
+  return {
+    points,
+    total: sumPoints(points),
+    previous: sumPoints(both.slice(0, half)),
+  }
+}
+
+/**
+ * This month so far, and last month up to the same day (the 31st becomes
+ * the 30th in a 30-day month), so the two compare like for like.
+ */
+export function monthToDate(loads: ReportLoad[], today: string) {
+  const year = Number(today.slice(0, 4))
+  const month = Number(today.slice(5, 7))
+  const day = Number(today.slice(8, 10))
+  const thisStart = monthStart(year, month)
+  const lastStart = monthStart(year, month - 1)
+  const lastLength = new Date(
+    Date.UTC(Number(lastStart.slice(0, 4)), Number(lastStart.slice(5, 7)), 0)
+  ).getUTCDate()
+  const lastEnd = `${lastStart.slice(0, 8)}${pad(Math.min(day, lastLength))}`
+  return {
+    current: totals(
+      loads.filter(
+        (l) => l.delivered_on >= thisStart && l.delivered_on <= today
+      )
+    ),
+    previous: totals(
+      loads.filter(
+        (l) => l.delivered_on >= lastStart && l.delivered_on <= lastEnd
+      )
+    ),
+  }
+}
+
+/** The change from `previous` to `current` as a fraction; null with nothing to compare to. */
+export function change(current: number | null, previous: number | null) {
+  if (current === null || previous === null || previous === 0) return null
+  return (current - previous) / Math.abs(previous)
 }
 
 const percent = new Intl.NumberFormat("en-US", {

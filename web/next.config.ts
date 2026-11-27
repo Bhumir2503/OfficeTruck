@@ -10,6 +10,12 @@ const nextConfig: NextConfig = {
         destination: "/org/:slug/customers/:path*",
         permanent: true,
       },
+      // Reports moved onto the dashboard, under the day's work.
+      {
+        source: "/org/:slug/reports",
+        destination: "/org/:slug#reports",
+        permanent: false,
+      },
     ]
   },
   experimental: {
