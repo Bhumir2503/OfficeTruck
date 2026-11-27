@@ -20,6 +20,7 @@ type Row = {
   empty_miles: number | null
   driver_pay_type: PayType | null
   driver_pay_rate: number | string | null
+  tonu_driver_pay: number | string | null
   pickup_location: string
   delivery_location: string
   broker_name: string
@@ -34,7 +35,7 @@ type Row = {
 }
 
 const COLUMNS =
-  "id, reference, status, delivery_start, delivered_on, rate, miles, empty_miles, driver_pay_type, driver_pay_rate, pickup_location, delivery_location, broker_name, broker_id, broker:brokers!loads_broker_fkey (legal_name), driver_name, driver_id, driver:drivers!loads_driver_fkey (full_name), truck, truck_id, truck_link:trucks!loads_truck_fkey (unit_number)"
+  "id, reference, status, delivery_start, delivered_on, rate, miles, empty_miles, driver_pay_type, driver_pay_rate, tonu_driver_pay, pickup_location, delivery_location, broker_name, broker_id, broker:brokers!loads_broker_fkey (legal_name), driver_name, driver_id, driver:drivers!loads_driver_fkey (full_name), truck, truck_id, truck_link:trucks!loads_truck_fkey (unit_number)"
 
 /** Every delivered (or further along) load, with its pay and expenses totalled. */
 export async function getReportLoads(
@@ -75,12 +76,15 @@ export async function getReportLoads(
 
   return rows.map((row) => {
     const rate = Number(row.rate)
+    const tonu = row.status === "tonu"
     const pay = loadDriverPay({
       driver_pay_type: row.driver_pay_type,
       driver_pay_rate:
         row.driver_pay_rate === null ? null : Number(row.driver_pay_rate),
       rate,
       miles: row.miles,
+      status: row.status,
+      tonu_driver_pay: row.tonu_driver_pay,
     })
     const driverName = row.driver?.full_name ?? row.driver_name
     const truckName = row.truck_link?.unit_number ?? row.truck
@@ -90,8 +94,9 @@ export async function getReportLoads(
       status: row.status,
       delivered_on: row.delivered_on ?? row.delivery_start.slice(0, 10),
       rate,
-      miles: row.miles,
-      empty_miles: row.empty_miles,
+      // A TONU ran no miles, so it doesn't skew rate or cost per mile.
+      miles: tonu ? null : row.miles,
+      empty_miles: tonu ? null : row.empty_miles,
       driver_pay: pay,
       pay_unknown: pay === null && row.driver_pay_type !== null,
       expenses: expenses.get(row.id) ?? 0,

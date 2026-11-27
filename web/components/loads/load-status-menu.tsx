@@ -168,7 +168,7 @@ function TonuForm({
   onDone,
 }: {
   organizationId: string
-  load: { id: string; reference: string }
+  load: { id: string; reference: string; hasDriver: boolean }
   onDone: () => void
 }) {
   const { errors, formError, pending, formProps } = useZodForm(
@@ -206,6 +206,20 @@ function TonuForm({
           placeholder="Optional, e.g. Shipper canceled at the dock"
           errors={errors}
         />
+        {load.hasDriver && (
+          <LoadTextField
+            name="driver_pay"
+            label="Driver's TONU pay"
+            prefix="$"
+            inputMode="decimal"
+            placeholder="Company default"
+            hint="For the wasted trip. Leave it blank for the amount in Settings, or enter 0."
+            errors={errors}
+            onChange={handleCurrencyInput}
+            onKeyDown={handleCurrencyKeyDown}
+            onBlur={handleCurrencyBlur}
+          />
+        )}
         <DialogFooter className="items-center">
           {formError && (
             <p className="mr-auto text-sm text-destructive">{formError}</p>
@@ -296,6 +310,8 @@ export function LoadStatusMenu({
     status: LoadStatus
     /** Marked complete by hand, with no POD or last-stop check-in yet. */
     completed_manually?: boolean
+    /** A load with a driver asks for their TONU pay when marked TONU. */
+    driver_id?: string | null
   }
 }) {
   const [pending, setPending] = useState(false)
@@ -531,7 +547,7 @@ export function LoadStatusMenu({
           </DialogHeader>
           <TonuForm
             organizationId={organizationId}
-            load={load}
+            load={{ ...load, hasDriver: !!load.driver_id }}
             onDone={() => setMarkingTonu(false)}
           />
         </DialogContent>

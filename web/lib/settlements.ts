@@ -41,12 +41,14 @@ type LoadRow = {
   miles: number | null
   driver_pay_type: PayType | null
   driver_pay_rate: number | string | null
+  tonu_driver_pay: number | string | null
+  status: string
   pickup_location: string
   delivery_location: string
 }
 
 const LOAD_COLUMNS =
-  "id, reference, driver_id, delivery_start, delivered_on, rate, miles, driver_pay_type, driver_pay_rate, pickup_location, delivery_location"
+  "id, reference, status, driver_id, delivery_start, delivered_on, rate, miles, driver_pay_type, driver_pay_rate, tonu_driver_pay, pickup_location, delivery_location"
 
 /** The day after `day` ("YYYY-MM-DD"). */
 const dayAfter = (day: string) =>
@@ -63,12 +65,15 @@ function toLoad(row: LoadRow): SettlementLoad {
     delivered_on: row.delivered_on,
     rate,
     miles: row.miles,
+    tonu: row.status === "tonu",
     pay: loadDriverPay({
       driver_pay_type: row.driver_pay_type,
       driver_pay_rate:
         row.driver_pay_rate === null ? null : Number(row.driver_pay_rate),
       rate,
       miles: row.miles,
+      status: row.status,
+      tonu_driver_pay: row.tonu_driver_pay,
     }),
     route: `${cityState(row.pickup_location)} → ${cityState(row.delivery_location)}`,
   }
@@ -213,7 +218,10 @@ export async function getSettlement(
     )
     loadRows = loadRows.filter((load) => !paidElsewhere.has(load.id))
   }
-  const driverLoads = loadRows.map(toLoad)
+  // A TONU is on the statement only when it pays the driver something.
+  const driverLoads = loadRows
+    .map(toLoad)
+    .filter((load, i) => loadRows[i]!.status !== "tonu" || (load.pay ?? 0) > 0)
 
   const ids = driverLoads.map((load) => load.id)
   const [expenses, adjustments] = await Promise.all([
@@ -346,6 +354,8 @@ export async function getOldestUnpaidDay(
       .eq("organization_id", organizationId)
       .eq("driver_id", driverId)
       .in("status", PAYABLE_STATUSES)
+      // A TONU that pays the driver nothing isn't owed.
+      .or("status.neq.tonu,tonu_driver_pay.gt.0")
       .lte("delivered_on", through)
       .order("delivered_on"),
     supabase

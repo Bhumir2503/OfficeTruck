@@ -14,6 +14,35 @@ import { LOAD_STATUS_LABELS } from "@/lib/schemas/load"
  */
 
 /**
+ * The load's status, or where the driver is right now: at a stop, or in
+ * detention once free time has run out there.
+ */
+function StatusBadge({
+  load,
+  className = "",
+}: {
+  load: DriverNow["current"] & object
+  className?: string
+}) {
+  const here = load.at_stop
+  const [label, style] = here
+    ? here.detention
+      ? ["In detention", "bg-destructive/10 text-destructive"]
+      : [
+          here.kind === "pickup" ? "At pickup" : "At delivery",
+          "bg-sky-500/15 text-sky-700 dark:text-sky-300",
+        ]
+    : [LOAD_STATUS_LABELS[load.status], STATUS_STYLES[load.status]]
+  return (
+    <span
+      className={`rounded-md px-1.5 py-0.5 text-xs font-medium whitespace-nowrap ${style} ${className}`}
+    >
+      {label}
+    </span>
+  )
+}
+
+/**
  * What a driver or truck is doing now: the load it's on, or Available with
  * the next booked load.
  */
@@ -41,14 +70,12 @@ export function NowCell({
           >
             {current.reference}
           </Link>
-          <span
-            className={`rounded-md px-1.5 py-0.5 text-xs font-medium ${STATUS_STYLES[current.status]}`}
-          >
-            {LOAD_STATUS_LABELS[current.status]}
-          </span>
+          <StatusBadge load={current} />
         </div>
         <div className="truncate text-sm text-muted-foreground">
-          {current.from} → {current.to}
+          {current.at_stop
+            ? `Since ${current.at_stop.since} · ${current.at_stop.kind === "pickup" ? current.from : current.to}`
+            : `${current.from} → ${current.to}`}
         </div>
       </div>
     )
@@ -107,13 +134,11 @@ export function NowLine({
   if (current) {
     return (
       <div className="mt-1 truncate text-xs md:hidden">
-        <span
-          className={`mr-1.5 rounded-md px-1.5 py-0.5 font-medium ${STATUS_STYLES[current.status]}`}
-        >
-          {LOAD_STATUS_LABELS[current.status]}
-        </span>
+        <StatusBadge load={current} className="mr-1.5" />
         <span className="text-muted-foreground">
-          {current.from} → {current.to}
+          {current.at_stop
+            ? `since ${current.at_stop.since}`
+            : `${current.from} → ${current.to}`}
         </span>
       </div>
     )

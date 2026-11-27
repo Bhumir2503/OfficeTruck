@@ -171,23 +171,23 @@ All fixed on branch `claude/qa-fixes` unless noted.
 
 ## Ideas
 
-Still open. Also new: TONU revenue isn't in Reports (they count delivered loads only).
+All done on branch `claude/qa-ideas` (migration `20261127232603_qa_ideas`, applied to the hosted project). Live driver state: "At pickup / At delivery / In detention since 5:40 AM" on the Drivers and Trucks lists and at the start of the load's next step.
 
 
-- [ ] **Import past invoices with their real dates.** `send_invoice` only
+- [x] **Import past invoices with their real dates.** Done on branch `claude/qa-ideas`: "Record as sent earlier" on a draft invoice (`record_past_invoice`), no email, refused before the delivery day. `send_invoice` only
   takes a date within a day of today, so a carrier switching to the app can't
   bring in history. An "add a past invoice" path (set invoice date and paid
   status) would help onboarding.
-- [ ] **TONU pay rule:** flat TONU pay for the driver, set per company or per
+- [x] **TONU pay rule:** Done on branch `claude/qa-ideas`: company default in Settings → TONU pay, set per load in the TONU dialog (`loads.tonu_driver_pay`); it lands on the pay statement for the pickup week. TONU loads also count in Reports now (dated their pickup day, no miles). flat TONU pay for the driver, set per company or per
   driver.
-- [ ] **Compliance blockers on the dashboard:** missing or expired documents
+- [x] **Compliance blockers on the dashboard:** Done on branch `claude/qa-ideas`: "Truck 103 can't legally run BFB-1" when a driver's or truck's date has lapsed, or lapses before the pickup of a load in the next 7 days. missing or expired documents
   only for drivers and trucks with a load in the next 7 days.
-- [ ] **Live driver state** on the Drivers/Trucks lists and the load's next
+- [x] **Live driver state** on the Drivers/Trucks lists and the load's next
   step: "At pickup since 5:40", "In detention", "Delivered, POD in".
-- [ ] **Gallons and state in the driver app** fuel receipt (proposed as a
+- [x] **Gallons and state in the driver app** Done on branch `claude/qa-ideas`: `add_my_expense` takes them, the iOS fuel form asks for them (builds; not tapped through in the simulator). fuel receipt (proposed as a
   separate task: update `add_my_expense`, then the iOS form; needs
   `claude/ifta` merged first).
-- [ ] Before deploying `claude/ifta`, apply its two migrations first (see top).
+- [x] Before deploying `claude/ifta`, apply its two migrations first (see top). Applied to the hosted project.
 
 ## Cleanup when done
 

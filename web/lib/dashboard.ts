@@ -79,11 +79,10 @@ export const getAttention = cache(async (organizationId: string) => {
     supabase
       .from("loads")
       .select(
-        "id, reference, status, pickup_location, pickup_start, driver_id, driver:drivers!loads_driver_fkey (full_name)"
+        "id, reference, status, pickup_location, pickup_start, driver_id, truck_id, driver:drivers!loads_driver_fkey (full_name)"
       )
       .eq("organization_id", organizationId)
       .in("status", ["booked", "dispatched", "loaded"])
-      .not("driver_id", "is", null)
       .order("pickup_start"),
     supabase
       .from("driver_updates")
@@ -107,16 +106,26 @@ export const getAttention = cache(async (organizationId: string) => {
     status: string
     pickup_location: string
     pickup_start: string
-    driver_id: string
+    driver_id: string | null
+    truck_id: string | null
     driver: { full_name: string } | null
   }[]
-  // Each driver's nearest load: on the road first, then the next booked.
-  const loadOf = new Map<string, string>()
+  // Each driver's and truck's nearest load: on the road first, then the
+  // next booked.
+  type Scheduled = { reference: string; pickup_start: string }
+  const loadOf = new Map<string, Scheduled>()
+  const truckLoadOf = new Map<string, Scheduled>()
   for (const load of [
     ...scheduled.filter((load) => load.status !== "booked"),
     ...scheduled.filter((load) => load.status === "booked"),
   ]) {
-    if (!loadOf.has(load.driver_id)) loadOf.set(load.driver_id, load.reference)
+    const entry = { reference: load.reference, pickup_start: load.pickup_start }
+    if (load.driver_id && !loadOf.has(load.driver_id)) {
+      loadOf.set(load.driver_id, entry)
+    }
+    if (load.truck_id && !truckLoadOf.has(load.truck_id)) {
+      truckLoadOf.set(load.truck_id, entry)
+    }
   }
   const driverName = new Map(
     drivers.map((driver) => [driver.id, driver.full_name])
@@ -151,6 +160,7 @@ export const getAttention = cache(async (organizationId: string) => {
           owner: `Truck ${truck.unit_number}`,
           item,
           path: `equipment/${truck.id}`,
+          onLoad: truckLoadOf.get(truck.id) ?? null,
         }))
     ),
     // Trailers have the same three dates as trucks.
@@ -237,7 +247,7 @@ export const getAttention = cache(async (organizationId: string) => {
       submitted_at: update.created_at,
     })),
     dispatched: scheduled
-      .filter((load) => load.status === "dispatched")
+      .filter((load) => load.status === "dispatched" && load.driver_id)
       .map((load) => ({
         id: load.id,
         reference: load.reference,

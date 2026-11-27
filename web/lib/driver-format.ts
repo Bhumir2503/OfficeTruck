@@ -278,13 +278,24 @@ export type LockedPay = {
 /**
  * What the driver earns on a load, at the rate locked onto it when they were
  * assigned (not their rate today). Null when there's no rate, or a per-mile
- * rate on a load without miles. A TONU load was never driven, so it pays
- * nothing.
+ * rate on a load without miles. A TONU load was never driven: it pays the
+ * flat TONU amount locked onto it, or nothing.
  */
 export function loadDriverPay(
-  load: LockedPay & { rate: number; miles: number | null; status?: string }
+  load: LockedPay & {
+    rate: number
+    miles: number | null
+    status?: string
+    /** On a TONU: the flat amount locked when it was marked, if any. */
+    tonu_driver_pay?: number | string | null
+  }
 ) {
-  if (load.status === "tonu" && load.driver_pay_type) return 0
+  if (load.status === "tonu") {
+    if (load.tonu_driver_pay !== null && load.tonu_driver_pay !== undefined) {
+      return Number(load.tonu_driver_pay)
+    }
+    return load.driver_pay_type ? 0 : null
+  }
   return driverPay(
     { pay_type: load.driver_pay_type, pay_rate: load.driver_pay_rate },
     load

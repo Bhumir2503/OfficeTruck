@@ -77,7 +77,7 @@ export type AttentionInput = {
      * For a driver: the load on their schedule, if any. A CDL or medical
      * card that isn't on file is only raised for a driver who's driving.
      */
-    onLoad?: string | null
+    onLoad?: { reference: string; pickup_start: string } | null
   }[]
   /** CDLs and medical cards drivers sent from the app, waiting for review. */
   driverUpdates?: {
@@ -99,6 +99,9 @@ export type AttentionInput = {
     driver: string | null
   }[]
 }
+
+/** How far ahead a load makes a lapsing document a blocker. */
+export const BLOCKER_DAYS = 7
 
 /** Documents a driver can't legally drive without. */
 const REQUIRED_TO_DRIVE = new Set(["cdl", "medical_card"])
@@ -276,11 +279,37 @@ export function buildAttention(input: AttentionInput): AttentionItem[] {
           kind: "document",
           tone: "danger",
           title: `${owner} has no ${lowerFirst(item.label)} on file`,
-          detail: `Driving ${onLoad} · Add the date from the card`,
+          detail: `Driving ${onLoad.reference} · Add the date from the card`,
           path,
           urgency: -1000,
         })
       }
+      continue
+    }
+    // A blocker: lapsed, or lapsing before the pickup of a load in the next
+    // BLOCKER_DAYS days. The driver or truck can't legally run it.
+    const pickup = onLoad?.pickup_start.slice(0, 10)
+    if (
+      onLoad &&
+      pickup &&
+      item.due &&
+      daysFrom(today, pickup) <= BLOCKER_DAYS &&
+      item.due < (pickup > today ? pickup : today)
+    ) {
+      const lapsed = expiry.state === "expired"
+      items.push({
+        key: `document:${path ?? owner}:${item.key}`,
+        kind: "document",
+        tone: "danger",
+        title: `${owner} can't legally run ${onLoad.reference}`,
+        detail: `${item.label} ${
+          lapsed
+            ? `${item.kind === "expires" ? "expired" : "was due"} ${dateOf(item.due)}`
+            : `${item.kind === "expires" ? "expires" : "is due"} ${dateOf(item.due)}, before pickup ${dateOf(pickup)}`
+        }`,
+        path,
+        urgency: -900,
+      })
       continue
     }
     if (!SOON.has(expiry.state)) continue

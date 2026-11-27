@@ -36,7 +36,8 @@ import { getLoadDocuments } from "@/lib/load-documents"
 import { getLoadInvoice } from "@/lib/invoices"
 import { getLoadExpenses } from "@/lib/load-expenses"
 import { getLoadDetail } from "@/lib/loads"
-import { canManage, getOrganization } from "@/lib/organizations"
+import { loadWhereNow } from "@/lib/load-format"
+import { canManage, getOrganization, getTimeZone } from "@/lib/organizations"
 import { getTruckOptions } from "@/lib/trucks"
 
 async function loadFor(params: PageProps<"/org/[slug]/loads/[id]">["params"]) {
@@ -75,6 +76,7 @@ export default async function LoadPage({
     documents,
     expenses,
     invoice,
+    timeZone,
   ] = await Promise.all([
     getDriverOptions(organization.id),
     getTruckOptions(organization.id),
@@ -84,7 +86,11 @@ export default async function LoadPage({
     getLoadDocuments(organization.id, load.id),
     getLoadExpenses(organization.id, load.id),
     getLoadInvoice(organization.id, load.id),
+    getTimeZone(organization.id),
   ])
+  // Where the driver is now, for the next step: worked out here, on the
+  // company's clock, so the page doesn't change as it loads.
+  const where = loadWhereNow(load, stops, timeZone)
 
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
@@ -230,6 +236,7 @@ export default async function LoadPage({
               <LoadSidePanel
                 organizationId={organization.id}
                 load={load}
+                where={where}
                 charges={charges}
                 documents={documents}
                 expenses={expenses}

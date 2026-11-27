@@ -9,6 +9,7 @@ import {
   Download,
   ExternalLink,
   FileText,
+  History,
   Loader2,
   Mail,
   Trash2,
@@ -32,6 +33,7 @@ import {
 } from "@/app/org/[slug]/invoices/actions"
 import { DateField } from "@/components/drivers/date-field"
 import { LoadTextField } from "@/components/loads/freight-fields"
+import { PastInvoiceDialog } from "@/components/invoices/past-invoice-dialog"
 import { LocalDate } from "@/components/local-date"
 import { Button, buttonVariants } from "@/components/ui/button"
 import {
@@ -628,6 +630,7 @@ export function InvoiceSidePanel({
   const [voiding, setVoiding] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [emailInstead, setEmailInstead] = useState(false)
+  const [recordingPast, setRecordingPast] = useState(false)
 
   const portal = billTo.method === "portal" && !emailInstead
 
@@ -917,6 +920,36 @@ export function InvoiceSidePanel({
           )}
         </div>
       </section>
+
+      {invoice.status === "draft" && (
+        <Panel title="Sent before OfficeTruck?">
+          <p className="text-sm text-muted-foreground">
+            Record the day it really went out, without sending anything, so its
+            due date and payments line up.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-3 w-full"
+            onClick={() => setRecordingPast(true)}
+          >
+            <History />
+            Record as sent earlier
+          </Button>
+          <PastInvoiceDialog
+            organizationId={organizationId}
+            invoiceId={invoice.id}
+            number={invoice.number}
+            today={today}
+            earliest={null}
+            open={recordingPast}
+            onOpenChange={(next) => {
+              setRecordingPast(next)
+              if (!next) router.refresh()
+            }}
+          />
+        </Panel>
+      )}
 
       {invoice.status === "draft" && (
         <Panel title="Delete draft">

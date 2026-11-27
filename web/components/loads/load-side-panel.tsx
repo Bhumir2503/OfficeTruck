@@ -228,9 +228,12 @@ export function LoadSidePanel({
   loadsBase,
   invoice,
   invoicesBase,
+  where = null,
 }: {
   organizationId: string
   load: Load
+  /** Where the driver is now, e.g. "At the pickup in Dallas, TX since 6:10 AM." */
+  where?: string | null
   charges: LoadCharge[]
   documents: LoadDocument[]
   expenses: LoadExpense[]
@@ -265,7 +268,11 @@ export function LoadSidePanel({
     ...(lumperReceipt ? [{ kind: "lumper_receipt" as const }] : []),
   ])
   const ready = missing.length === 0
-  const step = nextStep(load, missing, invoice)
+  const planned = nextStep(load, missing, invoice)
+  // On the road, lead with where the driver is right now.
+  const step = where
+    ? { ...planned, detail: `${where} ${planned.detail}` }
+    : planned
   const invoiced = INVOICED_STATUSES.includes(load.status)
   const shown: DocumentKind[] = [
     ...required,
@@ -657,7 +664,7 @@ export function LoadSidePanel({
           <MoneyLine
             label={
               load.status === "tonu"
-                ? "Driver pay (none on a TONU)"
+                ? "Driver pay (TONU)"
                 : locked
                   ? `Driver pay (${locked})`
                   : "Driver pay"
