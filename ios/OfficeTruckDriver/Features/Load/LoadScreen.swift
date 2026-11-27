@@ -253,10 +253,14 @@ struct LoadScreen: View {
                                      unsent: stop.departedAt == nil && isUnsent(departedTap))
                     }
                     // While waiting at the dock: when the free time runs out.
+                    // Early for the appointment, free time starts when it does.
                     if let hours = load.detentionFreeHours, hours > 0, let arrived, departed == nil {
-                        let starts = arrived.addingTimeInterval(hours * 3600)
+                        let starts = max(arrived, stop.appointmentAt ?? arrived).addingTimeInterval(hours * 3600)
                         LabeledContent("Detention starts") {
-                            Text(starts.formatted(date: .omitted, time: .shortened))
+                            // Tomorrow's 8:00 AM isn't today's: say the day when it's another one.
+                            Text(Calendar.current.isDateInToday(starts)
+                                 ? starts.formatted(date: .omitted, time: .shortened)
+                                 : starts.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
                                 .foregroundStyle(starts <= .now ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
                         }
                     }

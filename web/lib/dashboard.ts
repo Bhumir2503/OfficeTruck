@@ -196,6 +196,7 @@ export type WaitingStop = {
   location: string
   arrived_at: string
   departed_at: null
+  appointment_at: string | null
   load: {
     id: string
     reference: string
@@ -217,7 +218,9 @@ export async function getWaitingStops(
   const since = new Date(Date.now() - 24 * 3_600_000).toISOString()
   const { data: stops, error } = await supabase
     .from("load_stops")
-    .select("id, load_id, position, kind, facility, location, arrived_at")
+    .select(
+      "id, load_id, position, kind, facility, location, arrived_at, appointment_at"
+    )
     .eq("organization_id", organizationId)
     .not("arrived_at", "is", null)
     .is("departed_at", null)
@@ -252,6 +255,7 @@ export async function getWaitingStops(
         location: stop.location,
         arrived_at: stop.arrived_at as string,
         departed_at: null,
+        appointment_at: (stop.appointment_at as string | null) ?? null,
         load: {
           id: load.id,
           reference: load.reference,

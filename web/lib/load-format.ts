@@ -90,23 +90,50 @@ export function formatDuration(ms: number) {
   return rest ? `${hours}h ${rest}m` : `${hours}h`
 }
 
+/** A stop's times, as far as detention goes. */
+export type DetentionStop = {
+  arrived_at: string | null
+  departed_at: string | null
+  /**
+   * The moment the appointment starts, when the stop's time zone is known.
+   * For the clock only: appointments are shown as written.
+   */
+  appointment_at?: string | null
+}
+
 /**
- * Detention at a stop: time on site past the free hours, billed in quarter
- * hours. Counted from arrival, since the appointment is a wall-clock time
- * with no zone; check the driver arrived on time before billing it. Null
- * until the driver has arrived and departed, or with no detention terms.
+ * When a stop's free time starts: at arrival, or at the appointment for a
+ * driver who got there early. A stop with no time zone yet has no
+ * appointment moment and counts from arrival. Null until the driver arrives.
+ */
+export function freeTimeStart(stop: DetentionStop) {
+  if (!stop.arrived_at) return null
+  const arrived = new Date(stop.arrived_at).getTime()
+  const appointment = stop.appointment_at
+    ? new Date(stop.appointment_at).getTime()
+    : Number.NaN
+  return Number.isNaN(appointment) ? arrived : Math.max(arrived, appointment)
+}
+
+/**
+ * Detention at a stop: time past the free hours, billed in quarter hours.
+ * Free time starts at arrival, or at the appointment when the driver was
+ * early. Null until the driver has arrived and departed; no charge with no
+ * detention terms.
  */
 export function stopDetention(
-  stop: { arrived_at: string | null; departed_at: string | null },
+  stop: DetentionStop,
   terms: { detention_free_hours: number | null; detention_rate: number | null }
 ) {
-  if (!stop.arrived_at || !stop.departed_at) return null
-  const onSite =
-    new Date(stop.departed_at).getTime() - new Date(stop.arrived_at).getTime()
+  const start = freeTimeStart(stop)
+  if (start === null || !stop.arrived_at || !stop.departed_at) return null
+  const departed = new Date(stop.departed_at).getTime()
+  const onSite = departed - new Date(stop.arrived_at).getTime()
   if (terms.detention_free_hours === null || terms.detention_rate === null) {
     return { onSite, billableHours: 0, amount: 0 }
   }
-  const pastFree = onSite / 3_600_000 - Number(terms.detention_free_hours)
+  const pastFree =
+    (departed - start) / 3_600_000 - Number(terms.detention_free_hours)
   const billableHours = pastFree > 0 ? Math.ceil(pastFree * 4) / 4 : 0
   return {
     onSite,
@@ -120,18 +147,20 @@ export function stopDetention(
  * The detention clock for a driver still at a stop: how long they've
  * waited, how much free time is left, and once it's run out, how long
  * detention has run and what it comes to so far (quarter hours, rounded up,
- * as it'll be billed). Null until they've arrived, after they've left, or
- * with no free time on the load.
+ * as it'll be billed). Free time starts at arrival, or at the appointment
+ * when the driver is early. Null until they've arrived, after they've left,
+ * or with no free time on the load.
  */
 export function detentionClock(
-  stop: { arrived_at: string | null; departed_at: string | null },
+  stop: DetentionStop,
   terms: { detention_free_hours: number | null; detention_rate: number | null },
   now: number
 ) {
-  if (!stop.arrived_at || stop.departed_at) return null
+  const start = freeTimeStart(stop)
+  if (start === null || !stop.arrived_at || stop.departed_at) return null
   if (terms.detention_free_hours === null) return null
   const arrived = new Date(stop.arrived_at).getTime()
-  const freeUntil = arrived + Number(terms.detention_free_hours) * 3_600_000
+  const freeUntil = start + Number(terms.detention_free_hours) * 3_600_000
   const waiting = Math.max(0, now - arrived)
   const over = Math.max(0, now - freeUntil)
   const billableHours = over > 0 ? Math.ceil((over / 3_600_000) * 4) / 4 : 0

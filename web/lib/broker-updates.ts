@@ -22,7 +22,7 @@ const MAX_ATTEMPTS = 5
 const BATCH = 25
 
 const STOP_COLUMNS =
-  "id, position, kind, facility, location, stop_number, arrived_at, departed_at, arrived_source, departed_source, arrived_latitude, arrived_longitude, arrived_location_accuracy_m, departed_latitude, departed_longitude, departed_location_accuracy_m"
+  "id, position, kind, facility, location, time_zone, appointment_at, stop_number, arrived_at, departed_at, arrived_source, departed_source, arrived_latitude, arrived_longitude, arrived_location_accuracy_m, departed_latitude, departed_longitude, departed_location_accuracy_m"
 
 type Queued = {
   id: string

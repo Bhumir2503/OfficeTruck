@@ -54,7 +54,7 @@ export function DetentionSetting({
   return (
     <SettingsCard
       title="Detention"
-      description="For loads with free time and a detention rate on the rate con, counted from the driver's check-in."
+      description="For loads with free time and a detention rate on the rate con, counted from the driver's check-in, or from the appointment when they're early."
       footer={
         <SettingsCardFooter
           hint={

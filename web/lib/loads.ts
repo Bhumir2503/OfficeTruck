@@ -201,6 +201,10 @@ export type LoadStop = {
   /** Wall-clock time at the stop, "YYYY-MM-DDTHH:mm:ss" with no zone. */
   appointment_start: string
   appointment_end: string | null
+  /** The stop's IANA time zone, from its address. Null until looked up. */
+  time_zone: string | null
+  /** The moment appointment_start is, in that zone. For detention only. */
+  appointment_at: string | null
   stop_number: string | null
   /** PO or other numbers for this stop. */
   reference_numbers: string | null
@@ -267,7 +271,7 @@ export async function getLoadDetail(organizationId: string, id: string) {
     supabase
       .from("load_stops")
       .select(
-        "id, position, kind, facility, location, appointment_type, appointment_start, appointment_end, stop_number, reference_numbers, contact_phone, notes, arrived_at, departed_at, arrived_source, departed_source, arrived_note, departed_note, arrived_odometer, departed_odometer, arrived_latitude, arrived_longitude, arrived_location_accuracy_m, departed_latitude, departed_longitude, departed_location_accuracy_m"
+        "id, position, kind, facility, location, time_zone, appointment_type, appointment_start, appointment_end, appointment_at, stop_number, reference_numbers, contact_phone, notes, arrived_at, departed_at, arrived_source, departed_source, arrived_note, departed_note, arrived_odometer, departed_odometer, arrived_latitude, arrived_longitude, arrived_location_accuracy_m, departed_latitude, departed_longitude, departed_location_accuracy_m"
       )
       .eq("load_id", id)
       .order("position"),

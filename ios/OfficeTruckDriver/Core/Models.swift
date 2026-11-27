@@ -168,6 +168,10 @@ struct LoadDetail: Decodable, Identifiable, Sendable {
         let appointmentType: String
         let appointmentStart: String
         let appointmentEnd: String?
+        /// The moment the appointment starts, once the office knows the
+        /// stop's time zone. For the detention clock only: appointments are
+        /// shown as written (`appointmentStart`).
+        let appointmentAt: Date?
         let stopNumber: String?
         let referenceNumbers: String?
         let contactPhone: String?

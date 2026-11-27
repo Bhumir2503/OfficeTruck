@@ -20,6 +20,7 @@ import {
   type TruckStartingPoint,
 } from "@/lib/empty-miles"
 import { MAX_ROUTE_STOPS, routeMiles, type RouteMiles } from "@/lib/route-miles"
+import { fillStopTimeZones } from "@/lib/stop-time-zone"
 import {
   accessorialSchema,
   type AccessorialValues,
@@ -166,6 +167,11 @@ export async function createLoad(
       }
     }
     return { error: rpcError(error) }
+  }
+
+  // Each stop's time zone, so detention can start at the appointment.
+  if (typeof data === "string") {
+    await fillStopTimeZones(supabase, data)
   }
 
   // A new rate con from a broker is the moment to re-check them with FMCSA.
@@ -630,6 +636,8 @@ export async function saveLoadStops(
   if (error) {
     return { error: rpcError(error) }
   }
+  // The time zone of any new stop, or one whose address changed.
+  await fillStopTimeZones(supabase, loadId)
   // New stops, new estimates: loaded miles through the stops, and empty
   // miles to the first pickup. If Google Maps can't route them, the old
   // estimates stay and can be fixed by hand.

@@ -4,7 +4,12 @@ import { cn } from "cn"
 import { Timer } from "lucide-react"
 import { useEffect, useState } from "react"
 
-import { detentionClock, formatDuration, formatRate } from "@/lib/load-format"
+import {
+  type DetentionStop,
+  detentionClock,
+  formatDuration,
+  formatRate,
+} from "@/lib/load-format"
 
 const clockFormat = new Intl.DateTimeFormat("en-US", {
   hour: "numeric",
@@ -33,7 +38,7 @@ export function DetentionClock({
   terms,
   className,
 }: {
-  stop: { arrived_at: string | null; departed_at: string | null }
+  stop: DetentionStop
   terms: { detention_free_hours: number | null; detention_rate: number | null }
   className?: string
 }) {
