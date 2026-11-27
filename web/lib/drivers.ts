@@ -16,6 +16,7 @@ import {
 import { complianceItems, LAST_DELIVERY_DAYS, today } from "@/lib/driver-format"
 import { getDqDatesByDriver } from "@/lib/dq/fleet"
 import { cityState } from "@/lib/report-format"
+import { fetchAll } from "@/lib/supabase/paging"
 import { createClient } from "@/lib/supabase/server"
 
 export type Driver = {
@@ -182,15 +183,19 @@ export async function getDriverLoads(
   driverId: string
 ): Promise<DriverLoad[]> {
   const supabase = await createClient()
-  const [{ data, error }, { data: organization }] = await Promise.all([
-    supabase
-      .from("loads")
-      .select(
-        "id, reference, pickup_location, delivery_location, pickup_start, delivery_start, delivery_end, delivered_on, rate, miles, status, driver_pay_type, driver_pay_rate, tonu_driver_pay, stops:load_stops (kind, location, position, arrived_at, departed_at)"
-      )
-      .eq("organization_id", organizationId)
-      .eq("driver_id", driverId)
-      .order("pickup_start", { ascending: false }),
+  const [data, { data: organization }] = await Promise.all([
+    fetchAll((from, to) =>
+      supabase
+        .from("loads")
+        .select(
+          "id, reference, pickup_location, delivery_location, pickup_start, delivery_start, delivery_end, delivered_on, rate, miles, status, driver_pay_type, driver_pay_rate, tonu_driver_pay, stops:load_stops (kind, location, position, arrived_at, departed_at)"
+        )
+        .eq("organization_id", organizationId)
+        .eq("driver_id", driverId)
+        .order("pickup_start", { ascending: false })
+        .order("id")
+        .range(from, to)
+    ),
     supabase
       .from("organizations")
       .select("time_zone")
@@ -198,9 +203,6 @@ export async function getDriverLoads(
       .maybeSingle(),
   ])
 
-  if (error) {
-    throw error
-  }
   const time = new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     minute: "2-digit",

@@ -8,10 +8,10 @@ import {
   LoadRowAction,
   type RowActionContext,
 } from "@/components/loads/load-row-action"
+import { ListPager, usePage } from "@/components/dashboard/list-pager"
 import { LoadStatusMenu } from "@/components/loads/load-status-menu"
 import {
   SettingsCard,
-  SettingsCardFooter,
   SettingsEmptyState,
 } from "@/components/settings/settings-card"
 import { TableFilters, type FilterOption } from "@/components/table-filters"
@@ -34,6 +34,9 @@ import {
 } from "@/lib/schemas/load"
 
 type Filter = LoadStatus | "all"
+
+/** Rows per page: a company's history runs to thousands of loads. */
+const PAGE_SIZE = 50
 
 export function LoadsTable({
   loads,
@@ -88,6 +91,7 @@ export function LoadsTable({
           load.broker_name.toLowerCase().includes(query))
     )
   }, [loads, filter, search])
+  const { shown, pager } = usePage(filtered, PAGE_SIZE)
 
   if (loads.length === 0) {
     return (
@@ -134,22 +138,31 @@ export function LoadsTable({
       }
       contentClassName="@container px-0 pb-0"
       footer={
-        <SettingsCardFooter
-          hint={
+        <ListPager
+          {...pager}
+          noun={
             filtering
-              ? `Showing ${filtered.length} of ${loads.length} ${loads.length === 1 ? "load" : "loads"}`
-              : `${loads.length} ${loads.length === 1 ? "load" : "loads"}`
+              ? `matching loads (${loads.length} in all)`
+              : pager.total === 1
+                ? "load"
+                : "loads"
           }
         />
       }
     >
       <TableFilters
         search={search}
-        onSearchChange={setSearch}
+        onSearchChange={(value) => {
+          setSearch(value)
+          pager.onPage(1)
+        }}
         searchPlaceholder="Search load # or broker"
         searchLabel="Search loads"
         filter={filter}
-        onFilterChange={setFilter}
+        onFilterChange={(value) => {
+          setFilter(value)
+          pager.onPage(1)
+        }}
         options={filterOptions}
       />
       <Table className="[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6">
@@ -183,7 +196,7 @@ export function LoadsTable({
               </TableCell>
             </TableRow>
           )}
-          {filtered.map((load) => (
+          {shown.map((load) => (
             <TableRow key={load.id}>
               <TableCell className="py-3 @max-4xl:max-w-0">
                 <Link

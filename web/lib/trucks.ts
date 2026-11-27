@@ -13,6 +13,7 @@ import { today } from "@/lib/driver-format"
 import { type DriverNow, getLoadsNow } from "@/lib/drivers"
 import { truckComplianceItems } from "@/lib/truck-format"
 import type { TruckDocumentKind } from "@/lib/truck-document-format"
+import { fetchAll } from "@/lib/supabase/paging"
 import { createClient } from "@/lib/supabase/server"
 
 /** The load a truck is on, its next booked one and its last delivery. */
@@ -171,18 +172,18 @@ export async function getTruckLoads(
   truckId: string
 ): Promise<TruckLoad[]> {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("loads")
-    .select(
-      "id, reference, pickup_location, delivery_location, pickup_start, rate, miles, empty_miles, status, driver_pay_type, driver_pay_rate, tonu_driver_pay, driver:drivers!loads_driver_fkey (id, full_name, pay_type, pay_rate)"
-    )
-    .eq("organization_id", organizationId)
-    .eq("truck_id", truckId)
-    .order("pickup_start", { ascending: false })
-
-  if (error) {
-    throw error
-  }
+  const data = await fetchAll((from, to) =>
+    supabase
+      .from("loads")
+      .select(
+        "id, reference, pickup_location, delivery_location, pickup_start, rate, miles, empty_miles, status, driver_pay_type, driver_pay_rate, tonu_driver_pay, driver:drivers!loads_driver_fkey (id, full_name, pay_type, pay_rate)"
+      )
+      .eq("organization_id", organizationId)
+      .eq("truck_id", truckId)
+      .order("pickup_start", { ascending: false })
+      .order("id")
+      .range(from, to)
+  )
   return data as unknown as TruckLoad[]
 }
 
@@ -320,16 +321,17 @@ export async function getLastServiceByTruck(
   organizationId: string
 ): Promise<Record<string, LastService>> {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("truck_maintenance")
-    .select("truck_id, done_on, odometer")
-    .eq("organization_id", organizationId)
-    .eq("kind", "preventive")
-    .order("done_on", { ascending: false })
-    .order("created_at", { ascending: false })
-  if (error) {
-    throw error
-  }
+  const data = await fetchAll((from, to) =>
+    supabase
+      .from("truck_maintenance")
+      .select("truck_id, done_on, odometer")
+      .eq("organization_id", organizationId)
+      .eq("kind", "preventive")
+      .order("done_on", { ascending: false })
+      .order("created_at", { ascending: false })
+      .order("id")
+      .range(from, to)
+  )
   const byTruck: Record<string, LastService> = {}
   for (const row of data as (LastService & { truck_id: string })[]) {
     // Newest first, so the first one seen for a truck is its last service.

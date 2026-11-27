@@ -6,6 +6,7 @@ import {
 } from "@/lib/report-format"
 import type { PayType } from "@/lib/schemas/driver"
 import type { LoadStatus } from "@/lib/schemas/load"
+import { fetchAll, fetchByIds } from "@/lib/supabase/paging"
 import { createClient } from "@/lib/supabase/server"
 
 type Row = {
@@ -42,30 +43,31 @@ export async function getReportLoads(
   organizationId: string
 ): Promise<ReportLoad[]> {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("loads")
-    .select(COLUMNS)
-    .eq("organization_id", organizationId)
-    .in("status", REPORTED_STATUSES)
-    .order("delivered_on", { ascending: false })
-  if (error) {
-    throw error
-  }
+  const data = await fetchAll((from, to) =>
+    supabase
+      .from("loads")
+      .select(COLUMNS)
+      .eq("organization_id", organizationId)
+      .in("status", REPORTED_STATUSES)
+      .order("delivered_on", { ascending: false })
+      .order("id")
+      .range(from, to)
+  )
   const rows = data as unknown as Row[]
 
   const expenses = new Map<string, number>()
   if (rows.length) {
-    const { data: spent, error: spentError } = await supabase
-      .from("load_expenses")
-      .select("load_id, amount")
-      .eq("organization_id", organizationId)
-      .in(
-        "load_id",
-        rows.map((row) => row.id)
-      )
-    if (spentError) {
-      throw spentError
-    }
+    const spent = await fetchByIds(
+      rows.map((row) => row.id),
+      (chunk, from, to) =>
+        supabase
+          .from("load_expenses")
+          .select("load_id, amount")
+          .eq("organization_id", organizationId)
+          .in("load_id", chunk)
+          .order("id")
+          .range(from, to)
+    )
     for (const expense of spent) {
       expenses.set(
         expense.load_id,

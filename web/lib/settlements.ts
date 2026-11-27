@@ -11,6 +11,7 @@ import {
   type SettlementLoad,
   type SettlementTotals,
 } from "@/lib/settlement-format"
+import { fetchAll } from "@/lib/supabase/paging"
 import { createClient } from "@/lib/supabase/server"
 
 type SettlementRow = {
@@ -347,32 +348,39 @@ export async function getOldestUnpaidDay(
   through: string
 ): Promise<string | null> {
   const supabase = await createClient()
+  // All of it: a driver's history passes 1,000 loads within a few years.
   const [loads, paid] = await Promise.all([
-    supabase
-      .from("loads")
-      .select("id, delivered_on")
-      .eq("organization_id", organizationId)
-      .eq("driver_id", driverId)
-      .in("status", PAYABLE_STATUSES)
-      // A TONU that pays the driver nothing isn't owed.
-      .or("status.neq.tonu,tonu_driver_pay.gt.0")
-      .lte("delivered_on", through)
-      .order("delivered_on"),
-    supabase
-      .from("driver_settlements")
-      .select("load_ids")
-      .eq("organization_id", organizationId)
-      .eq("driver_id", driverId)
-      .eq("status", "paid"),
+    fetchAll((from, to) =>
+      supabase
+        .from("loads")
+        .select("id, delivered_on")
+        .eq("organization_id", organizationId)
+        .eq("driver_id", driverId)
+        .in("status", PAYABLE_STATUSES)
+        // A TONU that pays the driver nothing isn't owed.
+        .or("status.neq.tonu,tonu_driver_pay.gt.0")
+        .lte("delivered_on", through)
+        .order("delivered_on")
+        .order("id")
+        .range(from, to)
+    ),
+    fetchAll((from, to) =>
+      supabase
+        .from("driver_settlements")
+        .select("load_ids")
+        .eq("organization_id", organizationId)
+        .eq("driver_id", driverId)
+        .eq("status", "paid")
+        .order("id")
+        .range(from, to)
+    ),
   ])
-  if (loads.error) throw loads.error
-  if (paid.error) throw paid.error
   const done = new Set(
-    (paid.data as { load_ids: string[] | null }[]).flatMap(
+    (paid as { load_ids: string[] | null }[]).flatMap(
       (row) => row.load_ids ?? []
     )
   )
-  const first = (loads.data as { id: string; delivered_on: string }[]).find(
+  const first = (loads as { id: string; delivered_on: string }[]).find(
     (load) => !done.has(load.id)
   )
   return first?.delivered_on ?? null
