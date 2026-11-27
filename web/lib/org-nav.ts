@@ -9,7 +9,6 @@ import {
   PackageIcon,
   ReceiptTextIcon,
   Settings2Icon,
-  ShieldCheckIcon,
   TruckIcon,
   type LucideIcon,
 } from "lucide-react"
@@ -24,7 +23,7 @@ export type OrgSection = {
 
 // The sidebar follows an owner's day: what needs attention and how the
 // business is doing, the loads and the money they bring in, then the fleet,
-// then compliance. Add new items to the group they belong to.
+// then paperwork. Add new items to the group they belong to.
 export const ORG_NAV: { label?: string; items: OrgSection[] }[] = [
   {
     label: "Overview",
@@ -85,15 +84,8 @@ export const ORG_NAV: { label?: string; items: OrgSection[] }[] = [
     ],
   },
   {
-    label: "Compliance",
+    label: "Paperwork",
     items: [
-      {
-        title: "Compliance",
-        path: "compliance",
-        icon: ShieldCheckIcon,
-        description:
-          "The calendar of filings like IFTA, UCR and MCS-150, every driver's and truck's expiration dates with red, yellow and green status, and IFTA reports.",
-      },
       {
         title: "Documents",
         path: "documents",

@@ -19,6 +19,7 @@ import {
   truckServiceItem,
   withEstimatedOdometer,
 } from "@/lib/truck-format"
+import { getTrailers } from "@/lib/trailers"
 import {
   getLastServiceByTruck,
   getMilesSinceReading,
@@ -32,24 +33,34 @@ import {
 export const getAttention = cache(async (organizationId: string) => {
   const today = getToday()
   const supabase = await createClient()
-  const [invoices, ready, booked, drivers, trucks, papers, dq, lastService] =
-    await Promise.all([
-      getInvoices(organizationId),
-      getLoadsToInvoice(organizationId),
-      supabase
-        .from("loads")
-        .select(
-          "id, reference, pickup_location, pickup_start, driver_id, truck_id"
-        )
-        .eq("organization_id", organizationId)
-        .eq("status", "booked")
-        .order("pickup_start"),
-      getDrivers(organizationId),
-      getTrucks(organizationId),
-      getCompanyDocuments(organizationId),
-      getDqDatesByDriver(organizationId),
-      getLastServiceByTruck(organizationId),
-    ])
+  const [
+    invoices,
+    ready,
+    booked,
+    drivers,
+    trucks,
+    trailers,
+    papers,
+    dq,
+    lastService,
+  ] = await Promise.all([
+    getInvoices(organizationId),
+    getLoadsToInvoice(organizationId),
+    supabase
+      .from("loads")
+      .select(
+        "id, reference, pickup_location, pickup_start, driver_id, truck_id"
+      )
+      .eq("organization_id", organizationId)
+      .eq("status", "booked")
+      .order("pickup_start"),
+    getDrivers(organizationId),
+    getTrucks(organizationId),
+    getTrailers(organizationId),
+    getCompanyDocuments(organizationId),
+    getDqDatesByDriver(organizationId),
+    getLastServiceByTruck(organizationId),
+  ])
   if (booked.error) {
     throw booked.error
   }
@@ -84,6 +95,16 @@ export const getAttention = cache(async (organizationId: string) => {
           path: `equipment/${truck.id}`,
         }))
     ),
+    // Trailers have the same three dates as trucks.
+    ...trailers
+      .filter((trailer) => trailer.status === "active")
+      .flatMap((trailer) =>
+        truckComplianceItems(trailer, today).map((item) => ({
+          owner: `Trailer ${trailer.unit_number}`,
+          item,
+          path: `trailers/${trailer.id}`,
+        }))
+      ),
   ]
   // A truck parked past the day it was due back from out of service.
   for (const truck of trucks) {
