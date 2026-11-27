@@ -57,7 +57,9 @@ enum DemoBackend {
              "spent_on": "\(e.spentOn)", "note": \(e.note.flatMap { try? JSONEncoder().encode($0) }.flatMap { String(data: $0, encoding: .utf8) } ?? "null"),
              "receipt_path": \(e.hasReceipt ? "\"\(e.receiptPath)\"" : "null"),
              "receipt_type": \(e.hasReceipt ? "\"application/pdf\"" : "null"), "mine": true,
-             "paid_by": "\(e.companyPaid == true ? "company" : "driver")"}
+             "paid_by": "\(e.companyPaid == true ? "company" : "driver")",
+             "gallons": \(e.gallons.map { String($0) } ?? "null"),
+             "jurisdiction": \(e.jurisdiction.map { "\"\($0)\"" } ?? "null")}
             """
         }
         return "[" + rows.joined(separator: ",") + "]"

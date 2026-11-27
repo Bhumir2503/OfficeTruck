@@ -143,3 +143,15 @@ export async function getOrganizationMembers(
     }))
     .sort((a, b) => rank[a.role] - rank[b.role])
 }
+
+/** The company's time zone, for clock times like a driver's check-in. */
+export async function getTimeZone(organizationId: string) {
+  const { data } = await (
+    await createClient()
+  )
+    .from("organizations")
+    .select("time_zone")
+    .eq("id", organizationId)
+    .maybeSingle()
+  return (data?.time_zone as string | null) ?? "America/Chicago"
+}

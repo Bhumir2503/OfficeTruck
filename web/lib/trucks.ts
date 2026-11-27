@@ -174,7 +174,7 @@ export async function getTruckLoads(
   const { data, error } = await supabase
     .from("loads")
     .select(
-      "id, reference, pickup_location, delivery_location, pickup_start, rate, miles, empty_miles, status, driver_pay_type, driver_pay_rate, driver:drivers!loads_driver_fkey (id, full_name, pay_type, pay_rate)"
+      "id, reference, pickup_location, delivery_location, pickup_start, rate, miles, empty_miles, status, driver_pay_type, driver_pay_rate, tonu_driver_pay, driver:drivers!loads_driver_fkey (id, full_name, pay_type, pay_rate)"
     )
     .eq("organization_id", organizationId)
     .eq("truck_id", truckId)

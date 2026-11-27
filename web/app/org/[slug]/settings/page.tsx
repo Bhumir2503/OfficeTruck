@@ -3,6 +3,7 @@ import { notFound } from "next/navigation"
 
 import { BrokerUpdatesSetting } from "@/components/settings/broker-updates-setting"
 import { DetentionSetting } from "@/components/settings/detention-setting"
+import { TonuPaySetting } from "@/components/settings/tonu-pay-setting"
 import { InvoicingSetting } from "@/components/settings/invoicing-setting"
 import { CompanyProfileSection } from "@/components/settings/company-profile-form"
 import { DeleteOrganization } from "@/components/settings/delete-organization"
@@ -33,7 +34,7 @@ export default async function GeneralSettingsPage({
   )
     .from("organizations")
     .select(
-      "icon_url, time_zone, broker_updates, detention_notices, detention_auto_charge, auto_invoice, auto_invoice_reminders"
+      "icon_url, time_zone, broker_updates, detention_notices, detention_auto_charge, auto_invoice, auto_invoice_reminders, tonu_driver_pay"
     )
     .eq("id", organization.id)
     .single()
@@ -77,6 +78,15 @@ export default async function GeneralSettingsPage({
         organizationId={organization.id}
         notices={org?.detention_notices ?? false}
         autoCharge={org?.detention_auto_charge ?? false}
+        canEdit={canManage(organization)}
+      />
+      <TonuPaySetting
+        organizationId={organization.id}
+        pay={
+          org?.tonu_driver_pay === null || org?.tonu_driver_pay === undefined
+            ? null
+            : Number(org.tonu_driver_pay)
+        }
         canEdit={canManage(organization)}
       />
       <OrganizationUrlForm

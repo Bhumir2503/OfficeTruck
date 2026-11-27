@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 
-import { detentionClock, stopDetention } from "../lib/load-format.ts"
+import { detentionClock, stopDetention, whereNow } from "../lib/load-format.ts"
 
 const terms = { detention_free_hours: 2, detention_rate: 75 }
 const arrived = "2026-12-03T15:00:00Z"
@@ -123,5 +123,51 @@ describe("stopDetention", () => {
       terms
     )
     assert.equal(detention.billableHours, 1.25)
+  })
+})
+
+describe("whereNow", () => {
+  const stop = (overrides) => ({
+    kind: "pickup",
+    position: 1,
+    location: "Ozark Valley Plant 2, Springdale, AR 72764",
+    arrived_at: arrived,
+    departed_at: null,
+    ...overrides,
+  })
+
+  it("says where the driver is and since when, on the company's clock", () => {
+    assert.equal(
+      whereNow([stop()], terms, at("15:30"), "America/Chicago"),
+      "At the pickup in Springdale, AR since 9:00 AM."
+    )
+  })
+
+  it("says detention once free time runs out, with the amount so far", () => {
+    assert.equal(
+      whereNow([stop()], terms, at("18:00"), "America/Chicago"),
+      "In detention at the pickup since 9:00 AM: $75.00 so far."
+    )
+  })
+
+  it("is quiet when the driver isn't at a stop", () => {
+    assert.equal(
+      whereNow(
+        [stop({ departed_at: "2026-12-03T16:00:00Z" })],
+        terms,
+        at("18:00"),
+        "America/Chicago"
+      ),
+      null
+    )
+    assert.equal(
+      whereNow(
+        [stop({ arrived_at: null })],
+        terms,
+        at("18:00"),
+        "America/Chicago"
+      ),
+      null
+    )
   })
 })

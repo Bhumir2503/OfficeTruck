@@ -74,6 +74,14 @@ describe("loadDriverPay", () => {
     )
   })
 
+  it("pays the flat TONU amount locked on the load", () => {
+    assert.equal(
+      loadDriverPay(load({ status: "tonu", tonu_driver_pay: "75.00" })),
+      75
+    )
+    assert.equal(loadDriverPay(load({ status: "tonu", tonu_driver_pay: 0 })), 0)
+  })
+
   it("still has no pay without a rate", () => {
     assert.equal(
       loadDriverPay(

@@ -581,6 +581,8 @@ export type AccessorialValues = z.output<typeof accessorialSchema>
 export const tonuSchema = z.object({
   amount: money("Enter the TONU amount."),
   description: optional(120),
+  /** What the driver gets for the trip; blank for the company's default. */
+  driver_pay: money("Enter the driver's TONU pay.", { optional: true }),
 })
 export type TonuValues = z.output<typeof tonuSchema>
 

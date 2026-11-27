@@ -25,6 +25,8 @@ import {
   invoiceNumberSchema,
   type InvoiceNumberValues,
   markSentSchema,
+  pastInvoiceSchema,
+  type PastInvoiceValues,
   type MarkSentValues,
   paymentSchema,
   type PaymentValues,
@@ -357,6 +359,34 @@ export async function recordInvoicePayment(
     amount: parsed.data.amount,
     reference: parsed.data.reference ?? "",
     close_out: parsed.data.close_out,
+  })
+  if (error) {
+    return { error: rpcError(error) }
+  }
+  refresh()
+  return { ok: true }
+}
+
+/**
+ * Records a draft as sent on an earlier day, for invoices sent before the
+ * company used the app. Nothing is emailed; the invoice and due dates count
+ * from that day, so a payment from back then can be recorded.
+ */
+export async function recordPastInvoice(
+  organizationId: string,
+  invoiceId: string,
+  values: PastInvoiceValues
+): Promise<ActionResult> {
+  if (!(await isMember(organizationId))) return NOT_MEMBER
+  const parsed = pastInvoiceSchema.safeParse(values)
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message }
+  }
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("record_past_invoice", {
+    target_invoice: invoiceId,
+    via: parsed.data.via,
+    sent_on: parsed.data.sent_on,
   })
   if (error) {
     return { error: rpcError(error) }

@@ -15,6 +15,8 @@ export const REPORTED_STATUSES: LoadStatus[] = [
   "invoiced",
   "paid",
   "factored",
+  // Counted on its pickup day: the TONU charge, no miles.
+  "tonu",
 ]
 
 /** A load as the Reports page counts it. */

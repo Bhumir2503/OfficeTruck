@@ -217,9 +217,15 @@ describe("buildAttention: drivers and loads on the road", () => {
     const items = buildAttention({
       ...empty,
       documents: [
-        missing("medical_card", "Medical card", "SLL-40790"),
+        missing("medical_card", "Medical card", {
+          reference: "SLL-40790",
+          pickup_start: "2026-11-17T08:00:00",
+        }),
         missing("cdl", "CDL", null),
-        missing("annual_review", "Annual review", "SLL-40790"),
+        missing("annual_review", "Annual review", {
+          reference: "SLL-40790",
+          pickup_start: "2026-11-17T08:00:00",
+        }),
       ],
     })
     assert.deepEqual(
@@ -276,5 +282,79 @@ describe("buildAttention: drivers and loads on the road", () => {
       [["check_in", "PPT-1 hasn't picked up"]]
     )
     assert.match(items[0].detail, /7 days ago · Dana Ortiz, no check-in/)
+  })
+})
+
+describe("buildAttention: compliance blockers", () => {
+  const dated = (due, state, days, onLoad, owner = "Truck 103") => ({
+    owner,
+    path: "equipment/t3",
+    onLoad,
+    item: {
+      key: "registration",
+      label: "Registration",
+      kind: "expires",
+      due,
+      expiry: { state, days },
+    },
+  })
+
+  it("calls out a date that lapses before a load's pickup this week", () => {
+    const items = buildAttention({
+      ...empty,
+      documents: [
+        dated("2026-11-20", "urgent", 4, {
+          reference: "BFB-1",
+          pickup_start: "2026-11-22T07:00:00",
+        }),
+      ],
+    })
+    assert.deepEqual(
+      items.map((i) => [i.tone, i.title, i.detail]),
+      [
+        [
+          "danger",
+          "Truck 103 can't legally run BFB-1",
+          "Registration expires Nov 20, before pickup Nov 22",
+        ],
+      ]
+    )
+  })
+
+  it("calls out a lapsed date on the load it's running", () => {
+    const items = buildAttention({
+      ...empty,
+      documents: [
+        dated("2026-11-10", "expired", 6, {
+          reference: "SLL-9",
+          pickup_start: "2026-11-15T07:00:00",
+        }),
+      ],
+    })
+    assert.equal(items[0].title, "Truck 103 can't legally run SLL-9")
+    assert.equal(items[0].detail, "Registration expired Nov 10")
+  })
+
+  it("leaves a date that outlasts the pickup, or a load further out, as a normal reminder", () => {
+    const items = buildAttention({
+      ...empty,
+      documents: [
+        dated("2026-11-30", "soon", 14, {
+          reference: "A",
+          pickup_start: "2026-11-20T07:00:00",
+        }),
+        dated(
+          "2026-11-20",
+          "urgent",
+          4,
+          { reference: "B", pickup_start: "2026-12-01T07:00:00" },
+          "Truck 104"
+        ),
+      ],
+    })
+    assert.deepEqual(
+      items.map((i) => i.title),
+      ["Truck 104’s registration expires", "Truck 103’s registration expires"]
+    )
   })
 })
