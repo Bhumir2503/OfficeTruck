@@ -33,9 +33,16 @@ export const emailListSchema = z.preprocess(
     .transform((emails) => [...new Set(emails)])
 )
 
+/**
+ * Today where the person sending is, as "YYYY-MM-DD": the invoice's date.
+ * The server's own day is UTC, which is tomorrow on a US evening.
+ */
+const sentOn = z.string().regex(DATE).optional()
+
 export const emailInvoiceSchema = z.object({
   to: emailListSchema,
   message: optional(2000),
+  sent_on: sentOn,
 })
 export type EmailInvoiceValues = z.output<typeof emailInvoiceSchema>
 
@@ -45,6 +52,7 @@ export type ReminderValues = z.output<typeof reminderSchema>
 
 export const markSentSchema = z.object({
   via: z.enum(["portal", "other"], "Choose how it was sent."),
+  sent_on: sentOn,
 })
 export type MarkSentValues = z.output<typeof markSentSchema>
 
