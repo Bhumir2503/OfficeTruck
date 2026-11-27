@@ -9,6 +9,9 @@ export type LoadExpense = {
   spent_on: string
   paid_by: PaidBy
   note: string | null
+  /** For IFTA, on fuel: gallons and the state bought in, or null. */
+  gallons: number | null
+  jurisdiction: string | null
   receipt_name: string | null
   receipt_type: string | null
   /** A link to the receipt that works for an hour, or null. */
@@ -24,7 +27,7 @@ export async function getLoadExpenses(
   const { data, error } = await supabase
     .from("load_expenses")
     .select(
-      "id, kind, amount, spent_on, paid_by, note, receipt_path, receipt_name, receipt_type"
+      "id, kind, amount, spent_on, paid_by, note, gallons, jurisdiction, receipt_path, receipt_name, receipt_type"
     )
     .eq("organization_id", organizationId)
     .eq("load_id", loadId)
@@ -53,6 +56,7 @@ export async function getLoadExpenses(
   return rows.map(({ receipt_path, ...row }) => ({
     ...row,
     amount: Number(row.amount),
+    gallons: row.gallons === null ? null : Number(row.gallons),
     receipt_url: receipt_path ? (urls.get(receipt_path) ?? null) : null,
   }))
 }

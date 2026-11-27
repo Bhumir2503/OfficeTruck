@@ -2,6 +2,7 @@ import {
   CircleUserRoundIcon,
   ContainerIcon,
   FolderOpenIcon,
+  FuelIcon,
   HandshakeIcon,
   IdCardIcon,
   LayoutDashboardIcon,
@@ -92,6 +93,13 @@ export const ORG_NAV: { label?: string; items: OrgSection[] }[] = [
         icon: FolderOpenIcon,
         description:
           "The company's authority, insurance and W-9 with expiration dates, and every load, driver and receipt file in one searchable place.",
+      },
+      {
+        title: "IFTA",
+        path: "ifta",
+        icon: FuelIcon,
+        description:
+          "The quarterly fuel tax return: each truck's miles by state and fuel purchases, worked into net taxable gallons by state.",
       },
     ],
   },

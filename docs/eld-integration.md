@@ -12,7 +12,7 @@ estimates and taps.
 | Empty miles (`loads.empty_miles`) | **Estimated** from the truck's last delivery before the load, or its home base, to the first pickup (`lib/empty-miles.ts`) | Actual miles from the previous load's last stop to this load's first pickup |
 | Arrived / departed at a stop (`load_stops.arrived_at`, `departed_at`) | The driver taps on their dispatch page, or the office enters a time. `arrived_source` / `departed_source` already allow `'eld'` | Geofence arrival and departure from the truck's GPS, stamped with source `'eld'` |
 | Truck ↔ ELD link | `trucks.motive_vehicle_id` (on the truck form's ELD card) | Same field, plus a provider column when a second ELD is added |
-| Miles by state for IFTA | Not tracked | Pulled from the ELD each quarter |
+| Miles by state for IFTA (`ifta_state_miles`) | **Entered by hand** per truck, state and quarter on the IFTA page | Pulled from the ELD each quarter into the same table, with `source = 'eld'` |
 | Driver pay per mile | Locked at assignment on the **estimated** loaded miles | Decide: keep paying on estimated ("dispatched") miles, or switch to actual (see below) |
 
 Google routes for a car, so estimates usually run a little short of a
@@ -51,7 +51,9 @@ stays explainable.
   should use.
 - `load_stops.arrived_odometer` and `load_stops.departed_odometer`
   (numeric, nullable), filled from the ELD at the matching times.
-- `truck_state_miles`: `truck_id`, `month`, `state`, `miles`, for IFTA.
+- Miles by state for IFTA already have a table, `ifta_state_miles` (per
+  truck, year, quarter and jurisdiction), with a `source` column that
+  allows `'eld'`.
 
 ### 4. Sync
 
@@ -82,10 +84,13 @@ stays explainable.
 
 ### 6. IFTA
 
-- Each month, pull miles by state per truck into `truck_state_miles`.
-- Fuel purchases by state come from load expenses (fuel receipts) or a
-  fuel card import.
-- A quarterly IFTA page: miles and gallons by state, ready to file.
+- The IFTA page (Paperwork → IFTA) is built: miles by state and fuel
+  purchases (`ifta_fuel_purchases`, with gallons and state) are entered by
+  hand, and it works out net taxable gallons by state. Fuel expenses on
+  loads with gallons and a state count there too, for the load's truck.
+- Each quarter, pull miles by state per truck into `ifta_state_miles` with
+  `source = 'eld'`, replacing hand-entered rows for that truck and quarter.
+- Later: import fuel purchases from a fuel card instead of typing them.
 
 ### 7. Decide how drivers are paid
 
@@ -109,6 +114,6 @@ trip. Some pay on actual miles. Pick one and say so on the load:
 - [ ] Geofence arrival/departure stamping with source `'eld'`
 - [ ] Load page shows estimated vs actual miles
 - [ ] Reports (rate per mile, deadhead %) use actual miles when present
-- [ ] IFTA quarterly report
+- [x] IFTA quarterly report (hand-entered miles; ELD sync still to do)
 - [ ] Driver pay rule decided and documented
 - [ ] Test with one truck for a week before turning it on for all
