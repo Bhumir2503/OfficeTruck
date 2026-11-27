@@ -5,10 +5,12 @@ import {
   breakdown,
   change,
   cityState,
+  inOverview,
   inPeriod,
   monthlySeries,
   monthToDate,
   overview,
+  overviewStart,
   periodRange,
   totals,
   weeklySeries,
@@ -281,5 +283,36 @@ describe("change", () => {
     assert.equal(change(-50, -100), 0.5)
     assert.equal(change(100, 0), null)
     assert.equal(change(null, 100), null)
+  })
+})
+
+describe("overviewStart", () => {
+  it("starts where the charts start", () => {
+    // 2026-11-18 is a Wednesday; its week starts Monday the 16th.
+    assert.equal(overviewStart("2026-11-18", "30days"), "2026-10-19")
+    assert.equal(overviewStart("2026-11-18", "3months"), "2026-08-24")
+    assert.equal(overviewStart("2026-11-18", "1year"), "2025-12-01")
+  })
+})
+
+describe("inOverview", () => {
+  it("counts loads from the start through today", () => {
+    const today = "2026-11-18"
+    assert.equal(
+      inOverview(load({ delivered_on: "2026-10-19" }), today, "30days"),
+      true
+    )
+    assert.equal(
+      inOverview(load({ delivered_on: "2026-10-18" }), today, "30days"),
+      false
+    )
+    assert.equal(
+      inOverview(load({ delivered_on: "2026-11-19" }), today, "30days"),
+      false
+    )
+    assert.equal(
+      inOverview(load({ delivered_on: "2026-01-05" }), today, "1year"),
+      true
+    )
   })
 })

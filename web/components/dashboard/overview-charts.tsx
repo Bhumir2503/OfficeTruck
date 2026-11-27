@@ -3,7 +3,7 @@
 import { cn } from "cn"
 import { ArrowDownRight, ArrowUpRight, Inbox, Plus } from "lucide-react"
 import Link from "next/link"
-import { useMemo, useState } from "react"
+import { useMemo } from "react"
 import {
   Area,
   AreaChart,
@@ -15,6 +15,7 @@ import {
   YAxis,
 } from "recharts"
 
+import { usePeriod } from "@/components/dashboard/period-context"
 import { buttonVariants } from "@/components/ui/button"
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart"
 import {
@@ -23,7 +24,6 @@ import {
   OVERVIEW_PERIOD_LABELS,
   OVERVIEW_PERIODS,
   overview,
-  type OverviewPeriod,
   type ReportLoad,
   type SeriesPoint,
 } from "@/lib/report-format"
@@ -195,7 +195,7 @@ export function OverviewCharts({
   inboxHref: string
   newLoadHref: string
 }) {
-  const [period, setPeriod] = useState<OverviewPeriod>("1year")
+  const { period, setPeriod } = usePeriod()
   const { points, total, previous } = useMemo(
     () => overview(loads, today, period),
     [loads, today, period]
