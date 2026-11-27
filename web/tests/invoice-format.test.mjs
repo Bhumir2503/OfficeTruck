@@ -11,6 +11,7 @@ import {
   formatTerms,
   invoiceState,
   packetFileName,
+  dueDistance,
 } from "../lib/invoice-format.ts"
 
 describe("invoiceState", () => {
@@ -33,18 +34,27 @@ describe("invoiceState", () => {
 describe("part payments", () => {
   it("calls a sent invoice with money in partly paid", () => {
     assert.equal(
-      invoiceState({ status: "sent", due_on: "2026-12-15", paid_amount: "500.00" }, "2026-12-01"),
+      invoiceState(
+        { status: "sent", due_on: "2026-12-15", paid_amount: "500.00" },
+        "2026-12-01"
+      ),
       "partial"
     )
     assert.equal(
-      invoiceState({ status: "sent", due_on: "2026-12-15", paid_amount: 0 }, "2026-12-01"),
+      invoiceState(
+        { status: "sent", due_on: "2026-12-15", paid_amount: 0 },
+        "2026-12-01"
+      ),
       "sent"
     )
   })
 
   it("still calls it overdue once it's late", () => {
     assert.equal(
-      invoiceState({ status: "sent", due_on: "2026-12-15", paid_amount: 500 }, "2026-12-16"),
+      invoiceState(
+        { status: "sent", due_on: "2026-12-15", paid_amount: 500 },
+        "2026-12-16"
+      ),
       "overdue"
     )
   })
@@ -76,14 +86,23 @@ describe("formatting", () => {
 
   it("skips blank address parts", () => {
     assert.deepEqual(
-      addressLines({ line1: "12 Main St", line2: " ", city: "Dallas", state: "TX", postal_code: "75201" }),
+      addressLines({
+        line1: "12 Main St",
+        line2: " ",
+        city: "Dallas",
+        state: "TX",
+        postal_code: "75201",
+      }),
       ["12 Main St", "Dallas, TX 75201"]
     )
     assert.deepEqual(addressLines({ state: "TX" }), ["TX"])
   })
 
   it("makes a safe packet file name", () => {
-    assert.equal(packetFileName(1001, "AB 12/34"), "Invoice-1001-Load-AB-12-34.pdf")
+    assert.equal(
+      packetFileName(1001, "AB 12/34"),
+      "Invoice-1001-Load-AB-12-34.pdf"
+    )
     assert.equal(packetFileName(7, "///"), "Invoice-7.pdf")
   })
 })
@@ -117,7 +136,10 @@ describe("billTo", () => {
   })
 
   it("falls back to the broker when no factoring company is set up", () => {
-    assert.equal(billTo("Acme", { ...broker, factored: true }, null).kind, "broker")
+    assert.equal(
+      billTo("Acme", { ...broker, factored: true }, null).kind,
+      "broker"
+    )
   })
 
   it("uses the typed-in name for a load with no linked broker", () => {
@@ -128,13 +150,32 @@ describe("billTo", () => {
 })
 
 describe("brokerPaymentStats", () => {
-  const base = { invoice_date: "2026-10-01", total: "1000.00", paid_amount: 0, payments: [], due_on: "2026-10-31", paid_on: null }
+  const base = {
+    invoice_date: "2026-10-01",
+    total: "1000.00",
+    paid_amount: 0,
+    payments: [],
+    due_on: "2026-10-31",
+    paid_on: null,
+  }
 
   it("averages days to pay over paid invoices", () => {
     const stats = brokerPaymentStats(
       [
-        { ...base, status: "paid", paid_on: "2026-10-21", paid_amount: 1000, payments: [{ paid_on: "2026-10-21", amount: 1000 }] },
-        { ...base, status: "paid", paid_on: "2026-11-10", paid_amount: 1000, payments: [{ paid_on: "2026-11-10", amount: "1000.00" }] },
+        {
+          ...base,
+          status: "paid",
+          paid_on: "2026-10-21",
+          paid_amount: 1000,
+          payments: [{ paid_on: "2026-10-21", amount: 1000 }],
+        },
+        {
+          ...base,
+          status: "paid",
+          paid_on: "2026-11-10",
+          paid_amount: 1000,
+          payments: [{ paid_on: "2026-11-10", amount: "1000.00" }],
+        },
       ],
       "2026-11-15"
     )
@@ -146,7 +187,12 @@ describe("brokerPaymentStats", () => {
   it("adds up what's open and overdue by what's still owed", () => {
     const stats = brokerPaymentStats(
       [
-        { ...base, status: "sent", due_on: "2026-12-01", paid_amount: "250.00" },
+        {
+          ...base,
+          status: "sent",
+          due_on: "2026-12-01",
+          paid_amount: "250.00",
+        },
         { ...base, status: "sent", due_on: "2026-11-01" },
         { ...base, status: "draft", invoice_date: null, due_on: null },
         { ...base, status: "void" },
@@ -157,5 +203,15 @@ describe("brokerPaymentStats", () => {
     assert.deepEqual(stats.overdue, { count: 1, balance: 1000 })
     assert.equal(stats.avgDaysToPay, null)
     assert.equal(stats.lastPayment, null)
+  })
+})
+
+describe("dueDistance", () => {
+  it("says how far off the due date is", () => {
+    assert.equal(dueDistance("2026-12-26", "2026-11-27"), "in 29 days")
+    assert.equal(dueDistance("2026-11-28", "2026-11-27"), "tomorrow")
+    assert.equal(dueDistance("2026-11-27", "2026-11-27"), "today")
+    assert.equal(dueDistance("2026-11-26", "2026-11-27"), "1 day late")
+    assert.equal(dueDistance("2026-11-15", "2026-11-27"), "12 days late")
   })
 })

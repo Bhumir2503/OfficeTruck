@@ -94,6 +94,18 @@ export function daysBetween(from: string, to: string) {
   return Math.round((utc(to) - utc(from)) / (24 * 60 * 60 * 1000))
 }
 
+/**
+ * How far off the due date is, for the invoice page's summary: "in 29
+ * days", "tomorrow", "today", "1 day late", "12 days late".
+ */
+export function dueDistance(dueOn: string, today: string) {
+  const days = daysBetween(today, dueOn)
+  if (days === 0) return "today"
+  if (days === 1) return "tomorrow"
+  if (days > 1) return `in ${days} days`
+  return `${-days} ${days === -1 ? "day" : "days"} late`
+}
+
 const dateFormat = new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
