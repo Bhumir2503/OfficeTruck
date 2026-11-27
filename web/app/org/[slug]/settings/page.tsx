@@ -32,7 +32,7 @@ export default async function GeneralSettingsPage({
   )
     .from("organizations")
     .select(
-      "icon_url, broker_updates, detention_notices, detention_auto_charge"
+      "icon_url, broker_updates, detention_notices, detention_auto_charge, auto_invoice, auto_invoice_reminders"
     )
     .eq("id", organization.id)
     .single()
