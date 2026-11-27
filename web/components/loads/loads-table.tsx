@@ -1,6 +1,6 @@
 "use client"
 
-import { ArrowRight, Inbox, PackagePlus, Search } from "lucide-react"
+import { ArrowRight, Inbox, PackagePlus } from "lucide-react"
 import Link from "next/link"
 import { useMemo, useState } from "react"
 
@@ -14,8 +14,8 @@ import {
   SettingsCardFooter,
   SettingsEmptyState,
 } from "@/components/settings/settings-card"
+import { TableFilters, type FilterOption } from "@/components/table-filters"
 import { buttonVariants } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import {
   Table,
   TableBody,
@@ -24,7 +24,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { formatRate, formatStopDate } from "@/lib/load-format"
 import type { PaymentDue } from "@/lib/load-views"
 import type { Load } from "@/lib/loads"
@@ -110,6 +109,16 @@ export function LoadsTable({
 
   const filtering = search.trim() !== "" || filter !== "all"
 
+  // The status filter's choices, each with how many loads it shows.
+  const filterOptions: FilterOption<Filter>[] = [
+    { value: "all", name: "All", count: loads.length },
+    ...LOAD_STATUSES.map((status) => ({
+      value: status,
+      name: LOAD_STATUS_LABELS[status],
+      count: counts[status],
+    })),
+  ]
+
   return (
     <SettingsCard
       title="All loads"
@@ -134,39 +143,15 @@ export function LoadsTable({
         />
       }
     >
-      <div className="flex flex-col gap-3 px-6 pb-4">
-        <div className="relative w-full">
-          <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search load # or broker"
-            aria-label="Search loads"
-            className="pl-7"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <ToggleGroup
-          aria-label="Filter by status"
-          variant="outline"
-          size="sm"
-          spacing={1}
-          className="flex-wrap"
-          value={[filter]}
-          onValueChange={(value: string[]) =>
-            setFilter((value[0] as Filter | undefined) ?? "all")
-          }
-        >
-          <ToggleGroupItem value="all">All {loads.length}</ToggleGroupItem>
-          {LOAD_STATUSES.map((status) => (
-            <ToggleGroupItem key={status} value={status}>
-              {LOAD_STATUS_LABELS[status]}
-              <span className="text-muted-foreground tabular-nums">
-                {counts[status]}
-              </span>
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
-      </div>
+      <TableFilters
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search load # or broker"
+        searchLabel="Search loads"
+        filter={filter}
+        onFilterChange={setFilter}
+        options={filterOptions}
+      />
       <Table className="[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6">
         <TableHeader className="bg-muted/40">
           <TableRow>

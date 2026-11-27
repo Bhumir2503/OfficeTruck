@@ -1,6 +1,6 @@
 "use client"
 
-import { Building2, Search } from "lucide-react"
+import { Building2 } from "lucide-react"
 import Link from "next/link"
 import { useMemo, useState } from "react"
 
@@ -10,8 +10,8 @@ import {
   SettingsCardFooter,
   SettingsEmptyState,
 } from "@/components/settings/settings-card"
+import { TableFilters, type FilterOption } from "@/components/table-filters"
 import { buttonVariants } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import {
   Table,
   TableBody,
@@ -20,7 +20,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { fmcsaFlags, formatMc, formatTerms } from "@/lib/broker-format"
 import type { BrokerWithFmcsa } from "@/lib/brokers"
 
@@ -104,6 +103,11 @@ export function BrokersTable({
 
   const filtering = search.trim() !== "" || filter !== "all"
 
+  // The filter's choices, each with how many customers it shows.
+  const filterOptions: FilterOption<Filter>[] = (
+    Object.keys(FILTER_LABELS) as Filter[]
+  ).map((key) => ({ value: key, name: FILTER_LABELS[key], count: counts[key] }))
+
   return (
     <SettingsCard
       title="Customers"
@@ -119,38 +123,16 @@ export function BrokersTable({
         />
       }
     >
-      <div className="flex flex-col gap-3 px-6 pb-4 sm:flex-row sm:items-center">
-        <div className="relative w-full">
-          <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search name or MC"
-            aria-label="Search customers"
-            className="pl-7"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <ToggleGroup
-          aria-label="Filter customers"
-          variant="outline"
-          size="sm"
-          spacing={1}
-          className="shrink-0 flex-wrap"
-          value={[filter]}
-          onValueChange={(value: string[]) =>
-            setFilter((value[0] as Filter | undefined) ?? "all")
-          }
-        >
-          {(Object.keys(FILTER_LABELS) as Filter[]).map((key) => (
-            <ToggleGroupItem key={key} value={key}>
-              {FILTER_LABELS[key]}
-              <span className="text-muted-foreground tabular-nums">
-                {counts[key]}
-              </span>
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
-      </div>
+      <TableFilters
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search name or MC"
+        searchLabel="Search customers"
+        filter={filter}
+        onFilterChange={setFilter}
+        options={filterOptions}
+        filterLabel="Filter customers"
+      />
       <Table className="[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6">
         <TableHeader className="bg-muted/40">
           <TableRow>

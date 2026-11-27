@@ -64,21 +64,6 @@ function BackLinkSkeleton() {
   )
 }
 
-// All, Booked, Dispatched, In transit, Delivered, Invoiced, Paid, Factored,
-// Cancelled, TONU.
-const FILTER_WIDTHS = [
-  "w-14",
-  "w-21",
-  "w-28",
-  "w-21",
-  "w-25",
-  "w-23",
-  "w-16",
-  "w-24",
-  "w-25",
-  "w-19",
-]
-
 const LOAD_ROWS = [
   {
     ref: "w-20",
@@ -129,13 +114,10 @@ export function LoadsListSkeleton() {
             />
           }
         >
-          <div className="flex flex-col gap-3 px-6 pb-4">
+          <div className="flex flex-col gap-3 px-6 pb-4 sm:flex-row sm:items-center">
             <Skeleton className="h-9 w-full" />
-            <div className="flex flex-wrap gap-1">
-              {FILTER_WIDTHS.map((width, index) => (
-                <Skeleton key={index} className={cn("h-8 rounded-md", width)} />
-              ))}
-            </div>
+            {/* The status filter's dropdown. */}
+            <Skeleton className="h-9 w-full shrink-0 rounded-md sm:w-44" />
           </div>
           <Table className="[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6">
             <TableHeader className="bg-muted/40">

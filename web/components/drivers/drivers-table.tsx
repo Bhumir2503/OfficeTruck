@@ -1,6 +1,6 @@
 "use client"
 
-import { Search, UserRoundPlus } from "lucide-react"
+import { UserRoundPlus } from "lucide-react"
 import Link from "next/link"
 import { useMemo, useState } from "react"
 
@@ -14,9 +14,9 @@ import {
   SettingsCardFooter,
 } from "@/components/settings/settings-card"
 import { LastDeliveryCell, NowCell, NowLine } from "@/components/now-cells"
+import { TableFilters, type FilterOption } from "@/components/table-filters"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { buttonVariants } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import {
   Table,
   TableBody,
@@ -25,13 +25,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   complianceItems,
   formatPay,
@@ -169,23 +162,14 @@ export function DriversTable({
     )
 
   // The status filter's choices, each with how many drivers it shows.
-  const filterOptions: {
-    value: Filter
-    name: string
-    label: string
-    count: number
-  }[] = [
+  const filterOptions: FilterOption<Filter>[] = [
     ...DRIVER_STATUSES.map((status) => ({
       value: status,
       name: DRIVER_STATUS_LABELS[status],
       count: counts[status],
     })),
-    { value: "all" as const, name: "All", count: drivers.length },
-  ].map((option) => ({
-    ...option,
-    // What the closed dropdown shows.
-    label: `${option.name} (${option.count})`,
-  }))
+    { value: "all", name: "All", count: drivers.length },
+  ]
 
   const empty = drivers.length === 0
   const filtering = search.trim() !== "" || filter !== "all"
@@ -219,44 +203,17 @@ export function DriversTable({
         />
       }
     >
-      <div className="flex flex-col gap-3 px-6 pb-4 sm:flex-row sm:items-center">
-        <div className="relative w-full">
-          <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search by name"
-            aria-label="Search drivers"
-            className="pl-7"
-            value={search}
-            disabled={empty}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <Select
-          value={filter}
-          onValueChange={(value) =>
-            setFilter((value as Filter | null) ?? "all")
-          }
-          items={filterOptions}
-          disabled={empty}
-        >
-          <SelectTrigger
-            aria-label="Filter by status"
-            className="w-full shrink-0 sm:w-40"
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {filterOptions.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.name}
-                <span className="ml-auto pr-2 text-muted-foreground tabular-nums">
-                  {option.count}
-                </span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <TableFilters
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by name"
+        searchLabel="Search drivers"
+        filter={filter}
+        onFilterChange={setFilter}
+        options={filterOptions}
+        filterClassName="sm:w-40"
+        disabled={empty}
+      />
       <Table className="[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6">
         <TableHeader className="bg-muted/40">
           <TableRow>
