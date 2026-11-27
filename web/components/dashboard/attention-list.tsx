@@ -5,7 +5,9 @@ import {
   ChevronRightIcon,
   CircleCheckBig,
   ClockAlertIcon,
+  FileCheckIcon,
   FileWarningIcon,
+  MapPinOffIcon,
   PackageIcon,
   SendIcon,
   UserRoundXIcon,
@@ -27,6 +29,8 @@ const ICONS: Record<AttentionKind, LucideIcon> = {
   needs_driver: UserRoundXIcon,
   pod: PackageIcon,
   invoice_ready: SendIcon,
+  review: FileCheckIcon,
+  check_in: MapPinOffIcon,
 }
 
 const TONES: Record<AttentionItem["tone"], string> = {

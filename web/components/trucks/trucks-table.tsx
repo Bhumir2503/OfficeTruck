@@ -254,7 +254,9 @@ export function TrucksTable({
             </TableHead>
             <TableHead className="hidden lg:table-cell">Odometer</TableHead>
             <TableHead className="hidden xl:table-cell">Driver</TableHead>
-            <TableHead className="hidden sm:table-cell">Compliance</TableHead>
+            <TableHead className="hidden min-w-60 sm:table-cell">
+              Compliance
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -373,7 +375,7 @@ export function TrucksTable({
                     <span className="text-muted-foreground">None</span>
                   )}
                 </TableCell>
-                <TableCell className="hidden max-w-80 text-sm whitespace-normal sm:table-cell">
+                <TableCell className="hidden max-w-80 min-w-60 text-sm whitespace-normal sm:table-cell">
                   {off ? (
                     <span className="text-muted-foreground">Not tracked</span>
                   ) : warnings.length ? (

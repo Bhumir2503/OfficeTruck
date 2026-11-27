@@ -1,4 +1,5 @@
 import type { ComplianceItem } from "@/lib/driver-format"
+import { possessive } from "@/lib/text-format"
 import type { InvoiceStatus } from "@/lib/invoice-format"
 import type { LoadStatus } from "@/lib/schemas/load"
 
@@ -9,7 +10,13 @@ import type { LoadStatus } from "@/lib/schemas/load"
  */
 
 export type AttentionKind =
-  "overdue" | "document" | "needs_driver" | "pod" | "invoice_ready"
+  | "overdue"
+  | "document"
+  | "needs_driver"
+  | "pod"
+  | "invoice_ready"
+  | "review"
+  | "check_in"
 
 export type AttentionItem = {
   /** Unique in the list. */
@@ -66,7 +73,39 @@ export type AttentionInput = {
     owner: string
     item: ComplianceItem
     path: string | null
+    /**
+     * For a driver: the load on their schedule, if any. A CDL or medical
+     * card that isn't on file is only raised for a driver who's driving.
+     */
+    onLoad?: string | null
   }[]
+  /** CDLs and medical cards drivers sent from the app, waiting for review. */
+  driverUpdates?: {
+    id: string
+    driver: string
+    /** "cdl" or "medical_card". */
+    kind: string
+    path: string
+    /** When it was sent, an ISO timestamp. */
+    submitted_at: string
+  }[]
+  /** Dispatched loads, for the ones past pickup with no check-in. */
+  dispatched?: {
+    id: string
+    reference: string
+    pickup_location: string
+    /** Wall-clock time, "YYYY-MM-DDTHH:mm:ss". */
+    pickup_start: string
+    driver: string | null
+  }[]
+}
+
+/** Documents a driver can't legally drive without. */
+const REQUIRED_TO_DRIVE = new Set(["cdl", "medical_card"])
+
+const UPDATE_LABELS: Record<string, string> = {
+  cdl: "CDL",
+  medical_card: "medical card",
 }
 
 const DAY = 86_400_000
@@ -93,9 +132,6 @@ const dateOf = (value: string) =>
   shortDate.format(new Date(`${value.slice(0, 10)}T00:00:00Z`))
 
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`
-const possessive = (name: string) =>
-  name.endsWith("s") ? `${name}’` : `${name}’s`
-
 /** "Medical card" → "medical card", but "CDL" stays "CDL". */
 const lowerFirst = (label: string) =>
   /^[A-Z][a-z]/.test(label) ? label[0].toLowerCase() + label.slice(1) : label
@@ -106,6 +142,13 @@ export function relativeDay(days: number) {
   if (days === 1) return "tomorrow"
   if (days === -1) return "yesterday"
   return days > 0 ? `in ${days} days` : `${-days} days ago`
+}
+
+/** How a missing load document is named in the To do. */
+const DOC_NAMES: Record<string, string> = {
+  rate_con: "rate con",
+  bol: "BOL",
+  pod: "POD",
 }
 
 /** Which documents count as "expiring soon": late, or due within 30 days. */
@@ -159,13 +202,18 @@ export function buildAttention(input: AttentionInput): AttentionItem[] {
         path: `loads/${load.id}`,
         urgency: -ago,
       })
-    } else if (load.missing.length === 0) {
+    } else {
+      // Brokers want the rate con too, but a missing one shouldn't hide a
+      // load that's otherwise ready to bill.
+      const missing = load.missing.length
+        ? ` · Missing ${load.missing.map((kind) => DOC_NAMES[kind] ?? kind).join(", ")}`
+        : ""
       items.push({
         key: `ready:${load.id}`,
         kind: "invoice_ready",
         tone: "default",
         title: `${load.reference} is ready to invoice`,
-        detail: `${delivered} · ${load.broker_name} · ${usd.format(Number(load.rate))}`,
+        detail: `${delivered} · ${load.broker_name} · ${usd.format(Number(load.rate))}${missing}`,
         path: `loads/${load.id}`,
         urgency: -ago,
       })
@@ -193,9 +241,49 @@ export function buildAttention(input: AttentionInput): AttentionItem[] {
     })
   }
 
-  for (const { owner, item, path } of input.documents) {
+  for (const load of input.dispatched ?? []) {
+    const days = daysFrom(load.pickup_start, today)
+    if (days < 1) continue
+    items.push({
+      key: `check_in:${load.id}`,
+      kind: "check_in",
+      tone: "danger",
+      title: `${load.reference} hasn't picked up`,
+      detail: `Pickup was ${dateOf(load.pickup_start)}, ${plural(days, "day")} ago · ${load.driver ? `${load.driver}, no check-in` : "No check-in"}`,
+      path: `loads/${load.id}`,
+      urgency: -days,
+    })
+  }
+
+  for (const update of input.driverUpdates ?? []) {
+    items.push({
+      key: `review:${update.id}`,
+      kind: "review",
+      tone: "warning",
+      title: `${update.driver} sent a new ${UPDATE_LABELS[update.kind] ?? "document"} to review`,
+      detail: `From the driver app, ${dateOf(update.submitted_at)} · Check the date against the card`,
+      path: update.path,
+      urgency: 0,
+    })
+  }
+
+  for (const { owner, item, path, onLoad } of input.documents) {
     const { expiry } = item
-    if (expiry.state === "missing" || !SOON.has(expiry.state)) continue
+    if (expiry.state === "missing") {
+      if (onLoad && REQUIRED_TO_DRIVE.has(item.key)) {
+        items.push({
+          key: `document:${path ?? owner}:${item.key}`,
+          kind: "document",
+          tone: "danger",
+          title: `${owner} has no ${lowerFirst(item.label)} on file`,
+          detail: `Driving ${onLoad} · Add the date from the card`,
+          path,
+          urgency: -1000,
+        })
+      }
+      continue
+    }
+    if (!SOON.has(expiry.state)) continue
     const late = expiry.state === "expired"
     const verb =
       item.kind === "expires"
@@ -254,6 +342,8 @@ export function countActions(items: AttentionItem[]): ActionCounts {
     needs_driver: 0,
     pod: 0,
     invoice_ready: 0,
+    review: 0,
+    check_in: 0,
   }
   for (const item of items) counts[item.kind]++
   return counts

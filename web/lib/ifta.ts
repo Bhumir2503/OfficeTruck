@@ -115,32 +115,47 @@ export async function getIftaQuarter(organizationId: string, quarter: Quarter) {
 }
 
 /**
- * Whether the company keeps IFTA here (any miles entered or any quarter
- * marked filed), and whether `quarter` is filed. The dashboard only reminds
- * those who do, so carriers who file IFTA elsewhere aren't nagged.
+ * Whether to remind about `quarter`'s return: it isn't filed, and the
+ * company tracked that quarter here (miles or fuel entered for it, or an
+ * earlier quarter marked filed). A company that starts using the IFTA page
+ * mid-quarter isn't told the quarter before is overdue: they filed it
+ * elsewhere.
  */
 export async function getIftaReminder(
   organizationId: string,
   quarter: Quarter
 ) {
   const supabase = await createClient()
-  const [miles, filings] = await Promise.all([
+  const { start, end } = quarterRange(quarter)
+  const [miles, fuel, filings] = await Promise.all([
     supabase
       .from("ifta_state_miles")
       .select("id", { count: "exact", head: true })
-      .eq("organization_id", organizationId),
+      .eq("organization_id", organizationId)
+      .eq("year", quarter.year)
+      .eq("quarter", quarter.quarter),
+    supabase
+      .from("ifta_fuel_purchases")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", organizationId)
+      .gte("purchased_on", start)
+      .lte("purchased_on", end),
     supabase
       .from("ifta_filings")
       .select("year, quarter")
       .eq("organization_id", organizationId),
   ])
   if (miles.error) throw miles.error
+  if (fuel.error) throw fuel.error
   if (filings.error) throw filings.error
   const rows = filings.data as { year: number; quarter: number }[]
+  const key = (row: { year: number; quarter: number }) =>
+    row.year * 4 + row.quarter
   return {
-    inUse: (miles.count ?? 0) > 0 || rows.length > 0,
-    filed: rows.some(
-      (row) => row.year === quarter.year && row.quarter === quarter.quarter
-    ),
+    inUse:
+      (miles.count ?? 0) > 0 ||
+      (fuel.count ?? 0) > 0 ||
+      rows.some((row) => key(row) < key(quarter)),
+    filed: rows.some((row) => key(row) === key(quarter)),
   }
 }

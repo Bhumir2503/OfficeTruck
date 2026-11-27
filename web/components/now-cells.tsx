@@ -1,6 +1,9 @@
 import Link from "next/link"
 
-import { LAST_DELIVERY_DAYS } from "@/lib/driver-format"
+import {
+  formatDate as formatDay,
+  LAST_DELIVERY_DAYS,
+} from "@/lib/driver-format"
 import type { DriverLastDelivery, DriverNow } from "@/lib/drivers"
 import { formatStopDate, STATUS_STYLES } from "@/lib/load-format"
 import { LOAD_STATUS_LABELS } from "@/lib/schemas/load"
@@ -51,12 +54,27 @@ export function NowCell({
     )
   }
   const next = now?.next
+  const parked = now?.parked
   return (
     <div className="min-w-0">
-      <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-300">
-        <span className="size-1.5 rounded-full bg-emerald-500" />
-        Available
-      </span>
+      {parked ? (
+        <span className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-700 dark:text-amber-300">
+          <span className="size-1.5 rounded-full bg-amber-500" />
+          Truck {parked.unit} in the shop
+        </span>
+      ) : (
+        <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-300">
+          <span className="size-1.5 rounded-full bg-emerald-500" />
+          Available
+        </span>
+      )}
+      {parked && !next && (
+        <div className="truncate text-sm text-muted-foreground">
+          {parked.until
+            ? `Out of service until ${formatDay(parked.until)}`
+            : "Out of service"}
+        </div>
+      )}
       {next && (
         <div className="truncate text-sm text-muted-foreground">
           Next:{" "}
@@ -102,9 +120,15 @@ export function NowLine({
   }
   return (
     <div className="mt-1 truncate text-xs md:hidden">
-      <span className="font-medium text-emerald-700 dark:text-emerald-300">
-        Available
-      </span>
+      {now?.parked ? (
+        <span className="font-medium text-amber-700 dark:text-amber-300">
+          Truck {now.parked.unit} in the shop
+        </span>
+      ) : (
+        <span className="font-medium text-emerald-700 dark:text-emerald-300">
+          Available
+        </span>
+      )}
       {now?.next && (
         <span className="text-muted-foreground">
           {" "}

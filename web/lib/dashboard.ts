@@ -54,6 +54,8 @@ export const getAttention = cache(async (organizationId: string) => {
     dq,
     lastService,
     ifta,
+    onSchedule,
+    updates,
   ] = await Promise.all([
     getInvoices(organizationId),
     getLoadsToInvoice(organizationId),
@@ -72,10 +74,53 @@ export const getAttention = cache(async (organizationId: string) => {
     getDqDatesByDriver(organizationId),
     getLastServiceByTruck(organizationId),
     getIftaReminder(organizationId, iftaQuarter),
+    // Loads on a driver's schedule: for documents they can't drive without,
+    // and dispatched ones that never picked up.
+    supabase
+      .from("loads")
+      .select(
+        "id, reference, status, pickup_location, pickup_start, driver_id, driver:drivers!loads_driver_fkey (full_name)"
+      )
+      .eq("organization_id", organizationId)
+      .in("status", ["booked", "dispatched", "loaded"])
+      .not("driver_id", "is", null)
+      .order("pickup_start"),
+    supabase
+      .from("driver_updates")
+      .select("id, driver_id, kind, created_at")
+      .eq("organization_id", organizationId)
+      .eq("status", "pending")
+      .order("created_at"),
   ])
   if (booked.error) {
     throw booked.error
   }
+  if (onSchedule.error) {
+    throw onSchedule.error
+  }
+  if (updates.error) {
+    throw updates.error
+  }
+  const scheduled = onSchedule.data as unknown as {
+    id: string
+    reference: string
+    status: string
+    pickup_location: string
+    pickup_start: string
+    driver_id: string
+    driver: { full_name: string } | null
+  }[]
+  // Each driver's nearest load: on the road first, then the next booked.
+  const loadOf = new Map<string, string>()
+  for (const load of [
+    ...scheduled.filter((load) => load.status !== "booked"),
+    ...scheduled.filter((load) => load.status === "booked"),
+  ]) {
+    if (!loadOf.has(load.driver_id)) loadOf.set(load.driver_id, load.reference)
+  }
+  const driverName = new Map(
+    drivers.map((driver) => [driver.id, driver.full_name])
+  )
 
   const activeTrucks = trucks.filter((truck) => truck.status === "active")
   // Service by mileage counts from the odometer estimated from loads run
@@ -89,6 +134,7 @@ export const getAttention = cache(async (organizationId: string) => {
           owner: driver.full_name,
           item,
           path: `drivers/${driver.id}`,
+          onLoad: loadOf.get(driver.id) ?? null,
         }))
       ),
     ...activeTrucks.flatMap((truck) =>
@@ -176,6 +222,29 @@ export const getAttention = cache(async (organizationId: string) => {
       pickup_location: cityState(load.pickup_location),
     })),
     documents,
+    driverUpdates: (
+      updates.data as {
+        id: string
+        driver_id: string
+        kind: string
+        created_at: string
+      }[]
+    ).map((update) => ({
+      id: update.id,
+      driver: driverName.get(update.driver_id) ?? "A driver",
+      kind: update.kind,
+      path: `drivers/${update.driver_id}`,
+      submitted_at: update.created_at,
+    })),
+    dispatched: scheduled
+      .filter((load) => load.status === "dispatched")
+      .map((load) => ({
+        id: load.id,
+        reference: load.reference,
+        pickup_location: cityState(load.pickup_location),
+        pickup_start: load.pickup_start,
+        driver: load.driver?.full_name ?? null,
+      })),
   })
   return { today, items, invoices }
 })

@@ -655,7 +655,13 @@ export function LoadSidePanel({
         <dl className="flex flex-col gap-2">
           <MoneyLine label="Revenue">{formatRate(revenue)}</MoneyLine>
           <MoneyLine
-            label={locked ? `Driver pay (${locked})` : "Driver pay"}
+            label={
+              load.status === "tonu"
+                ? "Driver pay (none on a TONU)"
+                : locked
+                  ? `Driver pay (${locked})`
+                  : "Driver pay"
+            }
             muted
           >
             {pay === null
@@ -679,7 +685,9 @@ export function LoadSidePanel({
               : "Before fuel and fixed costs. Add expenses as receipts come in."}
           </p>
           <p className="mt-1 text-sm text-muted-foreground tabular-nums">
-            {load.miles ? (
+            {load.status === "tonu" ? (
+              "No miles run: the truck wasn't used."
+            ) : load.miles ? (
               <>
                 {formatRate(revenue / load.miles)} per estimated loaded mile
                 {load.empty_miles ? (

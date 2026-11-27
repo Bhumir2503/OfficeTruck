@@ -523,9 +523,10 @@ export function LoadStatusMenu({
           <DialogHeader>
             <DialogTitle>Mark load {load.reference} TONU?</DialogTitle>
             <DialogDescription>
-              Truck ordered, not used. Enter what the broker owes for it.
-              It&apos;s added to the load&apos;s charges, so it gets invoiced.
-              You can reopen the load later.
+              Truck ordered, not used. Enter what the broker owes for it. The
+              invoice bills the TONU instead of the linehaul, and the driver
+              isn&apos;t paid for the miles. Reopening the load puts the rate
+              con charges back.
             </DialogDescription>
           </DialogHeader>
           <TonuForm
