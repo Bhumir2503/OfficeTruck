@@ -53,12 +53,8 @@ export function BrokersListSkeleton() {
       >
         <div className="flex flex-col gap-3 px-6 pb-4 sm:flex-row sm:items-center">
           <Skeleton className="h-9 w-full" />
-          {/* All, Flagged, Do not use. */}
-          <div className="flex shrink-0 gap-1">
-            <Skeleton className="h-8 w-14 rounded-md" />
-            <Skeleton className="h-8 w-22 rounded-md" />
-            <Skeleton className="h-8 w-28 rounded-md" />
-          </div>
+          {/* The filter's dropdown. */}
+          <Skeleton className="h-9 w-full shrink-0 rounded-md sm:w-44" />
         </div>
         <Table className="[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6">
           <TableHeader className="bg-muted/40">

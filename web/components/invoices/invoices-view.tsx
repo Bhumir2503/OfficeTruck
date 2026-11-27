@@ -1,13 +1,7 @@
 "use client"
 
 import { cn } from "cn"
-import {
-  CheckCircle2,
-  FilePlus2,
-  Loader2,
-  ReceiptText,
-  Search,
-} from "lucide-react"
+import { CheckCircle2, FilePlus2, Loader2, ReceiptText } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useMemo, useState } from "react"
@@ -21,8 +15,8 @@ import {
   SettingsCardFooter,
   SettingsEmptyState,
 } from "@/components/settings/settings-card"
+import { TableFilters, type FilterOption } from "@/components/table-filters"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import {
   Table,
   TableBody,
@@ -31,7 +25,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import {
   balanceDue,
   daysBetween,
@@ -189,6 +182,16 @@ export function InvoicesView({
 
   const filtering = search.trim() !== "" || filter !== "all"
 
+  // The status filter's choices, each with how many invoices it shows.
+  const filterOptions: FilterOption<Filter>[] = [
+    { value: "all", name: "All", count: invoices.length },
+    ...FILTERS.map((state) => ({
+      value: state,
+      name: INVOICE_STATE_LABELS[state],
+      count: totals.byState[state],
+    })),
+  ]
+
   return (
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -336,41 +339,15 @@ export function InvoicesView({
           </SettingsEmptyState>
         ) : (
           <>
-            <div className="flex flex-col gap-3 px-6 pb-4">
-              <div className="relative w-full">
-                <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Search invoice #, load # or broker"
-                  aria-label="Search invoices"
-                  className="pl-7"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-              </div>
-              <ToggleGroup
-                aria-label="Filter by status"
-                variant="outline"
-                size="sm"
-                spacing={1}
-                className="flex-wrap"
-                value={[filter]}
-                onValueChange={(value: string[]) =>
-                  setFilter((value[0] as Filter | undefined) ?? "all")
-                }
-              >
-                <ToggleGroupItem value="all">
-                  All {invoices.length}
-                </ToggleGroupItem>
-                {FILTERS.map((state) => (
-                  <ToggleGroupItem key={state} value={state}>
-                    {INVOICE_STATE_LABELS[state]}
-                    <span className="text-muted-foreground tabular-nums">
-                      {totals.byState[state]}
-                    </span>
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
-            </div>
+            <TableFilters
+              search={search}
+              onSearchChange={setSearch}
+              searchPlaceholder="Search invoice #, load # or broker"
+              searchLabel="Search invoices"
+              filter={filter}
+              onFilterChange={setFilter}
+              options={filterOptions}
+            />
             <Table className="[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6">
               <TableHeader className="bg-muted/40">
                 <TableRow>

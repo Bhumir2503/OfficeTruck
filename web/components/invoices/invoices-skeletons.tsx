@@ -102,18 +102,10 @@ export function InvoicesListSkeleton() {
             />
           }
         >
-          <div className="flex flex-col gap-3 px-6 pb-4">
+          <div className="flex flex-col gap-3 px-6 pb-4 sm:flex-row sm:items-center">
             <Skeleton className="h-9 w-full" />
-            <div className="flex flex-wrap gap-1">
-              {["w-14", "w-16", "w-14", "w-24", "w-20", "w-14", "w-14"].map(
-                (width, index) => (
-                  <Skeleton
-                    key={index}
-                    className={cn("h-8 rounded-md", width)}
-                  />
-                )
-              )}
-            </div>
+            {/* The status filter's dropdown. */}
+            <Skeleton className="h-9 w-full shrink-0 rounded-md sm:w-44" />
           </div>
           <Table className={TABLE}>
             <TableHeader className="bg-muted/40">
