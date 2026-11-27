@@ -19,6 +19,10 @@ export type BrokerUpdateStop = {
   location: string
   /** The pickup or delivery number. */
   stop_number: string | null
+  /** The stop's own time zone, when it's known. */
+  time_zone?: string | null
+  /** The moment the appointment starts, when the zone is known. */
+  appointment_at?: string | null
   arrived_at: string | null
   departed_at: string | null
   arrived_source: string | null
@@ -33,7 +37,10 @@ export type BrokerUpdateStop = {
 
 export type BrokerUpdateInput = {
   companyName: string
-  /** The company's time zone, e.g. "America/Chicago". */
+  /**
+   * The company's time zone, e.g. "America/Chicago": for a stop whose own
+   * zone isn't known. Times are given in the stop's zone when it is.
+   */
   timeZone: string
   reference: string
   event: BrokerUpdateEvent
@@ -56,7 +63,7 @@ export type BrokerUpdateMessage = {
 
 const KIND = { pickup: "pickup", delivery: "delivery" } as const
 
-/** "Dec 3, 2026, 9:02 AM CST", in the company's time zone. */
+/** "Dec 3, 2026, 9:02 AM CST", in the zone given. */
 export function formatUpdateTime(iso: string, timeZone: string) {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -99,6 +106,8 @@ export function brokerUpdateMessage(
   input: BrokerUpdateInput
 ): BrokerUpdateMessage {
   const { stop, event } = input
+  // Times at a stop read in that stop's time, as the broker's own paperwork does.
+  const zone = stop?.time_zone ?? input.timeZone
   const lines: string[] = []
   let mapUrl: string | null = null
   let subject: string
@@ -116,7 +125,7 @@ export function brokerUpdateMessage(
       stop
         ? `Delivered at ${where(stop)}.`
         : `Load ${input.reference} was delivered.`,
-      `Time: ${formatUpdateTime(stop?.departed_at ?? stop?.arrived_at ?? input.at, input.timeZone)}`
+      `Time: ${formatUpdateTime(stop?.departed_at ?? stop?.arrived_at ?? input.at, zone)}`
     )
   } else {
     // A detention notice for a stop with no arrival reads as the arrival.
@@ -131,7 +140,7 @@ export function brokerUpdateMessage(
       )
     }
     const at = event === "arrived" ? stop.arrived_at : stop.departed_at
-    lines.push(`Time: ${formatUpdateTime(at ?? input.at, input.timeZone)}`)
+    lines.push(`Time: ${formatUpdateTime(at ?? input.at, zone)}`)
     const source =
       event === "arrived" ? stop.arrived_source : stop.departed_source
     const fix = source === "driver" ? place(stop, event) : null
@@ -172,12 +181,22 @@ function detentionMessage(
   arrivedAt: string
 ): BrokerUpdateMessage {
   const free = input.detention?.freeHours ?? 0
+  const zone = stop.time_zone ?? input.timeZone
+  // Early for the appointment: free time starts when the appointment does.
+  const arrived = new Date(arrivedAt).getTime()
+  const appointment = stop.appointment_at
+    ? new Date(stop.appointment_at).getTime()
+    : Number.NaN
+  const early = !Number.isNaN(appointment) && appointment > arrived
   const freeUntil = new Date(
-    new Date(arrivedAt).getTime() + free * 3_600_000
+    (early ? appointment : arrived) + free * 3_600_000
   ).toISOString()
   const name = stopName(stop, input.stopCount)
-  const until = formatUpdateTime(freeUntil, input.timeZone)
-  const since = formatUpdateTime(arrivedAt, input.timeZone)
+  const until = formatUpdateTime(freeUntil, zone)
+  const since = formatUpdateTime(arrivedAt, zone)
+  const appointed = early
+    ? ` for the ${formatUpdateTime(stop.appointment_at!, zone)} appointment`
+    : ""
   const rate =
     input.detention?.rate != null
       ? ` at ${money.format(input.detention.rate)}/hour, per the rate confirmation`
@@ -187,13 +206,13 @@ function detentionMessage(
   if (input.event === "detention_soon") {
     subject = `Load ${input.reference}: detention starts ${until.replace(/^[A-Z][a-z]{2} \d{1,2}, \d{4}, /, "")} at ${name}`
     lines.push(
-      `Our driver arrived at ${name} (${where(stop)}) at ${since} and is still waiting.`,
+      `Our driver arrived at ${name} (${where(stop)}) at ${since}${appointed} and is still waiting.`,
       `Free time (${hours(free)}) ends at ${until}. Detention starts then${rate}.`
     )
   } else {
     subject = `Load ${input.reference}: detention started at ${name}`
     lines.push(
-      `Our driver has been at ${name} (${where(stop)}) since ${since}.`,
+      `Our driver has been at ${name} (${where(stop)}) since ${since}${appointed}.`,
       `Free time (${hours(free)}) ended at ${until}. Detention is running${rate}.`,
       "Please reply with your detention authorization number."
     )

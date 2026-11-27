@@ -152,6 +152,29 @@ describe("suggestAssignments", () => {
     assert.equal(result[1].clean, false)
   })
 
+  it("offers each truck a different driver while there are drivers to go round", () => {
+    const result = suggestAssignments({
+      trucks: [
+        truck({ truckId: "a", unit: "A", emptyMiles: 10 }),
+        truck({ truckId: "b", unit: "B", emptyMiles: 20 }),
+        truck({ truckId: "c", unit: "C", emptyMiles: 30 }),
+      ],
+      drivers: [
+        driver({ driverId: "d1", name: "Ana Torres" }),
+        driver({ driverId: "d2", name: "Ben Ortiz" }),
+      ],
+      pickupStart: pickup,
+      now,
+    })
+    assert.deepEqual(
+      result.map((s) => s.truckId),
+      ["a", "b", "c"]
+    )
+    // Two drivers for three trucks: the first two differ, the third repeats.
+    assert.notEqual(result[0].driverId, result[1].driverId)
+    assert.ok(result[2].driverId)
+  })
+
   it("still offers a truck with no free driver, lower down", () => {
     const [only] = suggestAssignments({
       trucks: [truck()],

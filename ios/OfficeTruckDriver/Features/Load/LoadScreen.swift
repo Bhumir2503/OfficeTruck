@@ -14,6 +14,8 @@ struct LoadScreen: View {
 
     @State private var load: Loadable<LoadDetail> = .loading
     @State private var checkIn: CheckInRequest?
+    /// The check-in being saved: a few seconds while the phone finds where it is.
+    @State private var recording: CheckInRequest?
     @State private var odometer = ""
     /// A check-in whose odometer was lower than the truck's last reading.
     @State private var lowReading: CheckInRequest?
@@ -253,10 +255,14 @@ struct LoadScreen: View {
                                      unsent: stop.departedAt == nil && isUnsent(departedTap))
                     }
                     // While waiting at the dock: when the free time runs out.
+                    // Early for the appointment, free time starts when it does.
                     if let hours = load.detentionFreeHours, hours > 0, let arrived, departed == nil {
-                        let starts = arrived.addingTimeInterval(hours * 3600)
+                        let starts = max(arrived, stop.appointmentAt ?? arrived).addingTimeInterval(hours * 3600)
                         LabeledContent("Detention starts") {
-                            Text(starts.formatted(date: .omitted, time: .shortened))
+                            // Tomorrow's 8:00 AM isn't today's: say the day when it's another one.
+                            Text(Calendar.current.isDateInToday(starts)
+                                 ? starts.formatted(date: .omitted, time: .shortened)
+                                 : starts.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
                                 .foregroundStyle(starts <= .now ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
                         }
                     }
@@ -353,19 +359,24 @@ struct LoadScreen: View {
                     }
                 }
                 let title = arrived ? "Check out" : "Check in"
+                // Saving a check-in waits a moment for the phone's location:
+                // say so, and take no second tap meanwhile.
+                let saving = recording.map { $0.event == .arrived ? "Checking in…" : "Checking out…" }
+                let label = HStack(spacing: 8) {
+                    if saving != nil { ProgressView() }
+                    Text(saving ?? title).font(.headline)
+                }
+                .frame(maxWidth: .infinity)
                 Group {
                     if #available(iOS 26.0, *) {
-                        Button(action: start) {
-                            Text(title).font(.headline).frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.glassProminent)
+                        Button(action: start) { label }
+                            .buttonStyle(.glassProminent)
                     } else {
-                        Button(action: start) {
-                            Text(title).font(.headline).frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
+                        Button(action: start) { label }
+                            .buttonStyle(.borderedProminent)
                     }
                 }
+                .disabled(recording != nil)
                 .controlSize(.extraLarge)
                 .padding(.horizontal)
                 .padding(.bottom, 8)
@@ -1000,7 +1011,9 @@ struct LoadScreen: View {
     private func record(_ request: CheckInRequest) {
         let tapped = Date.now
         let reading = Int(odometer.filter(\.isNumber))
+        recording = request
         Task {
+            defer { recording = nil }
             let fix = await CheckInLocation.shared.fix()
             queue.enqueue(PendingCheckIn(
                 loadID: request.loadID,

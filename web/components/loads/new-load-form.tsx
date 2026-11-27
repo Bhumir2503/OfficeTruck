@@ -63,6 +63,7 @@ const LOAD_FIELDS: FilledField[] = [
   "commodity",
   "weight_lbs",
   "trailer_number",
+  "notes",
 ]
 const BROKER_FIELDS: FilledField[] = ["broker", "rate_con_from"]
 const CHARGE_FIELDS: FilledField[] = ["charges", "detention"]
@@ -448,6 +449,8 @@ export function NewLoadForm({
               <Field data-invalid={!!errors.notes} className="sm:col-span-6">
                 <FieldLabel htmlFor="load-notes">Notes</FieldLabel>
                 <Textarea
+                  key={`notes-${fillKey}`}
+                  defaultValue={fill?.freight.notes ?? undefined}
                   id="load-notes"
                   name="notes"
                   rows={3}

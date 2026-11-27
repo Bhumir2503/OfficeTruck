@@ -179,9 +179,13 @@ export function suggestAssignments({
   }
   const free = drivers.filter((driver) => !driver.busyWith)
 
+  // Each free truck with every free driver ranked for it, best trucks first.
+  // Drivers are then handed out down the list, so two trucks aren't offered
+  // the same driver while another is free.
+  const taken = new Set<string>()
   const suggestions = trucks
     .filter((truck) => !truck.busyWith)
-    .map((truck): Suggestion => {
+    .map((truck) => {
       const lines: MatchLine[] = []
       let score = truck.emptyMiles ?? UNKNOWN_MILES
       let clean = true
@@ -224,52 +228,70 @@ export function suggestAssignments({
         lines.push({ text: `${truck.unit}: ${truck.problem}`, tone: "warn" })
       }
 
-      // The driver who fits this truck best.
-      let best: {
-        driver: DriverCandidate
-        score: number
-        lines: MatchLine[]
-      } | null = null
-      for (const driver of free) {
-        const fit = driverFit(driver, truck, defaultOf)
-        if (!best || fit.score < best.score) best = { driver, ...fit }
-      }
-      if (!best) {
-        score += 250
-        clean = false
-        lines.push({ text: "No driver is free then", tone: "warn" })
-      } else {
-        score += best.score
-        if (best.driver.problem) clean = false
-        lines.push(...best.lines)
-      }
-      // Why the truck's usual driver isn't the one offered.
-      const usual = drivers.find(
-        (driver) => driver.driverId === truck.defaultDriverId
-      )
-      if (usual && usual.driverId !== best?.driver.driverId) {
-        const why = usual.busyWith
-          ? `is on ${usual.busyWith} then`
-          : usual.problem
-            ? `is out (${usual.problem})`
-            : usual.lastPlace && usual.lastTruckId !== truck.truckId
-              ? `ends ${usual.lastLoad} in ${usual.lastPlace}`
-              : null
-        if (why) {
-          lines.push({
-            text: `Usual driver ${usual.name} ${why}`,
-            tone: "info",
-          })
+      // The drivers who fit this truck, best first.
+      const fits = free
+        .map((driver) => ({ driver, ...driverFit(driver, truck, defaultOf) }))
+        .sort((a, b) => a.score - b.score)
+      return { truck, lines, score, clean, fits }
+    })
+    .sort(
+      (a, b) =>
+        a.score +
+        (a.fits[0]?.score ?? 250) -
+        (b.score + (b.fits[0]?.score ?? 250))
+    )
+    .map(
+      ({
+        truck,
+        lines,
+        score: truckScore,
+        clean: truckClean,
+        fits,
+      }): Suggestion => {
+        let score = truckScore
+        let clean = truckClean
+        // The best driver nobody above has been offered; when every driver
+        // has, the best one again, so the truck can still be picked.
+        const best =
+          fits.find((fit) => !taken.has(fit.driver.driverId)) ?? fits[0] ?? null
+        if (best) taken.add(best.driver.driverId)
+        if (!best) {
+          score += 250
+          clean = false
+          lines.push({ text: "No driver is free then", tone: "warn" })
+        } else {
+          score += best.score
+          if (best.driver.problem) clean = false
+          lines.push(...best.lines)
+        }
+        // Why the truck's usual driver isn't the one offered.
+        const usual = drivers.find(
+          (driver) => driver.driverId === truck.defaultDriverId
+        )
+        if (usual && usual.driverId !== best?.driver.driverId) {
+          const why = usual.busyWith
+            ? `is on ${usual.busyWith} then`
+            : usual.problem
+              ? `is out (${usual.problem})`
+              : usual.lastPlace && usual.lastTruckId !== truck.truckId
+                ? `ends ${usual.lastLoad} in ${usual.lastPlace}`
+                : null
+          if (why) {
+            lines.push({
+              text: `Usual driver ${usual.name} ${why}`,
+              tone: "info",
+            })
+          }
+        }
+        return {
+          truckId: truck.truckId,
+          driverId: best?.driver.driverId ?? null,
+          score,
+          clean,
+          lines,
         }
       }
-      return {
-        truckId: truck.truckId,
-        driverId: best?.driver.driverId ?? null,
-        score,
-        clean,
-        lines,
-      }
-    })
+    )
     .sort((a, b) => a.score - b.score)
   return suggestions.slice(0, limit)
 }

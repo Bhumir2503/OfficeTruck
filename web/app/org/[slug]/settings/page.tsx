@@ -10,6 +10,7 @@ import { LeaveOrganization } from "@/components/settings/leave-organization"
 import { IconUpload } from "@/components/settings/icon-upload"
 import { OrganizationUrlForm } from "@/components/settings/organization-url-form"
 import { SettingsPage } from "@/components/settings/settings-card"
+import { TimeZoneSetting } from "@/components/settings/time-zone-setting"
 import {
   canManage,
   getOrganization,
@@ -32,7 +33,7 @@ export default async function GeneralSettingsPage({
   )
     .from("organizations")
     .select(
-      "icon_url, broker_updates, detention_notices, detention_auto_charge, auto_invoice, auto_invoice_reminders"
+      "icon_url, time_zone, broker_updates, detention_notices, detention_auto_charge, auto_invoice, auto_invoice_reminders"
     )
     .eq("id", organization.id)
     .single()
@@ -56,6 +57,11 @@ export default async function GeneralSettingsPage({
       />
       <CompanyProfileSection section="contact" {...props} />
       <CompanyProfileSection section="address" {...props} />
+      <TimeZoneSetting
+        organizationId={organization.id}
+        timeZone={org?.time_zone ?? "America/Chicago"}
+        canEdit={canManage(organization)}
+      />
       <BrokerUpdatesSetting
         organizationId={organization.id}
         enabled={org?.broker_updates ?? false}

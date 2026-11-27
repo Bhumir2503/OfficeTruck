@@ -156,6 +156,7 @@ export async function emailInvoice(
   const parsed = emailInvoiceSchema.safeParse({
     to: values.to.join(","),
     message: values.message ?? "",
+    sent_on: values.sent_on,
   })
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message }
@@ -184,7 +185,7 @@ export async function emailInvoice(
     }
   }
 
-  const page = invoicePageData(detail)
+  const page = invoicePageData(detail, parsed.data.sent_on)
   const user = await getUser()
   const emailError = await sendInvoiceEmail({
     to: parsed.data.to,
@@ -216,6 +217,7 @@ export async function emailInvoice(
     target_invoice: invoiceId,
     via: "email",
     recipients: parsed.data.to,
+    sent_on: parsed.data.sent_on ?? null,
   })
   if (error) {
     return {
@@ -324,6 +326,7 @@ export async function markInvoiceSent(
     target_invoice: invoiceId,
     via: parsed.data.via,
     recipients: [],
+    sent_on: parsed.data.sent_on ?? null,
   })
   if (error) {
     return { error: rpcError(error) }

@@ -112,7 +112,17 @@ describe("rateConToForm", () => {
       commodity: null,
       weight_lbs: null,
       trailer_number: null,
+      notes: null,
     })
+  })
+
+  it("keeps what the driver needs for the whole load, like the reefer set point", () => {
+    const fill = rateConToForm(
+      { ...empty, notes: "  Reefer 34 F,\n continuous. " },
+      brokers
+    )
+    assert.equal(fill.freight.notes, "Reefer 34 F, continuous.")
+    assert.deepEqual(fill.filled, ["notes"])
   })
 
   it("fills a full rate con and marks each part", () => {

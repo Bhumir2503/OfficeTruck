@@ -58,6 +58,7 @@ import {
   formatInvoiceDate,
   formatTerms,
   type InvoiceState,
+  localToday,
   SENT_VIA_LABELS,
 } from "@/lib/invoice-format"
 import type { Invoice, InvoicePayment } from "@/lib/invoices"
@@ -118,7 +119,10 @@ function EmailForm({
   const { errors, formError, pending, formProps } = useZodForm(
     emailInvoiceSchema,
     async (values) => {
-      const result = await emailInvoice(organizationId, invoice.id, values)
+      const result = await emailInvoice(organizationId, invoice.id, {
+        ...values,
+        sent_on: localToday(),
+      })
       if ("error" in result) {
         return result.error
       }
@@ -625,7 +629,10 @@ export function InvoiceSidePanel({
 
   async function markSent(via: "portal" | "other") {
     setBusy(via)
-    const result = await markInvoiceSent(organizationId, invoice.id, { via })
+    const result = await markInvoiceSent(organizationId, invoice.id, {
+      via,
+      sent_on: localToday(),
+    })
     setBusy(null)
     if ("error" in result) {
       toast.error(result.error)

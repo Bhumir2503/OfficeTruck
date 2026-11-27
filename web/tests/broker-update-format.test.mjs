@@ -182,6 +182,27 @@ describe("detention notices", () => {
     assert.match(message.lines[2], /^Driver's location at check-in: https:/)
   })
 
+  it("counts from the appointment, in the stop's time, for an early driver", () => {
+    const message = brokerUpdateMessage({
+      ...base,
+      event: "detention_soon",
+      stop: {
+        ...waiting,
+        time_zone: "America/New_York",
+        appointment_at: "2026-12-03T21:00:00Z",
+      },
+      detention: { freeHours: 2, rate: 75 },
+    })
+    assert.equal(
+      message.subject,
+      "Load SM-107: detention starts 6:00 PM EST at delivery 2 of 2"
+    )
+    assert.deepEqual(message.lines.slice(0, 2), [
+      "Our driver arrived at delivery 2 of 2 (Publix, Atlanta, GA) at Dec 3, 2026, 2:22 PM EST for the Dec 3, 2026, 4:00 PM EST appointment and is still waiting.",
+      "Free time (2 h) ends at Dec 3, 2026, 6:00 PM EST. Detention starts then at $75.00/hour, per the rate confirmation.",
+    ])
+  })
+
   it("says detention started and asks for the authorization number", () => {
     const message = brokerUpdateMessage({
       ...base,

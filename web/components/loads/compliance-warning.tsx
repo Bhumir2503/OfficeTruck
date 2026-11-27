@@ -3,6 +3,7 @@ import Link from "next/link"
 
 import {
   assignmentProblems,
+  missingSentence,
   problemSentence,
 } from "@/lib/assignment-compliance"
 import type { DriverOption } from "@/lib/drivers"
@@ -11,7 +12,9 @@ import type { TruckOption } from "@/lib/trucks"
 /**
  * Warns when the picked driver or truck can't legally run the load: a CDL,
  * medical card, inspection or registration already past, or running out
- * before `until`, the load's last day. Nothing when all is in order.
+ * before `until`, the load's last day. A driver with no CDL expiration or
+ * medical card on file gets a softer note: nothing says they're out of
+ * date, and nothing says they aren't. Nothing when all is in order.
  */
 export function ComplianceWarning({
   driver,
@@ -43,7 +46,34 @@ export function ComplianceWarning({
         }))
       : []),
   ]
-  if (!rows.length) return null
+  const missing =
+    driver && driver.missing.length > 0
+      ? {
+          text: missingSentence(driver.full_name, driver.missing),
+          href: `${driversBase}/${driver.id}`,
+        }
+      : null
+  if (!rows.length && !missing) return null
+
+  if (!rows.length && missing) {
+    return (
+      <div
+        role="status"
+        className="flex gap-2.5 rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200"
+      >
+        <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+        <p>
+          {missing.text}{" "}
+          <Link
+            href={missing.href}
+            className="font-medium underline underline-offset-2"
+          >
+            Add them
+          </Link>
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div
@@ -63,6 +93,17 @@ export function ComplianceWarning({
             </Link>
           </li>
         ))}
+        {missing && (
+          <li>
+            {missing.text}{" "}
+            <Link
+              href={missing.href}
+              className="font-medium underline underline-offset-2"
+            >
+              Add them
+            </Link>
+          </li>
+        )}
       </ul>
     </div>
   )

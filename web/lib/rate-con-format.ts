@@ -21,6 +21,8 @@ export type RateConExtraction = {
   commodity: string | null
   weight_lbs: number | null
   trailer_number: string | null
+  /** Load-wide requirements for the driver, like the reefer set point. */
+  notes?: string | null
   stops: {
     kind: StopKind
     facility: string | null
@@ -58,6 +60,7 @@ export type FilledField =
   | "commodity"
   | "weight_lbs"
   | "trailer_number"
+  | "notes"
   | "broker"
   | "rate_con_from"
   | "stops"
@@ -73,6 +76,7 @@ export type RateConFill = {
     commodity: string | null
     weight_lbs: number | null
     trailer_number: string | null
+    notes: string | null
   }
   broker: {
     brokerId: string | null
@@ -276,6 +280,7 @@ export function rateConToForm(
       "trailer_number",
       cleanText(extraction.trailer_number, 30)
     ),
+    notes: mark("notes", cleanText(extraction.notes ?? null, 500)),
   }
 
   const email = cleanText(extraction.sender_email, 254)?.toLowerCase() ?? null

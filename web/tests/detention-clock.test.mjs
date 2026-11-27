@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 
-import { detentionClock } from "../lib/load-format.ts"
+import { detentionClock, stopDetention } from "../lib/load-format.ts"
 
 const terms = { detention_free_hours: 2, detention_rate: 75 }
 const arrived = "2026-12-03T15:00:00Z"
@@ -69,5 +69,59 @@ describe("detentionClock", () => {
     )
     assert.equal(clock.started, true)
     assert.equal(clock.amount, null)
+  })
+
+  it("starts free time at the appointment for a driver who's early", () => {
+    // In at 3:00, appointment at 6:00, 2 free hours: free until 8:00.
+    const stop = {
+      arrived_at: arrived,
+      departed_at: null,
+      appointment_at: "2026-12-03T18:00:00Z",
+    }
+    const waiting = detentionClock(stop, terms, at("17:10"))
+    assert.equal(waiting.waiting, 130 * 60_000)
+    assert.equal(waiting.started, false)
+    assert.equal(waiting.freeUntil, at("20:00"))
+    const late = detentionClock(stop, terms, at("20:20"))
+    assert.equal(late.started, true)
+    assert.equal(late.amount, 37.5)
+  })
+
+  it("starts free time at arrival for a driver who's late", () => {
+    const clock = detentionClock(
+      {
+        arrived_at: arrived,
+        departed_at: null,
+        appointment_at: "2026-12-03T13:00:00Z",
+      },
+      terms,
+      at("16:00")
+    )
+    assert.equal(clock.freeUntil, at("17:00"))
+  })
+})
+
+describe("stopDetention", () => {
+  it("bills from the appointment when the driver was early", () => {
+    // In 3:00, appointment 6:00, out 9:10: 70 minutes past free time.
+    const detention = stopDetention(
+      {
+        arrived_at: arrived,
+        departed_at: "2026-12-03T21:10:00Z",
+        appointment_at: "2026-12-03T18:00:00Z",
+      },
+      terms
+    )
+    assert.equal(detention.onSite, 370 * 60_000)
+    assert.equal(detention.billableHours, 1.25)
+    assert.equal(detention.amount, 93.75)
+  })
+
+  it("bills from arrival with no appointment moment", () => {
+    const detention = stopDetention(
+      { arrived_at: arrived, departed_at: "2026-12-03T18:10:00Z" },
+      terms
+    )
+    assert.equal(detention.billableHours, 1.25)
   })
 })

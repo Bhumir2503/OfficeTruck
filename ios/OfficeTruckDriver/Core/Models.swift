@@ -63,12 +63,12 @@ struct Overlap: Sendable {
     init(load: LoadSummary, other: LoadSummary) {
         if load.windowStart >= other.windowStart {
             short = "Picks up before \(other.reference) delivers"
-            long = "This load picks up in \(load.pickupLocation) on \(WallClock.format(load.pickupStart)), "
-                + "before \(other.reference) delivers in \(other.deliveryLocation) \(other.deliveryDue)."
+            long = "This load picks up in \(Place.cityState(load.pickupLocation)) on \(WallClock.format(load.pickupStart)), "
+                + "before \(other.reference) delivers in \(Place.cityState(other.deliveryLocation)) \(other.deliveryDue)."
         } else {
             short = "\(other.reference) picks up before this delivers"
-            long = "\(other.reference) picks up in \(other.pickupLocation) on \(WallClock.format(other.pickupStart)), "
-                + "before this load delivers in \(load.deliveryLocation) \(load.deliveryDue)."
+            long = "\(other.reference) picks up in \(Place.cityState(other.pickupLocation)) on \(WallClock.format(other.pickupStart)), "
+                + "before this load delivers in \(Place.cityState(load.deliveryLocation)) \(load.deliveryDue)."
         }
     }
 }
@@ -168,6 +168,10 @@ struct LoadDetail: Decodable, Identifiable, Sendable {
         let appointmentType: String
         let appointmentStart: String
         let appointmentEnd: String?
+        /// The moment the appointment starts, once the office knows the
+        /// stop's time zone. For the detention clock only: appointments are
+        /// shown as written (`appointmentStart`).
+        let appointmentAt: Date?
         let stopNumber: String?
         let referenceNumbers: String?
         let contactPhone: String?

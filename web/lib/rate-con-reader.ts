@@ -59,6 +59,9 @@ const extractionSchema = z.object({
     .nullable()
     .describe("Total weight in pounds. null if not shown."),
   trailer_number: text("The trailer number, if the rate con names one."),
+  notes: text(
+    "What the driver must do or have for the whole load, in a short sentence or two: reefer set point and mode (like \"34 F, continuous\"), pulp temperature, tarps, straps, load locks, seal, team or hazmat. Only what the rate con says. Leave out rates, payment terms and penalties."
+  ),
   stops: z
     .array(
       z.object({
