@@ -5,6 +5,7 @@ import type {
   InvoiceMethod,
 } from "@/lib/schemas/broker"
 import type { LoadStatus } from "@/lib/schemas/load"
+import { fetchAll } from "@/lib/supabase/paging"
 import { createClient } from "@/lib/supabase/server"
 
 export type Broker = {
@@ -224,17 +225,17 @@ export async function getBrokerLoads(
   brokerId: string
 ): Promise<BrokerLoad[]> {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("loads")
-    .select(
-      "id, reference, pickup_location, delivery_location, pickup_start, rate, status, rate_con_from"
-    )
-    .eq("organization_id", organizationId)
-    .eq("broker_id", brokerId)
-    .order("pickup_start", { ascending: false })
-
-  if (error) {
-    throw error
-  }
+  const data = await fetchAll((from, to) =>
+    supabase
+      .from("loads")
+      .select(
+        "id, reference, pickup_location, delivery_location, pickup_start, rate, status, rate_con_from"
+      )
+      .eq("organization_id", organizationId)
+      .eq("broker_id", brokerId)
+      .order("pickup_start", { ascending: false })
+      .order("id")
+      .range(from, to)
+  )
   return data as BrokerLoad[]
 }

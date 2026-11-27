@@ -1,4 +1,5 @@
 import { paymentDue, type PaymentDue } from "@/lib/load-views"
+import { fetchAll, fetchByIds } from "@/lib/supabase/paging"
 import { createClient } from "@/lib/supabase/server"
 import type { PayType } from "@/lib/schemas/driver"
 import type {
@@ -82,15 +83,15 @@ const LOAD_COLUMNS =
 /** Every load in the organization, newest pickup first. */
 export async function getLoads(organizationId: string): Promise<Load[]> {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("loads")
-    .select(LOAD_COLUMNS)
-    .eq("organization_id", organizationId)
-    .order("pickup_start", { ascending: false })
-
-  if (error) {
-    throw error
-  }
+  const data = await fetchAll((from, to) =>
+    supabase
+      .from("loads")
+      .select(LOAD_COLUMNS)
+      .eq("organization_id", organizationId)
+      .order("pickup_start", { ascending: false })
+      .order("id")
+      .range(from, to)
+  )
   return data as unknown as Load[]
 }
 
@@ -114,35 +115,32 @@ export async function getPaymentsDue(
 
   const supabase = await createClient()
   // An invoice sent from OfficeTruck knows its own due date.
-  const { data: invoices, error: invoicesError } = await supabase
-    .from("invoices")
-    .select("load_id, due_on")
-    .eq("organization_id", organizationId)
-    .eq("status", "sent")
-    .in(
-      "load_id",
-      waiting.map((load) => load.id)
-    )
-  if (invoicesError) {
-    throw invoicesError
-  }
+  const waitingIds = waiting.map((load) => load.id)
+  const invoices = await fetchByIds(waitingIds, (chunk, from, to) =>
+    supabase
+      .from("invoices")
+      .select("load_id, due_on")
+      .eq("organization_id", organizationId)
+      .eq("status", "sent")
+      .in("load_id", chunk)
+      .order("id")
+      .range(from, to)
+  )
   const invoiceDue = new Map(
     invoices.map((invoice) => [invoice.load_id, invoice.due_on as string])
   )
 
-  const { data, error } = await supabase
-    .from("load_events")
-    .select("load_id, created_at")
-    .eq("organization_id", organizationId)
-    .eq("to_status", "invoiced")
-    .in(
-      "load_id",
-      waiting.map((load) => load.id)
-    )
-    .order("created_at")
-  if (error) {
-    throw error
-  }
+  const data = await fetchByIds(waitingIds, (chunk, from, to) =>
+    supabase
+      .from("load_events")
+      .select("load_id, created_at")
+      .eq("organization_id", organizationId)
+      .eq("to_status", "invoiced")
+      .in("load_id", chunk)
+      .order("created_at")
+      .order("id")
+      .range(from, to)
+  )
   // The latest time each load was invoiced.
   const invoicedOn = new Map<string, string>()
   for (const event of data) {

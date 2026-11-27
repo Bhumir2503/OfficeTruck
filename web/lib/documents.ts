@@ -13,6 +13,7 @@ import {
   TRUCK_DOCUMENT_LABELS,
   type TruckDocumentKind,
 } from "@/lib/truck-document-format"
+import { fetchAll } from "@/lib/supabase/paging"
 import { createClient } from "@/lib/supabase/server"
 
 export type CompanyDocument = {
@@ -73,36 +74,54 @@ export async function getAllDocuments(
   company: CompanyDocument[]
 ): Promise<DocumentEntry[]> {
   const supabase = await createClient()
-  const [loadDocs, receipts, drivers, trucks] = await Promise.all([
-    supabase
-      .from("load_documents")
-      .select(
-        "id, kind, path, file_name, created_at, load:loads (id, reference)"
-      )
-      .eq("organization_id", organizationId),
-    supabase
-      .from("load_expenses")
-      .select(
-        "id, kind, receipt_path, receipt_name, spent_on, load:loads (id, reference)"
-      )
-      .eq("organization_id", organizationId)
-      .not("receipt_path", "is", null),
-    supabase
-      .from("driver_documents")
-      .select(
-        "id, kind, title, path, file_name, created_at, driver:drivers (id, full_name)"
-      )
-      .eq("organization_id", organizationId),
-    supabase
-      .from("truck_documents")
-      .select(
-        "id, kind, title, path, file_name, created_at, truck:trucks (id, unit_number)"
-      )
-      .eq("organization_id", organizationId),
+  const [loadRows, receiptData, driverData, truckData] = await Promise.all([
+    fetchAll((from, to) =>
+      supabase
+        .from("load_documents")
+        .select(
+          "id, kind, path, file_name, created_at, load:loads (id, reference)"
+        )
+        .eq("organization_id", organizationId)
+        .order("id")
+        .range(from, to)
+    ),
+    fetchAll((from, to) =>
+      supabase
+        .from("load_expenses")
+        .select(
+          "id, kind, receipt_path, receipt_name, spent_on, load:loads (id, reference)"
+        )
+        .eq("organization_id", organizationId)
+        .not("receipt_path", "is", null)
+        .order("id")
+        .range(from, to)
+    ),
+    fetchAll((from, to) =>
+      supabase
+        .from("driver_documents")
+        .select(
+          "id, kind, title, path, file_name, created_at, driver:drivers (id, full_name)"
+        )
+        .eq("organization_id", organizationId)
+        .order("id")
+        .range(from, to)
+    ),
+    fetchAll((from, to) =>
+      supabase
+        .from("truck_documents")
+        .select(
+          "id, kind, title, path, file_name, created_at, truck:trucks (id, unit_number)"
+        )
+        .eq("organization_id", organizationId)
+        .order("id")
+        .range(from, to)
+    ),
   ])
-  for (const result of [loadDocs, receipts, drivers, trucks]) {
-    if (result.error) throw result.error
-  }
+
+  const loadDocs = { data: loadRows }
+  const receipts = { data: receiptData }
+  const drivers = { data: driverData }
+  const trucks = { data: truckData }
 
   type Linked = { id: string; reference: string } | null
   const docs = loadDocs.data as unknown as {

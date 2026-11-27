@@ -11,6 +11,7 @@ import { getLoadExpenses } from "@/lib/load-expenses"
 import { getLoadDetail } from "@/lib/loads"
 import { getOrganizationProfile } from "@/lib/organizations"
 import type { LoadStatus } from "@/lib/schemas/load"
+import { fetchAll, fetchByIds } from "@/lib/supabase/paging"
 import { createClient } from "@/lib/supabase/server"
 
 export type Invoice = {
@@ -73,16 +74,17 @@ export async function getInvoices(
   organizationId: string
 ): Promise<InvoiceListItem[]> {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("invoices")
-    .select(
-      `${INVOICE_COLUMNS}, load:loads!invoices_organization_id_load_id_fkey (id, reference, broker_name, rate, status, delivery_start, broker:brokers!loads_broker_fkey (quick_pay_fee_percent)), payments:invoice_payments (paid_on, amount)`
-    )
-    .eq("organization_id", organizationId)
-    .order("number", { ascending: false })
-  if (error) {
-    throw error
-  }
+  const data = await fetchAll((from, to) =>
+    supabase
+      .from("invoices")
+      .select(
+        `${INVOICE_COLUMNS}, load:loads!invoices_organization_id_load_id_fkey (id, reference, broker_name, rate, status, delivery_start, broker:brokers!loads_broker_fkey (quick_pay_fee_percent)), payments:invoice_payments (paid_on, amount)`
+      )
+      .eq("organization_id", organizationId)
+      .order("number", { ascending: false })
+      .order("id")
+      .range(from, to)
+  )
   return data as unknown as InvoiceListItem[]
 }
 
@@ -92,17 +94,18 @@ export async function getBrokerInvoices(
   brokerId: string
 ): Promise<InvoiceListItem[]> {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("invoices")
-    .select(
-      `${INVOICE_COLUMNS}, load:loads!invoices_organization_id_load_id_fkey!inner (id, reference, broker_name, broker_id, rate, status, delivery_start, broker:brokers!loads_broker_fkey (quick_pay_fee_percent)), payments:invoice_payments (paid_on, amount)`
-    )
-    .eq("organization_id", organizationId)
-    .eq("load.broker_id", brokerId)
-    .order("number", { ascending: false })
-  if (error) {
-    throw error
-  }
+  const data = await fetchAll((from, to) =>
+    supabase
+      .from("invoices")
+      .select(
+        `${INVOICE_COLUMNS}, load:loads!invoices_organization_id_load_id_fkey!inner (id, reference, broker_name, broker_id, rate, status, delivery_start, broker:brokers!loads_broker_fkey (quick_pay_fee_percent)), payments:invoice_payments (paid_on, amount)`
+      )
+      .eq("organization_id", organizationId)
+      .eq("load.broker_id", brokerId)
+      .order("number", { ascending: false })
+      .order("id")
+      .range(from, to)
+  )
   return data as unknown as InvoiceListItem[]
 }
 
@@ -125,26 +128,34 @@ export async function getLoadsToInvoice(
   organizationId: string
 ): Promise<ReadyLoad[]> {
   const supabase = await createClient()
+  // Read whole: past 1,000 invoices, a partial list would show billed
+  // loads as ready to invoice again.
   const [loads, invoiced] = await Promise.all([
-    supabase
-      .from("loads")
-      .select(
-        "id, reference, broker_name, rate, status, delivery_start, delivered_on"
-      )
-      .eq("organization_id", organizationId)
-      .in("status", ["delivered", "tonu"])
-      .order("delivery_start"),
-    supabase
-      .from("invoices")
-      .select("load_id")
-      .eq("organization_id", organizationId)
-      .neq("status", "void"),
+    fetchAll((from, to) =>
+      supabase
+        .from("loads")
+        .select(
+          "id, reference, broker_name, rate, status, delivery_start, delivered_on"
+        )
+        .eq("organization_id", organizationId)
+        .in("status", ["delivered", "tonu"])
+        .order("delivery_start")
+        .order("id")
+        .range(from, to)
+    ),
+    fetchAll((from, to) =>
+      supabase
+        .from("invoices")
+        .select("load_id")
+        .eq("organization_id", organizationId)
+        .neq("status", "void")
+        .order("id")
+        .range(from, to)
+    ),
   ])
-  if (loads.error) throw loads.error
-  if (invoiced.error) throw invoiced.error
 
-  const billed = new Set(invoiced.data.map((row) => row.load_id))
-  const rows = (loads.data as Omit<ReadyLoad, "missing">[]).filter(
+  const billed = new Set(invoiced.map((row) => row.load_id))
+  const rows = (loads as Omit<ReadyLoad, "missing">[]).filter(
     (load) => !billed.has(load.id)
   )
   if (!rows.length) {
@@ -152,20 +163,38 @@ export async function getLoadsToInvoice(
   }
 
   const ids = rows.map((load) => load.id)
-  const [documents, charges, lumpers] = await Promise.all([
-    supabase.from("load_documents").select("load_id, kind").in("load_id", ids),
-    supabase.from("load_charges").select("load_id, kind").in("load_id", ids),
+  const [documentRows, chargeRows, lumperRows] = await Promise.all([
+    fetchByIds(ids, (chunk, from, to) =>
+      supabase
+        .from("load_documents")
+        .select("load_id, kind")
+        .in("load_id", chunk)
+        .order("id")
+        .range(from, to)
+    ),
+    fetchByIds(ids, (chunk, from, to) =>
+      supabase
+        .from("load_charges")
+        .select("load_id, kind")
+        .in("load_id", chunk)
+        .order("id")
+        .range(from, to)
+    ),
     // A lumper receipt on an expense counts as the lumper receipt.
-    supabase
-      .from("load_expenses")
-      .select("load_id")
-      .in("load_id", ids)
-      .eq("kind", "lumper")
-      .not("receipt_path", "is", null),
+    fetchByIds(ids, (chunk, from, to) =>
+      supabase
+        .from("load_expenses")
+        .select("load_id")
+        .in("load_id", chunk)
+        .eq("kind", "lumper")
+        .not("receipt_path", "is", null)
+        .order("id")
+        .range(from, to)
+    ),
   ])
-  for (const result of [documents, charges, lumpers]) {
-    if (result.error) throw result.error
-  }
+  const documents = { data: documentRows }
+  const charges = { data: chargeRows }
+  const lumpers = { data: lumperRows }
 
   return rows.map((load) => {
     const docs = (documents.data ?? []).filter((d) => d.load_id === load.id)

@@ -189,10 +189,87 @@ All done on branch `claude/qa-ideas` (migration `20261127232603_qa_ideas`, appli
   `claude/ifta` merged first).
 - [x] Before deploying `claude/ifta`, apply its two migrations first (see top). Applied to the hosted project.
 
+## Year run (2026-11-27): a full year of Red River
+
+A second QA pass with a whole year of operations, to see how the app holds
+up with real volume. **Tick items here as they're fixed.**
+
+### What was added (same demo org)
+
+- **Loads:** about 460 for Jan 5 – Nov 21, 2026, on 18 central-US lanes at
+  $2–3/mi, for Marcus (101), Dana (102), Terrell (103), Ray (104,
+  owner-operator, 88%) and Earl (new truck 100, Jan–Aug, then retired and
+  the truck sold). Created through `create_load` / `assign_load` /
+  `set_stop_time`; about 4% cancelled, 2% TONU ($250, $75 driver pay),
+  12% with detention, 8% with a lumper, fuel receipts with gallons on
+  loads over 250 mi. References `XXX-2001…` and `XXX-3001…`.
+- **Paperwork:** rate con, BOL and POD on every delivered load (1,335
+  load documents); three September loads left without a POD.
+- **Billing:** every load invoiced with `record_past_invoice` 1–3 days after
+  delivery and paid by broker habit (Gulfway/Summit quick pay, Prairie
+  3–4 weeks late with two summer invoices never paid, Delta Crossroads
+  short-paid once in June and then marked do-not-use, one SLL invoice
+  voided and reissued). 451 invoices: 407 paid, 43 open, 1 void.
+- **Driver pay:** every week Jan 5 – Nov 16 marked paid through the app's own
+  `markPaid` server action (208 paid statements).
+- **Fleet:** 33 maintenance entries (service every ~7 weeks, inspections,
+  tires, repairs); IFTA Q1–Q3 miles (from loads) and fuel, all three marked
+  filed.
+- Data artifacts, not app bugs: maintenance costs repeat per truck, and
+  truck odometers didn't move (history has no stop odometers).
+
+### Checked and correct
+
+- Dashboard money matches the database to the dollar: 12-month revenue
+  $413,269, costs $193,608 (driver pay + expenses), this month vs last,
+  owed $33,736, overdue $12,261.
+- Reports by truck (loads, revenue, miles, rate/mi, empty %) match.
+- Customer "At a glance" (overdue, open, days to pay, loads) matches.
+- IFTA filed quarters, fleet MPG and net gallons; the TONU's $75 on the pay
+  statement; drivers who left still see their pay statements; the driver
+  app's trip list is the last 120 days by design.
+
+### Findings
+
+- [x] **Lists silently stop at 1,000 rows (serious).** Supabase returns at
+  most 1,000 rows per query. Documents → All documents shows 1,000 of the
+  1,335 load documents ("Showing 50 of 1007"); older ones can't be found.
+  `getReportLoads`, the loads list and invoices load everything the same
+  way, so Reports and totals will quietly undercount past 1,000 loads
+  (about two years at this pace). Page with `.range()` or aggregate in SQL.
+  *Fixed:* `lib/supabase/paging.ts` (`fetchAll`, `fetchByIds`) reads whole
+  results 1,000 rows at a time, with `.in()` id lists in chunks of 150. Used
+  for loads, invoices, ready-to-invoice, reports, all documents, and per
+  truck / driver / broker loads. Documents now shows all 1,342.
+- [x] **Loads and Invoices render every row.** /loads is 2 MB and 3.4 s with
+  473 loads (each row has its own menu and action); /invoices is 1.3 MB.
+  Server-side paging or a "last 90 days / all" filter.
+  *Fixed:* both lists show 50 rows a page (search and filter go back to page
+  1). /loads is now 1.0 MB and 1.4 s, /invoices 657 KB. What's left is the
+  row data sent to the browser for search; server-side search would cut it.
+- [ ] **Invoice numbers follow entry order, not date.** Past invoices take the
+  next number, and the list sorts by number, so September's #1001–#1008 sit
+  under January's #1009. Let "Record as sent earlier" take the original
+  number (`set_invoice_number` exists) and sort by invoice date.
+- [ ] **No owner-operator deductions.** Company-paid fuel on Ray's loads is a
+  company cost with no way to take it off his settlement, so truck 104 shows
+  a -4% margin. A "deduct from driver" choice on company-paid expenses.
+- [ ] **One broker floods the To do.** Ten separate "Invoice #… overdue" rows
+  for Prairie Path; group per broker ("Prairie Path: 8 overdue, $6,836").
+- [ ] **Customer page wording.** "Last load: Dec 3" is a booked future load;
+  the Loads tab (95) and "At a glance" (92) differ by cancelled loads with
+  nothing saying so.
+- [ ] **Customers list has no money.** Open balance, overdue and days to pay
+  are only on each customer's page.
+- [ ] **Dates without a year** in the loads list ("Dec 3") get ambiguous once
+  there's more than a year of loads.
+- [ ] Dashboard takes ~2.5 s with a year of data (dev server).
+
 ## Cleanup when done
 
-The demo org, its files in storage (`load-documents`, `driver-documents`,
-company documents), and the three auth users
+The demo org (now a full year: ~480 loads, ~1,350 files), its files in
+storage (`load-documents`, `driver-documents`, company documents), and the
+three auth users
 (`a1000000-0000-4000-8000-00000000017{1,3,4}`) are still in the hosted
 project. Delete them only when the user says so. Deleting the org cascades
 most rows; storage objects and `auth.users` rows need removing separately.

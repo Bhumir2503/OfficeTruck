@@ -7,6 +7,7 @@ import { useMemo, useState } from "react"
 import { toast } from "sonner"
 
 import { createInvoice } from "@/app/org/[slug]/invoices/actions"
+import { ListPager, usePage } from "@/components/dashboard/list-pager"
 import { InvoiceRowAction } from "@/components/invoices/invoice-row-action"
 import { InvoiceStatusBadge } from "@/components/invoices/invoice-status-badge"
 import {
@@ -130,6 +131,8 @@ export function InvoicesView({
   }
 
   const filtering = search.trim() !== "" || filter !== "all"
+  // A page at a time: a company bills hundreds of loads a year.
+  const { shown, pager } = usePage(filtered, 50)
 
   // The status filter's choices, each with how many invoices it shows.
   const filterOptions: FilterOption<Filter>[] = [
@@ -247,11 +250,14 @@ export function InvoicesView({
         contentClassName={invoices.length ? "@container px-0 pb-0" : undefined}
         footer={
           invoices.length > 0 && (
-            <SettingsCardFooter
-              hint={
+            <ListPager
+              {...pager}
+              noun={
                 filtering
-                  ? `Showing ${filtered.length} of ${count(invoices.length, "invoice")}`
-                  : count(invoices.length, "invoice")
+                  ? `matching invoices (${invoices.length} in all)`
+                  : pager.total === 1
+                    ? "invoice"
+                    : "invoices"
               }
             />
           )
@@ -266,11 +272,17 @@ export function InvoicesView({
           <>
             <TableFilters
               search={search}
-              onSearchChange={setSearch}
+              onSearchChange={(value) => {
+                setSearch(value)
+                pager.onPage(1)
+              }}
               searchPlaceholder="Search invoice #, load # or broker"
               searchLabel="Search invoices"
               filter={filter}
-              onFilterChange={setFilter}
+              onFilterChange={(value) => {
+                setFilter(value)
+                pager.onPage(1)
+              }}
               options={filterOptions}
             />
             <Table className="[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6">
@@ -302,7 +314,7 @@ export function InvoicesView({
                     </TableCell>
                   </TableRow>
                 )}
-                {filtered.map(({ invoice, state }) => (
+                {shown.map(({ invoice, state }) => (
                   <TableRow key={invoice.id}>
                     <TableCell className="py-3">
                       <Link
