@@ -176,7 +176,9 @@ export function TrailersTable({
             <TableHead>Trailer</TableHead>
             <TableHead className="hidden md:table-cell">Pulled by</TableHead>
             <TableHead className="hidden lg:table-cell">Plate</TableHead>
-            <TableHead className="hidden sm:table-cell">Compliance</TableHead>
+            <TableHead className="hidden min-w-60 sm:table-cell">
+              Compliance
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -258,7 +260,7 @@ export function TrailersTable({
                     "Not set"
                   )}
                 </TableCell>
-                <TableCell className="hidden max-w-80 text-sm whitespace-normal sm:table-cell">
+                <TableCell className="hidden max-w-80 min-w-60 text-sm whitespace-normal sm:table-cell">
                   {off ? (
                     <span className="text-muted-foreground">Not tracked</span>
                   ) : warnings.length ? (

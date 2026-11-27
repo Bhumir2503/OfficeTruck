@@ -73,7 +73,7 @@ const COPY: Record<
     title: "Import miles from a CSV",
     description:
       "An ELD state mileage report or a trip-sheet spreadsheet, with a row per state. A state's miles replace what's already entered for that truck.",
-    noun: "states",
+    noun: "rows",
   },
   fuel: {
     title: "Import fuel from a CSV",
@@ -205,9 +205,14 @@ export function IftaImportDialog({
         setError(result.error)
         return
       }
+      const miles = rows as MilesImportRow[]
+      const states = new Set(miles.map((row) => row.jurisdiction)).size
+      const truckCount = new Set(miles.map((row) => row.truck_id)).size
       toast.success(
         kind === "miles"
-          ? `Miles saved for ${result.saved} ${result.saved === 1 ? "state" : "states"}.`
+          ? `Miles saved: ${states} ${states === 1 ? "state" : "states"}${
+              truckCount > 1 ? ` across ${truckCount} trucks` : ""
+            }.`
           : `${result.saved} ${result.saved === 1 ? "purchase" : "purchases"} imported${
               result.skipped ? `, ${result.skipped} already entered` : ""
             }.`

@@ -51,6 +51,7 @@ import {
   handleCurrencyInput,
   handleCurrencyKeyDown,
 } from "@/lib/currency"
+import { possessive } from "@/lib/text-format"
 import {
   balanceDue,
   type BillTo,
@@ -346,6 +347,9 @@ function PaymentForm({
           defaultValue={today}
           errors={errors.paid_on}
           onUpdate={() => revalidate(formRef.current)}
+          // Not before the invoice was sent, and not in the future.
+          min={invoice.invoice_date ?? undefined}
+          max={today}
         />
         <LoadTextField
           name="amount"
@@ -736,7 +740,7 @@ export function InvoiceSidePanel({
             <>
               <h4 className="mt-1 text-lg font-semibold tracking-tight">
                 {portal
-                  ? `Upload it to ${billTo.name}'s portal`
+                  ? `Upload it to ${possessive(billTo.name)} portal`
                   : `Send it to ${billTo.name}`}
               </h4>
               <p className="mt-1 text-sm text-muted-foreground">

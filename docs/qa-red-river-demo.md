@@ -7,6 +7,8 @@ branch or PR.**
 
 ## Where things stand
 
+- **2026-11-28:** bugs and gaps below fixed on branch `claude/qa-fixes` (from `dev`). Its two migrations are applied to the hosted project. Ideas are still open. Demo data change: Kim was assigned PPT-55410 (Dec 3) to show the missing medical card warning.
+
 - Branch `claude/ifta` (from `dev`) holds **uncommitted** work: the IFTA page,
   CSV import, fuel gallons/state on load expenses, trailer dates in the
   dashboard To do. Commit or check it out before building on it.
@@ -115,7 +117,7 @@ the office put files in the load folder and the driver registered them, so
 
 ## Bugs
 
-- [ ] **1. TONU still bills the linehaul (serious).** PPT-55377 marked TONU
+- [x] **1. TONU still bills the linehaul (serious).** Fixed on branch `claude/qa-fixes`: migration `20261127230124_tonu_bills_tonu_only` drops the rate con charges when a load becomes TONU and puts them back on reopen; `loadDriverPay` pays nothing on a TONU. PPT-55377 now bills $250. A flat TONU pay for drivers is still an idea below. PPT-55377 marked TONU
   for $250: revenue becomes $1,550 and draft invoice 1008 bills Linehaul
   $1,300 + TONU $250. The load also keeps the driver's per-mile pay ($180) for
   miles never driven. Expected: a TONU load bills only the TONU charge (and
@@ -123,21 +125,21 @@ the office put files in the load folder and the driver registered them, so
   flat TONU amount. Look at the TONU action in `web/app/org/[slug]/loads/`
   and the rate version / charges logic; check reopening a TONU restores the
   linehaul.
-- [ ] **2. Missing compliance dates aren't flagged anywhere.** Kim has no
+- [x] **2. Missing compliance dates aren't flagged anywhere.** Fixed on branch `claude/qa-fixes`: red "No medical card" / "No CDL" badge in the drivers list, and a To do item for a driver with a load on their schedule. Kim has no
   medical card and drove today; the drivers list shows grey "1 of 4 dates on
   file" and the dashboard To do is silent (missing dates were only on the
   removed Compliance page). At minimum: red warning in the drivers/trucks
   lists, and a To do item for a missing CDL or medical card on a driver with
   a load in the next few days.
-- [ ] **3. A payment can be dated before its invoice.**
+- [x] **3. A payment can be dated before its invoice.** Fixed on branch `claude/qa-fixes`: migration `20261127230125_payment_date_checks` refuses dates before the invoice date or in the future; the payment date picker is limited to that range.
   `record_invoice_payment` accepted a paid date weeks before `invoice_date`.
   Validate in the RPC and the payment form.
-- [ ] **4. Stops get no time zone unless created through the New Load page.**
+- [x] **4. Stops get no time zone unless created through the New Load page.** Not an app bug: both app paths (New Load, Edit stops) call `fillStopTimeZones`; only loads created straight through SQL miss it, and a stop Google can't place counts detention from arrival by design. No change.
   `create_load` leaves `load_stops.time_zone` null; the page calls
   `set_stop_time_zone` afterwards. Loads from the rate con inbox, imports or
   RPCs would show out-of-state times in Central. Set it in the database (or in
   every path that creates stops).
-- [ ] **5. Small fixes.**
+- [x] **5. Small fixes.** All done on branch `claude/qa-fixes` (CDL label, possessive via `lib/text-format.ts`, IFTA toast counts states and trucks, load link before the note, compliance column `min-w-60` on trucks and trailers, stats strip 4 columns from `xl`).
   - Driver page update card says "New cdl" (should be "New CDL").
   - Invoice next step: "Prairie Path Transport Services's portal".
   - IFTA miles import toast says "17 states" for 17 truck/state rows.
@@ -147,24 +149,30 @@ the office put files in the load folder and the driver registered them, so
 
 ## Gaps
 
-- [ ] Dashboard To do doesn't show a driver document waiting for review
+All fixed on branch `claude/qa-fixes` unless noted.
+
+
+- [x] Dashboard To do doesn't show a driver document waiting for review
   (Terrell's CDL sat unnoticed until the driver page was opened).
-- [ ] No flag for a stale load: PPT-55377 stayed "Dispatched" a week past
+- [x] No flag for a stale load: PPT-55377 stayed "Dispatched" a week past
   pickup with no check-ins.
-- [ ] SLL-40790 (delivered today, POD in) isn't listed in To do as ready to
-  invoice.
-- [ ] Drivers list shows Ray "Available" though his only truck is out of
+- [x] SLL-40790 (delivered today, POD in) isn't listed in To do as ready to
+  invoice. (It was hidden by the missing rate con; now listed, naming what's missing.)
+- [x] Drivers list shows Ray "Available" though his only truck is out of
   service.
-- [ ] Driver page "Next action" says "Picks up Nov 27" for Terrell, who's been
+- [x] Driver page "Next action" says "Picks up Nov 27" for Terrell, who's been
   at the dock in detention since 5:40am.
-- [ ] Nothing prompts setting up a driver's qualification file; every driver
+- [x] Nothing prompts setting up a driver's qualification file; (seeding artifact: saving a start date builds the file, and a missing start date is already a next step) every driver
   shows "Not set up".
-- [ ] The IFTA reminder fires for the previous quarter (Q3, "overdue") as soon
+- [x] The IFTA reminder fires for the previous quarter (Q3, "overdue") as soon
   as a company starts using IFTA, even if they filed it elsewhere. Consider
   only reminding for quarters from first use onward, or a one-time "Did you
   file Q3?" prompt.
 
 ## Ideas
+
+Still open. Also new: TONU revenue isn't in Reports (they count delivered loads only).
+
 
 - [ ] **Import past invoices with their real dates.** `send_invoice` only
   takes a date within a day of today, so a carrier switching to the app can't

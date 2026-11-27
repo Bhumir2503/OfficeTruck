@@ -59,7 +59,7 @@ function Stat({
         </div>
       </div>
       {!last && (
-        <div className="mx-4 hidden h-full w-px bg-border lg:block xl:mx-6" />
+        <div className="mx-4 hidden h-full w-px bg-border xl:mx-6 xl:block" />
       )}
     </div>
   )
@@ -133,7 +133,7 @@ export function StatsStrip({
   invoicesHref: string
 }) {
   return (
-    <div className="grid grid-cols-2 gap-3 rounded-xl border bg-card p-4 sm:gap-4 sm:p-5 lg:grid-cols-4 lg:gap-6 lg:p-6">
+    <div className="grid grid-cols-2 gap-3 rounded-xl border bg-card p-4 sm:gap-4 sm:p-5 lg:gap-6 lg:p-6 xl:grid-cols-4">
       <Stat
         icon={CircleDollarSign}
         title="Revenue this month"

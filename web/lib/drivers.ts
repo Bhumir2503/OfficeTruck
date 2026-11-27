@@ -164,6 +164,15 @@ export type DriverLoad = {
   /** The pay rate locked onto the load when this driver was assigned. */
   driver_pay_type: PayType | null
   driver_pay_rate: number | null
+  /**
+   * On a load on the road: the stop the driver is checked in at and hasn't
+   * left, with the check-in time in the company's zone ("5:40 AM").
+   */
+  at_stop?: {
+    kind: "pickup" | "delivery"
+    location: string
+    since: string
+  } | null
 }
 
 /** The loads a driver has been assigned, newest pickup first. */
@@ -172,19 +181,57 @@ export async function getDriverLoads(
   driverId: string
 ): Promise<DriverLoad[]> {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("loads")
-    .select(
-      "id, reference, pickup_location, delivery_location, pickup_start, delivery_start, delivery_end, delivered_on, rate, miles, status, driver_pay_type, driver_pay_rate"
-    )
-    .eq("organization_id", organizationId)
-    .eq("driver_id", driverId)
-    .order("pickup_start", { ascending: false })
+  const [{ data, error }, { data: organization }] = await Promise.all([
+    supabase
+      .from("loads")
+      .select(
+        "id, reference, pickup_location, delivery_location, pickup_start, delivery_start, delivery_end, delivered_on, rate, miles, status, driver_pay_type, driver_pay_rate, stops:load_stops (kind, location, position, arrived_at, departed_at)"
+      )
+      .eq("organization_id", organizationId)
+      .eq("driver_id", driverId)
+      .order("pickup_start", { ascending: false }),
+    supabase
+      .from("organizations")
+      .select("time_zone")
+      .eq("id", organizationId)
+      .maybeSingle(),
+  ])
 
   if (error) {
     throw error
   }
-  return data as DriverLoad[]
+  const time = new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: organization?.time_zone ?? "America/Chicago",
+  })
+  type Stop = {
+    kind: "pickup" | "delivery"
+    location: string
+    position: number
+    arrived_at: string | null
+    departed_at: string | null
+  }
+  return (data as (Omit<DriverLoad, "at_stop"> & { stops: Stop[] })[]).map(
+    ({ stops, ...load }) => {
+      const here =
+        load.status === "dispatched" || load.status === "loaded"
+          ? [...stops]
+              .sort((a, b) => b.position - a.position)
+              .find((stop) => stop.arrived_at && !stop.departed_at)
+          : undefined
+      return {
+        ...load,
+        at_stop: here
+          ? {
+              kind: here.kind,
+              location: here.location,
+              since: time.format(new Date(here.arrived_at!)),
+            }
+          : null,
+      }
+    }
+  )
 }
 
 /** A load on the drivers list's Now column. */
@@ -212,6 +259,11 @@ export type DriverNow = {
   current: DriverNowLoad | null
   next: DriverNowLoad | null
   last: DriverLastDelivery | null
+  /**
+   * For a driver with no load on: the truck they usually drive, when it's
+   * out of service, so they don't read as available.
+   */
+  parked?: { unit: string; until: string | null } | null
 }
 
 // A load counts as delivered from here on in the flow.
@@ -228,7 +280,28 @@ export async function getDriversNow(
   /** "YYYY-MM-DD" */
   today: string
 ): Promise<Record<string, DriverNow>> {
-  return getLoadsNow(organizationId, today, "driver_id")
+  const supabase = await createClient()
+  const [now, parked] = await Promise.all([
+    getLoadsNow(organizationId, today, "driver_id"),
+    supabase
+      .from("trucks")
+      .select("unit_number, default_driver_id, out_of_service_until")
+      .eq("organization_id", organizationId)
+      .eq("status", "out_of_service")
+      .not("default_driver_id", "is", null),
+  ])
+  if (parked.error) {
+    throw parked.error
+  }
+  for (const truck of parked.data) {
+    const driverId = truck.default_driver_id as string
+    const entry = (now[driverId] ??= { current: null, next: null, last: null })
+    entry.parked = {
+      unit: truck.unit_number as string,
+      until: (truck.out_of_service_until as string | null) ?? null,
+    }
+  }
+  return now
 }
 
 /**

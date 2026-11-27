@@ -110,6 +110,22 @@ export function ExpiryDate({
 }
 
 /**
+ * A document a driver can't legally drive without that isn't on file, e.g.
+ * "No medical card".
+ */
+export function MissingBadge({ item }: { item: ComplianceItem }) {
+  return (
+    <span
+      className={cn(pill, TONES.expired)}
+      title={`No ${item.label.toLowerCase()} date on file`}
+    >
+      <AlertTriangle aria-hidden />
+      No {item.label === "CDL" ? "CDL" : item.label.toLowerCase()}
+    </span>
+  )
+}
+
+/**
  * Every date on file and none due soon: green, so a clean record stands out
  * from one with gaps or warnings.
  */

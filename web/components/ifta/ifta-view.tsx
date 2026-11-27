@@ -591,9 +591,9 @@ export function IftaView({
                         {nameOf(row.truck_id)}
                       </div>
                       <div className="truncate text-xs text-muted-foreground">
-                        {[row.jurisdiction, row.vendor]
-                          .filter(Boolean)
-                          .join(" · ")}
+                        {row.jurisdiction}
+                        {/* The load link before the note, so a long note
+                            can't push it out of sight. */}
                         {row.load && (
                           <>
                             {" · "}
@@ -605,6 +605,7 @@ export function IftaView({
                             </Link>
                           </>
                         )}
+                        {row.vendor && ` · ${row.vendor}`}
                       </div>
                     </TableCell>
                     <TableCell className="text-right tabular-nums">

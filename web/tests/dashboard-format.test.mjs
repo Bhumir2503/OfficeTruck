@@ -83,9 +83,12 @@ describe("buildAttention", () => {
       [
         ["pod", "R2 needs its POD"],
         ["invoice_ready", "R1 is ready to invoice"],
+        ["invoice_ready", "R3 is ready to invoice"],
       ]
     )
     assert.equal(items[0].tone, "warning")
+    // Missing paperwork other than the POD is named, not hidden.
+    assert.match(items[2].detail, /Missing BOL$/)
   })
 
   it("warns about booked loads with no driver picking up soon", () => {
@@ -193,5 +196,85 @@ describe("company documents", () => {
     })
     assert.equal(item.title, "The insurance certificate expires")
     assert.equal(item.path, "documents")
+  })
+})
+
+describe("buildAttention: drivers and loads on the road", () => {
+  const missing = (key, label, onLoad) => ({
+    owner: "Kim Nguyen",
+    path: "drivers/d2",
+    onLoad,
+    item: {
+      key,
+      label,
+      kind: "expires",
+      due: null,
+      expiry: { state: "missing" },
+    },
+  })
+
+  it("raises a missing CDL or medical card only for a driver with a load", () => {
+    const items = buildAttention({
+      ...empty,
+      documents: [
+        missing("medical_card", "Medical card", "SLL-40790"),
+        missing("cdl", "CDL", null),
+        missing("annual_review", "Annual review", "SLL-40790"),
+      ],
+    })
+    assert.deepEqual(
+      items.map((i) => [i.tone, i.title, i.detail]),
+      [
+        [
+          "danger",
+          "Kim Nguyen has no medical card on file",
+          "Driving SLL-40790 · Add the date from the card",
+        ],
+      ]
+    )
+  })
+
+  it("lists documents drivers sent for review", () => {
+    const items = buildAttention({
+      ...empty,
+      driverUpdates: [
+        {
+          id: "u1",
+          driver: "Terrell Banks",
+          kind: "cdl",
+          path: "drivers/d3",
+          submitted_at: "2026-11-15T18:00:00Z",
+        },
+      ],
+    })
+    assert.equal(items[0].kind, "review")
+    assert.equal(items[0].title, "Terrell Banks sent a new CDL to review")
+    assert.equal(countActions(items).review, 1)
+  })
+
+  it("flags a dispatched load a day or more past pickup", () => {
+    const load = {
+      id: "l9",
+      reference: "PPT-1",
+      pickup_location: "Tulsa, OK",
+      driver: "Dana Ortiz",
+    }
+    const items = buildAttention({
+      ...empty,
+      dispatched: [
+        { ...load, pickup_start: "2026-11-09T08:00:00" },
+        {
+          ...load,
+          id: "l10",
+          reference: "PPT-2",
+          pickup_start: "2026-11-16T06:00:00",
+        },
+      ],
+    })
+    assert.deepEqual(
+      items.map((i) => [i.kind, i.title]),
+      [["check_in", "PPT-1 hasn't picked up"]]
+    )
+    assert.match(items[0].detail, /7 days ago · Dana Ortiz, no check-in/)
   })
 })
