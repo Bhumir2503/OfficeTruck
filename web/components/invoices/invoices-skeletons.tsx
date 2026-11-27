@@ -28,12 +28,6 @@ function Line({ className }: { className?: string }) {
   )
 }
 
-const STATS = [
-  "Ready to invoice",
-  "Waiting on pay",
-  "Overdue",
-  "Paid, last 30 days",
-]
 const ROWS = ["w-24", "w-32", "w-28"]
 const TABLE =
   "[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6"
@@ -42,19 +36,6 @@ export function InvoicesListSkeleton() {
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
       <div className="flex flex-col gap-6">
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {STATS.map((label) => (
-            <div
-              key={label}
-              className="rounded-xl border bg-card px-5 py-4 shadow-xs"
-            >
-              <p className="text-sm text-muted-foreground">{label}</p>
-              <Skeleton className="mt-2 h-7 w-28" />
-              <Skeleton className="mt-2 h-3 w-14" />
-            </div>
-          ))}
-        </div>
-
         <SettingsCard
           title="Ready to invoice"
           description="Delivered and TONU loads with no invoice yet. Make a draft, check it, then send it with the paperwork attached."

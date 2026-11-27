@@ -23,8 +23,8 @@ export type OrgSection = {
 }
 
 // The sidebar follows an owner's day: what needs attention and how the
-// business is doing, the loads and the money they bring in, compliance and
-// paperwork, then the fleet. Add new items to the group they belong to.
+// business is doing, the loads and the money they bring in, then the fleet,
+// then compliance. Add new items to the group they belong to.
 export const ORG_NAV: { label?: string; items: OrgSection[] }[] = [
   {
     label: "Overview",
@@ -57,20 +57,6 @@ export const ORG_NAV: { label?: string; items: OrgSection[] }[] = [
         description:
           "Drafts, sent, overdue and paid invoices, plus factoring submissions.",
       },
-      {
-        title: "Compliance",
-        path: "compliance",
-        icon: ShieldCheckIcon,
-        description:
-          "The calendar of filings like IFTA, UCR and MCS-150, every driver's and truck's expiration dates with red, yellow and green status, and IFTA reports.",
-      },
-      {
-        title: "Documents",
-        path: "documents",
-        icon: FolderOpenIcon,
-        description:
-          "The company's authority, insurance and W-9 with expiration dates, and every load, driver and receipt file in one searchable place.",
-      },
     ],
   },
   {
@@ -95,6 +81,25 @@ export const ORG_NAV: { label?: string; items: OrgSection[] }[] = [
         icon: ContainerIcon,
         description:
           "Each trailer's type, plate, registration and inspections, and which truck is pulling it.",
+      },
+    ],
+  },
+  {
+    label: "Compliance",
+    items: [
+      {
+        title: "Compliance",
+        path: "compliance",
+        icon: ShieldCheckIcon,
+        description:
+          "The calendar of filings like IFTA, UCR and MCS-150, every driver's and truck's expiration dates with red, yellow and green status, and IFTA reports.",
+      },
+      {
+        title: "Documents",
+        path: "documents",
+        icon: FolderOpenIcon,
+        description:
+          "The company's authority, insurance and W-9 with expiration dates, and every load, driver and receipt file in one searchable place.",
       },
     ],
   },

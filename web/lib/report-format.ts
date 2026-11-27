@@ -426,6 +426,31 @@ export function overview(
 }
 
 /**
+ * The first day the charts cover for a period: the Monday 5 or 13 weeks
+ * back, or the first of the month 12 months back. Loads from then to
+ * `today` are the ones the charts count.
+ */
+export function overviewStart(today: string, period: OverviewPeriod) {
+  const [first] =
+    period === "1year"
+      ? monthlySeries([], today, 12)
+      : weeklySeries([], today, period === "30days" ? 5 : 13)
+  return first.start
+}
+
+/** Whether a load delivered within what the charts show for a period. */
+export function inOverview(
+  load: ReportLoad,
+  today: string,
+  period: OverviewPeriod
+) {
+  return (
+    load.delivered_on >= overviewStart(today, period) &&
+    load.delivered_on <= today
+  )
+}
+
+/**
  * This month so far, and last month up to the same day (the 31st becomes
  * the 30th in a 30-day month), so the two compare like for like.
  */

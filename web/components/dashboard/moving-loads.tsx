@@ -1,17 +1,14 @@
 "use client"
 
 import { cn } from "cn"
-import { TruckIcon } from "lucide-react"
 import Link from "next/link"
-import { useState } from "react"
 
 import {
-  EmptyRow,
-  HEAD,
-  HEAD_ROW,
-  ShowMore,
-  TableCard,
-} from "@/components/dashboard/table-panel"
+  ListPager,
+  PAGED_BODY,
+  usePage,
+} from "@/components/dashboard/list-pager"
+import { SettingsCard } from "@/components/settings/settings-card"
 import {
   Table,
   TableBody,
@@ -25,10 +22,11 @@ import { formatStopWindow, STATUS_STYLES } from "@/lib/load-format"
 import { cityState } from "@/lib/report-format"
 import { LOAD_STATUS_LABELS } from "@/lib/schemas/load"
 
-const FIRST = 6
+const TABLE =
+  "[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6"
 
 /** Loads out on the road now, then the ones picking up in the next two days. */
-export function MovingLoadsCard({
+export function MovingLoads({
   loads,
   loadsBase,
 }: {
@@ -36,43 +34,41 @@ export function MovingLoadsCard({
   /** /org/<slug>/loads */
   loadsBase: string
 }) {
-  const [showAll, setShowAll] = useState(false)
-  const shown = showAll ? loads : loads.slice(0, FIRST)
+  const { shown, pager } = usePage(loads)
 
   return (
-    <TableCard
-      icon={TruckIcon}
+    <SettingsCard
       title="On the road"
-      count={loads.length}
-      footer={
-        loads.length > FIRST && (
-          <ShowMore
-            shown={shown.length}
-            total={loads.length}
-            noun="loads"
-            showAll={showAll}
-            onToggle={() => setShowAll((value) => !value)}
-          />
-        )
+      // A line under the title like To do's, so the two tables start level.
+      description={
+        loads.length === 0
+          ? "In transit or picking up in the next two days"
+          : `${loads.length} in transit or picking up in the next two days`
       }
-      className="flex-1"
+      // Fills its half of the row, so it ends level with To do.
+      className="flex h-full flex-col"
+      contentClassName={cn(
+        PAGED_BODY,
+        loads.length ? "@container px-0 pb-0" : "pt-1 pb-5"
+      )}
+      footer={<ListPager {...pager} noun="loads" />}
     >
       {loads.length === 0 ? (
-        <EmptyRow>
+        <p className="text-sm text-muted-foreground">
           Nothing in transit or picking up in the next two days.
-        </EmptyRow>
+        </p>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow className={HEAD_ROW}>
-              <TableHead className={cn(HEAD, "w-full")}>Load</TableHead>
-              <TableHead className={cn(HEAD, "hidden w-px @md:table-cell")}>
+        <Table className={TABLE}>
+          <TableHeader className="bg-muted/40">
+            <TableRow>
+              <TableHead className="w-full">Load</TableHead>
+              <TableHead className="hidden w-px @xl:table-cell">
                 Driver
               </TableHead>
-              <TableHead className={cn(HEAD, "hidden w-px @xl:table-cell")}>
+              <TableHead className="hidden w-px @3xl:table-cell">
                 Next stop
               </TableHead>
-              <TableHead className={cn(HEAD, "w-px")}>Status</TableHead>
+              <TableHead className="w-px">Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -82,24 +78,24 @@ export function MovingLoadsCard({
               const truck = load.truck_link?.unit_number ?? load.truck
               return (
                 <TableRow key={load.id}>
-                  <TableCell className="max-w-0 py-2.5">
+                  <TableCell className="max-w-0">
                     <Link
                       href={`${loadsBase}/${load.id}`}
-                      className="text-xs font-medium hover:underline sm:text-sm"
+                      className="font-medium hover:underline"
                     >
                       {load.reference}
                     </Link>
-                    <p className="truncate text-[10px] text-muted-foreground sm:text-xs">
+                    <p className="truncate text-xs text-muted-foreground">
                       {cityState(load.pickup_location)} →{" "}
                       {cityState(load.delivery_location)}
                     </p>
                   </TableCell>
-                  <TableCell className="hidden text-xs whitespace-nowrap sm:text-sm @md:table-cell">
+                  <TableCell className="hidden whitespace-nowrap @xl:table-cell">
                     {driver ? (
                       <>
                         {driver}
                         {truck && (
-                          <p className="text-[10px] text-muted-foreground sm:text-xs">
+                          <p className="text-xs text-muted-foreground">
                             Truck {truck}
                           </p>
                         )}
@@ -108,11 +104,11 @@ export function MovingLoadsCard({
                       <span className="text-muted-foreground">No driver</span>
                     )}
                   </TableCell>
-                  <TableCell className="hidden whitespace-nowrap @xl:table-cell">
-                    <span className="text-[10px] text-muted-foreground sm:text-xs">
+                  <TableCell className="hidden whitespace-nowrap @3xl:table-cell">
+                    <span className="text-xs text-muted-foreground">
                       {delivering ? "Delivery" : "Pickup"}
                     </span>
-                    <p className="text-xs sm:text-sm">
+                    <p className="text-sm">
                       {delivering
                         ? formatStopWindow(
                             load.delivery_start,
@@ -129,7 +125,7 @@ export function MovingLoadsCard({
                   <TableCell>
                     <span
                       className={cn(
-                        "inline-flex rounded-md px-2 py-1 text-[10px] font-medium whitespace-nowrap sm:text-xs",
+                        "inline-flex rounded-md px-2 py-0.5 text-xs font-medium whitespace-nowrap",
                         STATUS_STYLES[load.status]
                       )}
                     >
@@ -142,6 +138,6 @@ export function MovingLoadsCard({
           </TableBody>
         </Table>
       )}
-    </TableCard>
+    </SettingsCard>
   )
 }
