@@ -133,7 +133,7 @@ struct TripsView: View {
             VStack(alignment: .leading) {
                 LabeledContent(trip.reference, value: trip.status.label)
                     .font(.headline)
-                Text("\(trip.pickupLocation) → \(trip.deliveryLocation)")
+                Text("\(Place.cityState(trip.pickupLocation)) → \(Place.cityState(trip.deliveryLocation))")
                 Text(showsCarrier ? "\(trip.organizationName) · \(when(trip))" : when(trip))
                     .font(.callout)
                     .foregroundStyle(.secondary)

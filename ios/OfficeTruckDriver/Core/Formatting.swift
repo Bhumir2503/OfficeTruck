@@ -118,3 +118,23 @@ enum WallClock {
 extension Double {
     var dollars: String { formatted(.currency(code: "USD")) }
 }
+
+/// A stop's address, shortened for a row or a sentence.
+enum Place {
+    /// "1200 Main St, Dallas, TX 75201, USA" → "Dallas, TX". The whole
+    /// location, trimmed, when there's no city and state to find. Keep in
+    /// step with `cityState` in `web/lib/report-format.ts`.
+    static func cityState(_ location: String) -> String {
+        let parts = location
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && !["usa", "us", "united states"].contains($0.lowercased()) }
+        for index in parts.indices.reversed() where index > 0 {
+            // "TX" or "TX 75201" or "TX 75201-1234"
+            if let match = parts[index].wholeMatch(of: /([A-Z]{2})(\s+\d{5}(-\d{4})?)?/) {
+                return "\(parts[index - 1]), \(match.1)"
+            }
+        }
+        return location.trimmingCharacters(in: .whitespaces)
+    }
+}
