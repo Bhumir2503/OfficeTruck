@@ -1039,28 +1039,20 @@ export function InvoiceSidePanel({
 }
 
 /**
- * Under the invoice: what goes out with it, and the draft's terms and notes.
+ * Beside the invoice: what goes out with it, and the draft's terms and notes.
  */
 export function InvoiceDetails({
   organizationId,
   invoice,
   packet,
-  packetHref,
 }: {
   organizationId: string
   invoice: Invoice
   packet: PacketItem[]
-  /** /org/<slug>/invoices/<id>/packet */
-  packetHref: string
 }) {
   return (
     <div className="flex flex-col gap-4">
-      <div
-        className={cn(
-          "grid items-start gap-4",
-          invoice.status === "draft" && "md:grid-cols-2"
-        )}
-      >
+      <div className="flex flex-col gap-4">
         <Panel title="Packet">
           <ul className="flex flex-col divide-y">
             <li className="flex items-center gap-2 py-2 text-sm first:pt-0">
@@ -1099,24 +1091,6 @@ export function InvoiceDetails({
               </li>
             ))}
           </ul>
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <a
-              href={packetHref}
-              target="_blank"
-              rel="noreferrer"
-              className={buttonVariants({ variant: "outline", size: "sm" })}
-            >
-              <ExternalLink />
-              View
-            </a>
-            <a
-              href={`${packetHref}?download=1`}
-              className={buttonVariants({ variant: "outline", size: "sm" })}
-            >
-              <Download />
-              Download
-            </a>
-          </div>
         </Panel>
 
         {invoice.status === "draft" && (

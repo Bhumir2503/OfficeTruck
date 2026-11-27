@@ -1,9 +1,10 @@
 import type { Metadata } from "next"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, Download, ExternalLink } from "lucide-react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 
 import { LocalDate } from "@/components/local-date"
+import { InvoiceActivity } from "@/components/invoices/invoice-activity"
 import { InvoiceNumberField } from "@/components/invoices/invoice-number-field"
 import { InvoicePreview } from "@/components/invoices/invoice-preview"
 import {
@@ -12,6 +13,7 @@ import {
   type PacketItem,
 } from "@/components/invoices/invoice-side-panel"
 import { InvoiceStatusBadge } from "@/components/invoices/invoice-status-badge"
+import { InvoiceSummary } from "@/components/invoices/invoice-summary"
 import { buttonVariants } from "@/components/ui/button"
 import { billTo, invoiceState, localToday } from "@/lib/invoice-format"
 import { invoicePageData } from "@/lib/invoice-packet"
@@ -75,6 +77,8 @@ export default async function InvoicePage({
     }))
     .filter((item) => item.required || item.files > 0)
 
+  const packetHref = `${base}/${invoice.id}/packet`
+
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
@@ -89,58 +93,91 @@ export default async function InvoicePage({
           <ArrowLeft />
           All invoices
         </Link>
-        <div className="flex flex-col gap-1">
-          <div className="flex flex-wrap items-center gap-3">
-            <h2 className="text-2xl font-semibold tracking-tight">
-              Invoice {invoice.number}
-            </h2>
-            <InvoiceStatusBadge state={state} />
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex min-w-0 flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="text-2xl font-semibold tracking-tight">
+                Invoice {invoice.number}
+              </h2>
+              <InvoiceStatusBadge state={state} />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              For load{" "}
+              <Link href={loadHref} className="font-medium hover:underline">
+                {load.reference}
+              </Link>{" "}
+              · {load.broker_name}
+              {detail.voided.length > 0 && (
+                <>
+                  {` · Replaces ${detail.voided
+                    .map((voided) => `#${voided.number}`)
+                    .join(", ")}, voided `}
+                  <LocalDate value={detail.voided.at(-1)!.voided_at} />
+                </>
+              )}
+            </p>
           </div>
-          <p className="text-sm text-muted-foreground">
-            For load{" "}
-            <Link href={loadHref} className="font-medium hover:underline">
-              {load.reference}
-            </Link>{" "}
-            · {load.broker_name}
-            {detail.voided.length > 0 && (
-              <>
-                {` · Replaces ${detail.voided
-                  .map((voided) => `#${voided.number}`)
-                  .join(", ")}, voided `}
-                <LocalDate value={detail.voided.at(-1)!.voided_at} />
-              </>
-            )}
-          </p>
+          {/* The packet is what gets sent, filed and asked for again. */}
+          <div className="flex shrink-0 gap-2">
+            <a
+              href={packetHref}
+              target="_blank"
+              rel="noreferrer"
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <ExternalLink />
+              View packet
+            </a>
+            <a
+              href={`${packetHref}?download=1`}
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <Download />
+              Download
+            </a>
+          </div>
         </div>
+
+        <InvoiceSummary
+          invoice={invoice}
+          state={state}
+          total={page.total}
+          dueOn={page.due_on}
+          today={today}
+        />
+
         <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]">
-          <div className="min-w-0">
-            <InvoicePreview
-              page={page}
-              numberField={
-                invoice.status === "draft" ? (
-                  <InvoiceNumberField
-                    organizationId={organization.id}
-                    invoiceId={invoice.id}
-                    number={invoice.number}
-                  />
-                ) : undefined
-              }
-            />
-            {invoice.status === "draft" && (
-              <p className="mt-3 text-sm text-muted-foreground">
-                The lines are the load&apos;s charges as they are now. Change
-                them on the{" "}
-                <Link href={loadHref} className="underline">
-                  load
-                </Link>
-                ; they&apos;re locked in when the invoice is sent. Click the
-                invoice number to change it.
-              </p>
-            )}
+          {/* The page as it prints, on a desk of its own so it reads as paper. */}
+          <div className="min-w-0 rounded-xl border bg-muted/40 p-3 sm:p-6">
+            <div className="mx-auto max-w-3xl">
+              <InvoicePreview
+                page={page}
+                numberField={
+                  invoice.status === "draft" ? (
+                    <InvoiceNumberField
+                      organizationId={organization.id}
+                      invoiceId={invoice.id}
+                      number={invoice.number}
+                    />
+                  ) : undefined
+                }
+              />
+              {invoice.status === "draft" && (
+                <p className="mt-3 px-1 text-sm text-muted-foreground">
+                  The lines are the load&apos;s charges as they are now. Change
+                  them on the{" "}
+                  <Link href={loadHref} className="underline">
+                    load
+                  </Link>
+                  ; they&apos;re locked in when the invoice is sent. Click the
+                  invoice number to change it.
+                </p>
+              )}
+            </div>
           </div>
-          {/* Only sending (or the payment) sits beside the invoice; on a
-              phone it comes right after it. */}
-          <aside className="xl:sticky xl:top-6 xl:row-span-2 xl:max-h-[calc(100svh-3rem)] xl:overflow-y-auto">
+          {/* What to do next, what goes with it and what's happened so far,
+              beside the invoice; on a phone they come right after it. */}
+          <aside className="flex flex-col gap-4 xl:sticky xl:top-6 xl:max-h-[calc(100svh-3rem)] xl:overflow-y-auto">
             <InvoiceSidePanel
               organizationId={organization.id}
               invoice={invoice}
@@ -149,7 +186,7 @@ export default async function InvoicePage({
               dueOn={page.due_on}
               billTo={billTo(load.broker_name, detail.broker, detail.factoring)}
               missing={packet.filter((item) => item.required && !item.files)}
-              packetHref={`${base}/${invoice.id}/packet`}
+              packetHref={packetHref}
               invoicesBase={base}
               payments={detail.payments}
               noaMissing={
@@ -163,15 +200,13 @@ export default async function InvoicePage({
               }
               today={today}
             />
-          </aside>
-          <div className="min-w-0">
             <InvoiceDetails
               organizationId={organization.id}
               invoice={invoice}
               packet={packet}
-              packetHref={`${base}/${invoice.id}/packet`}
             />
-          </div>
+            <InvoiceActivity invoice={invoice} payments={detail.payments} />
+          </aside>
         </div>
       </div>
     </div>
