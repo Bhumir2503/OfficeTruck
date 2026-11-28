@@ -69,6 +69,10 @@ export function useZodForm<Schema extends z.ZodType<Record<string, unknown>>>(
       }
     },
     formProps: {
+      // Submitted before this script has loaded, a form falls back to the
+      // browser's own submit. As a GET, that put every field, passwords
+      // included, in the address bar; as a POST they stay in the body.
+      method: "post" as const,
       noValidate: true,
       async onSubmit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()

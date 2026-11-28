@@ -2,9 +2,13 @@ import { loadDriverPay } from "@/lib/driver-format"
 import { cityState } from "@/lib/report-format"
 import type { PayType } from "@/lib/schemas/driver"
 import {
+  carryDay,
+  lateExpenses,
+  lateLoads,
   PAYABLE_STATUSES,
   periodEnd,
   settlementTotals,
+  type PaidPeriod,
   type PayPeriod,
   type SettlementAdjustment,
   type SettlementExpense,
@@ -78,6 +82,125 @@ function toLoad(row: LoadRow): SettlementLoad {
     }),
     route: `${cityState(row.pickup_location)} → ${cityState(row.delivery_location)}`,
   }
+}
+
+type Client = Awaited<ReturnType<typeof createClient>>
+
+/** The driver's paid statements, as the late-arrival rules read them. */
+const paidPeriods = (
+  rows: Pick<
+    SettlementRow,
+    "status" | "week_start" | "period_end" | "load_ids" | "paid_lines"
+  >[]
+): PaidPeriod[] =>
+  rows
+    .filter((row) => row.status === "paid")
+    .map((row) => ({
+      week_start: row.week_start,
+      period_end: row.period_end,
+      load_ids: row.load_ids ?? [],
+      expense_ids: row.paid_lines
+        ? row.paid_lines.expenses.map((expense) => expense.id)
+        : null,
+    }))
+
+type ExpenseRow = {
+  id: string
+  load_id: string
+  kind: string
+  amount: number | string
+  spent_on: string
+  note: string | null
+  paid_by: string
+}
+
+/** An expense as a statement line: owed back, or taken off when deducted. */
+const toExpense = ({ paid_by, ...expense }: ExpenseRow): SettlementExpense => ({
+  ...expense,
+  amount:
+    paid_by === "deduct" ? -Number(expense.amount) : Number(expense.amount),
+  ...(paid_by === "deduct" ? { deducted: true } : {}),
+})
+
+/**
+ * The driver's loads delivered before `before`, inside a period that was
+ * already paid, and on no paid statement: recorded after payroll ran.
+ */
+async function lateLoadRows(
+  supabase: Client,
+  organizationId: string,
+  driverId: string,
+  before: string,
+  paid: PaidPeriod[]
+): Promise<LoadRow[]> {
+  if (!paid.length) return []
+  const earliest = paid.reduce(
+    (min, row) => (row.week_start < min ? row.week_start : min),
+    paid[0]!.week_start
+  )
+  const delivered = await fetchAll((from, to) =>
+    supabase
+      .from("loads")
+      .select("id, delivered_on")
+      .eq("organization_id", organizationId)
+      .eq("driver_id", driverId)
+      .in("status", PAYABLE_STATUSES)
+      .gte("delivered_on", earliest)
+      .lt("delivered_on", before)
+      .order("delivered_on")
+      .order("id")
+      .range(from, to)
+  )
+  const late = lateLoads(
+    delivered as { id: string; delivered_on: string | null }[],
+    paid
+  )
+  if (!late.length) return []
+  const { data, error } = await supabase
+    .from("loads")
+    .select(LOAD_COLUMNS)
+    .eq("organization_id", organizationId)
+    .in(
+      "id",
+      late.map((load) => load.id)
+    )
+    .order("delivered_on")
+  if (error) throw error
+  return data as LoadRow[]
+}
+
+/**
+ * The driver's receipts on loads a paid statement covers that the statement
+ * didn't pay: turned in after payroll ran.
+ */
+async function lateExpenseRows(
+  supabase: Client,
+  organizationId: string,
+  driverId: string,
+  paid: PaidPeriod[]
+): Promise<SettlementExpense[]> {
+  if (!paid.some((row) => row.expense_ids !== null)) return []
+  const rows = await fetchAll((from, to) =>
+    supabase
+      .from("load_expenses")
+      .select(
+        "id, load_id, kind, amount, spent_on, note, paid_by, load:loads!inner (driver_id, reference)"
+      )
+      .eq("organization_id", organizationId)
+      .in("paid_by", ["driver", "deduct"])
+      .eq("load.driver_id", driverId)
+      .order("spent_on")
+      .order("id")
+      .range(from, to)
+  )
+  return lateExpenses(
+    rows as unknown as (ExpenseRow & { load: { reference: string } })[],
+    paid
+  ).map(({ load, ...expense }) => ({
+    ...toExpense(expense),
+    late: true,
+    reference: load.reference,
+  }))
 }
 
 /**
@@ -194,6 +317,20 @@ export async function getSettlement(
     .filter((r): r is SettlementRow => r !== null)
     .map((r) => r.id)
 
+  // A paid statement is frozen, so a delivery or receipt recorded after its
+  // period was paid rides on the next one payroll pays: the open period
+  // holding the day after the driver's latest paid period.
+  const settled = paidPeriods(rows)
+  const carry = paid ? null : carryDay(settled)
+  const [lateRows, lateReceipts] =
+    carry !== null && carry >= start && carry <= end
+      ? await Promise.all([
+          lateLoadRows(supabase, organizationId, driverId, start, settled),
+          lateExpenseRows(supabase, organizationId, driverId, settled),
+        ])
+      : [[], []]
+  const lateIds = new Set(lateRows.map((load) => load.id))
+
   let loadRows = loads.data as LoadRow[]
   if (paid) {
     // A paid period keeps the loads it paid for, even if one moved since.
@@ -217,11 +354,18 @@ export async function getSettlement(
         .filter((r) => r.status === "paid" && r.id !== row?.id)
         .flatMap((r) => r.load_ids ?? [])
     )
-    loadRows = loadRows.filter((load) => !paidElsewhere.has(load.id))
+    loadRows = [
+      ...lateRows,
+      ...loadRows.filter(
+        (load) => !paidElsewhere.has(load.id) && !lateIds.has(load.id)
+      ),
+    ]
   }
   // A TONU is on the statement only when it pays the driver something.
   const driverLoads = loadRows
-    .map(toLoad)
+    .map((load) =>
+      lateIds.has(load.id) ? { ...toLoad(load), late: true } : toLoad(load)
+    )
     .filter((load, i) => loadRows[i]!.status !== "tonu" || (load.pay ?? 0) > 0)
 
   const ids = driverLoads.map((load) => load.id)
@@ -248,12 +392,10 @@ export async function getSettlement(
   if (expenses.error) throw expenses.error
   if (adjustments.error) throw adjustments.error
 
-  const liveExpenses = (expenses.data ?? []).map(({ paid_by, ...expense }) => ({
-    ...expense,
-    amount:
-      paid_by === "deduct" ? -Number(expense.amount) : Number(expense.amount),
-    ...(paid_by === "deduct" ? { deducted: true } : {}),
-  }))
+  const liveExpenses = [
+    ...lateReceipts,
+    ...((expenses.data ?? []) as ExpenseRow[]).map(toExpense),
+  ]
   const driverAdjustments = (adjustments.data ?? []).map(
     ({ id, description, amount }) => ({
       id,
@@ -352,7 +494,7 @@ export async function getOldestUnpaidDay(
 ): Promise<string | null> {
   const supabase = await createClient()
   // All of it: a driver's history passes 1,000 loads within a few years.
-  const [loads, paid] = await Promise.all([
+  const [loads, statements] = await Promise.all([
     fetchAll((from, to) =>
       supabase
         .from("loads")
@@ -370,7 +512,7 @@ export async function getOldestUnpaidDay(
     fetchAll((from, to) =>
       supabase
         .from("driver_settlements")
-        .select("load_ids")
+        .select("status, week_start, period_end, load_ids, paid_lines")
         .eq("organization_id", organizationId)
         .eq("driver_id", driverId)
         .eq("status", "paid")
@@ -378,13 +520,21 @@ export async function getOldestUnpaidDay(
         .range(from, to)
     ),
   ])
-  const done = new Set(
-    (paid as { load_ids: string[] | null }[]).flatMap(
-      (row) => row.load_ids ?? []
-    )
-  )
-  const first = (loads as { id: string; delivered_on: string }[]).find(
-    (load) => !done.has(load.id)
-  )
-  return first?.delivered_on ?? null
+  const delivered = loads as { id: string; delivered_on: string }[]
+  const settled = paidPeriods(statements as Parameters<typeof paidPeriods>[0])
+  const done = new Set(settled.flatMap((row) => row.load_ids))
+  // What came in after its period was paid is owed on the period payroll
+  // pays next, not on the frozen statement it missed.
+  const carry = carryDay(settled)
+  const late = new Set(lateLoads(delivered, settled).map((load) => load.id))
+  const days = delivered
+    .filter((load) => !done.has(load.id))
+    .map((load) => (late.has(load.id) && carry ? carry : load.delivered_on))
+  if (
+    carry &&
+    (await lateExpenseRows(supabase, organizationId, driverId, settled)).length
+  ) {
+    days.push(carry)
+  }
+  return days.length ? days.reduce((min, day) => (day < min ? day : min)) : null
 }
