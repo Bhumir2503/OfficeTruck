@@ -228,9 +228,12 @@ export function LoadSidePanel({
   loadsBase,
   invoice,
   invoicesBase,
+  where = null,
 }: {
   organizationId: string
   load: Load
+  /** Where the driver is now, e.g. "At the pickup in Dallas, TX since 6:10 AM." */
+  where?: string | null
   charges: LoadCharge[]
   documents: LoadDocument[]
   expenses: LoadExpense[]
@@ -265,7 +268,11 @@ export function LoadSidePanel({
     ...(lumperReceipt ? [{ kind: "lumper_receipt" as const }] : []),
   ])
   const ready = missing.length === 0
-  const step = nextStep(load, missing, invoice)
+  const planned = nextStep(load, missing, invoice)
+  // On the road, lead with where the driver is right now.
+  const step = where
+    ? { ...planned, detail: `${where} ${planned.detail}` }
+    : planned
   const invoiced = INVOICED_STATUSES.includes(load.status)
   const shown: DocumentKind[] = [
     ...required,
@@ -282,7 +289,8 @@ export function LoadSidePanel({
     total: expenseTotals(expenses.filter((expense) => expense.kind === kind))
       .total,
   })).filter((line) => line.total > 0)
-  const expenseTotal = expenseTotals(expenses).total
+  // What the company is out: deductions come back off the driver's pay.
+  const { companyCost: expenseTotal, deducted } = expenseTotals(expenses)
   const locked = formatPay(load.driver_pay_type, load.driver_pay_rate)
   const allMiles = (load.miles ?? 0) + (load.empty_miles ?? 0)
 
@@ -655,7 +663,13 @@ export function LoadSidePanel({
         <dl className="flex flex-col gap-2">
           <MoneyLine label="Revenue">{formatRate(revenue)}</MoneyLine>
           <MoneyLine
-            label={locked ? `Driver pay (${locked})` : "Driver pay"}
+            label={
+              load.status === "tonu"
+                ? "Driver pay (TONU)"
+                : locked
+                  ? `Driver pay (${locked})`
+                  : "Driver pay"
+            }
             muted
           >
             {pay === null
@@ -669,6 +683,11 @@ export function LoadSidePanel({
               −{formatRate(line.total)}
             </MoneyLine>
           ))}
+          {deducted > 0 && (
+            <MoneyLine label="Taken off driver's pay" muted>
+              +{formatRate(deducted)}
+            </MoneyLine>
+          )}
           <div className="my-1 border-t" />
           <MoneyLine label={spent.length ? "Profit" : "Margin"} strong>
             {pay === null ? "—" : formatRate(revenue - pay - expenseTotal)}
@@ -679,7 +698,9 @@ export function LoadSidePanel({
               : "Before fuel and fixed costs. Add expenses as receipts come in."}
           </p>
           <p className="mt-1 text-sm text-muted-foreground tabular-nums">
-            {load.miles ? (
+            {load.status === "tonu" ? (
+              "No miles run: the truck wasn't used."
+            ) : load.miles ? (
               <>
                 {formatRate(revenue / load.miles)} per estimated loaded mile
                 {load.empty_miles ? (

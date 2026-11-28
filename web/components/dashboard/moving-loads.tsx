@@ -1,6 +1,13 @@
+"use client"
+
 import { cn } from "cn"
 import Link from "next/link"
 
+import {
+  ListPager,
+  PAGED_BODY,
+  usePage,
+} from "@/components/dashboard/list-pager"
 import { SettingsCard } from "@/components/settings/settings-card"
 import {
   Table,
@@ -27,10 +34,24 @@ export function MovingLoads({
   /** /org/<slug>/loads */
   loadsBase: string
 }) {
+  const { shown, pager } = usePage(loads)
+
   return (
     <SettingsCard
       title="On the road"
-      contentClassName={loads.length ? "@container px-0 pb-0" : "pt-1 pb-5"}
+      // A line under the title like To do's, so the two tables start level.
+      description={
+        loads.length === 0
+          ? "In transit or picking up in the next two days"
+          : `${loads.length} in transit or picking up in the next two days`
+      }
+      // Fills its half of the row, so it ends level with To do.
+      className="flex h-full flex-col"
+      contentClassName={cn(
+        PAGED_BODY,
+        loads.length ? "@container px-0 pb-0" : "pt-1 pb-5"
+      )}
+      footer={<ListPager {...pager} noun="loads" />}
     >
       {loads.length === 0 ? (
         <p className="text-sm text-muted-foreground">
@@ -51,7 +72,7 @@ export function MovingLoads({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loads.map((load) => {
+            {shown.map((load) => {
               const delivering = load.status === "loaded"
               const driver = load.driver?.full_name ?? load.driver_name
               const truck = load.truck_link?.unit_number ?? load.truck

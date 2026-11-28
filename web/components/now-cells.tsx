@@ -1,6 +1,9 @@
 import Link from "next/link"
 
-import { LAST_DELIVERY_DAYS } from "@/lib/driver-format"
+import {
+  formatDate as formatDay,
+  LAST_DELIVERY_DAYS,
+} from "@/lib/driver-format"
 import type { DriverLastDelivery, DriverNow } from "@/lib/drivers"
 import { formatStopDate, STATUS_STYLES } from "@/lib/load-format"
 import { LOAD_STATUS_LABELS } from "@/lib/schemas/load"
@@ -9,6 +12,35 @@ import { LOAD_STATUS_LABELS } from "@/lib/schemas/load"
  * The Now and Last delivery cells of the drivers and trucks lists. Their
  * links sit above the row's own link, which covers the whole row.
  */
+
+/**
+ * The load's status, or where the driver is right now: at a stop, or in
+ * detention once free time has run out there.
+ */
+function StatusBadge({
+  load,
+  className = "",
+}: {
+  load: DriverNow["current"] & object
+  className?: string
+}) {
+  const here = load.at_stop
+  const [label, style] = here
+    ? here.detention
+      ? ["In detention", "bg-destructive/10 text-destructive"]
+      : [
+          here.kind === "pickup" ? "At pickup" : "At delivery",
+          "bg-sky-500/15 text-sky-700 dark:text-sky-300",
+        ]
+    : [LOAD_STATUS_LABELS[load.status], STATUS_STYLES[load.status]]
+  return (
+    <span
+      className={`rounded-md px-1.5 py-0.5 text-xs font-medium whitespace-nowrap ${style} ${className}`}
+    >
+      {label}
+    </span>
+  )
+}
 
 /**
  * What a driver or truck is doing now: the load it's on, or Available with
@@ -38,25 +70,38 @@ export function NowCell({
           >
             {current.reference}
           </Link>
-          <span
-            className={`rounded-md px-1.5 py-0.5 text-xs font-medium ${STATUS_STYLES[current.status]}`}
-          >
-            {LOAD_STATUS_LABELS[current.status]}
-          </span>
+          <StatusBadge load={current} />
         </div>
         <div className="truncate text-sm text-muted-foreground">
-          {current.from} → {current.to}
+          {current.at_stop
+            ? `Since ${current.at_stop.since} · ${current.at_stop.kind === "pickup" ? current.from : current.to}`
+            : `${current.from} → ${current.to}`}
         </div>
       </div>
     )
   }
   const next = now?.next
+  const parked = now?.parked
   return (
     <div className="min-w-0">
-      <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-300">
-        <span className="size-1.5 rounded-full bg-emerald-500" />
-        Available
-      </span>
+      {parked ? (
+        <span className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-700 dark:text-amber-300">
+          <span className="size-1.5 rounded-full bg-amber-500" />
+          Truck {parked.unit} in the shop
+        </span>
+      ) : (
+        <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-300">
+          <span className="size-1.5 rounded-full bg-emerald-500" />
+          Available
+        </span>
+      )}
+      {parked && !next && (
+        <div className="truncate text-sm text-muted-foreground">
+          {parked.until
+            ? `Out of service until ${formatDay(parked.until)}`
+            : "Out of service"}
+        </div>
+      )}
       {next && (
         <div className="truncate text-sm text-muted-foreground">
           Next:{" "}
@@ -89,22 +134,26 @@ export function NowLine({
   if (current) {
     return (
       <div className="mt-1 truncate text-xs md:hidden">
-        <span
-          className={`mr-1.5 rounded-md px-1.5 py-0.5 font-medium ${STATUS_STYLES[current.status]}`}
-        >
-          {LOAD_STATUS_LABELS[current.status]}
-        </span>
+        <StatusBadge load={current} className="mr-1.5" />
         <span className="text-muted-foreground">
-          {current.from} → {current.to}
+          {current.at_stop
+            ? `since ${current.at_stop.since}`
+            : `${current.from} → ${current.to}`}
         </span>
       </div>
     )
   }
   return (
     <div className="mt-1 truncate text-xs md:hidden">
-      <span className="font-medium text-emerald-700 dark:text-emerald-300">
-        Available
-      </span>
+      {now?.parked ? (
+        <span className="font-medium text-amber-700 dark:text-amber-300">
+          Truck {now.parked.unit} in the shop
+        </span>
+      ) : (
+        <span className="font-medium text-emerald-700 dark:text-emerald-300">
+          Available
+        </span>
+      )}
       {now?.next && (
         <span className="text-muted-foreground">
           {" "}

@@ -1,19 +1,13 @@
 "use client"
 
-import { cn } from "cn"
-import {
-  CheckCircle2,
-  FilePlus2,
-  Loader2,
-  ReceiptText,
-  Search,
-} from "lucide-react"
+import { CheckCircle2, FilePlus2, Loader2, ReceiptText } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
 
 import { createInvoice } from "@/app/org/[slug]/invoices/actions"
+import { ListPager, usePage } from "@/components/dashboard/list-pager"
 import { InvoiceRowAction } from "@/components/invoices/invoice-row-action"
 import { InvoiceStatusBadge } from "@/components/invoices/invoice-status-badge"
 import {
@@ -21,8 +15,8 @@ import {
   SettingsCardFooter,
   SettingsEmptyState,
 } from "@/components/settings/settings-card"
+import { TableFilters, type FilterOption } from "@/components/table-filters"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import {
   Table,
   TableBody,
@@ -31,7 +25,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import {
   balanceDue,
   daysBetween,
@@ -61,33 +54,6 @@ type Filter = InvoiceState | "open" | "all"
 /** What an invoice is for: its frozen total once sent, the load's rate while a draft. */
 const amountOf = (invoice: InvoiceListItem) =>
   Number(invoice.total ?? invoice.load.rate)
-
-function Stat({
-  label,
-  value,
-  detail,
-  tone,
-}: {
-  label: string
-  value: string
-  detail: string
-  tone?: "warning"
-}) {
-  return (
-    <div className="rounded-xl border bg-card px-5 py-4 shadow-xs">
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <p
-        className={cn(
-          "mt-1 text-2xl font-semibold tracking-tight tabular-nums",
-          tone === "warning" && "text-destructive"
-        )}
-      >
-        {value}
-      </p>
-      <p className="mt-0.5 text-xs text-muted-foreground">{detail}</p>
-    </div>
-  )
-}
 
 const count = (n: number, one: string, many = `${one}s`) =>
   `${n} ${n === 1 ? one : many}`
@@ -128,41 +94,18 @@ export function InvoicesView({
     [invoices, today]
   )
 
-  const totals = useMemo(() => {
-    // What's still owed, not the whole invoice, once some has come in.
-    const owed = (list: typeof rows) =>
-      list.reduce(
-        (total, row) =>
-          total + balanceDue(row.invoice.total, row.invoice.paid_amount),
-        0
-      )
-    const open = rows.filter((row) => isOpen(row.state))
-    const overdue = rows.filter((row) => row.state === "overdue")
-    // Every payment in the last 30 days, part payments included.
-    const recent = rows.flatMap(({ invoice }) =>
-      invoice.payments
-        .filter((payment) => daysBetween(payment.paid_on, today) <= 30)
-        .map((payment) => ({ invoice: invoice.id, amount: payment.amount }))
-    )
-    return {
-      ready: ready.reduce((total, load) => total + Number(load.rate), 0),
-      open: { n: open.length, amount: owed(open) },
-      overdue: { n: overdue.length, amount: owed(overdue) },
-      paid: {
-        n: new Set(recent.map((payment) => payment.invoice)).size,
-        amount: recent.reduce(
-          (total, payment) => total + Number(payment.amount),
-          0
-        ),
-      },
+  // How many invoices each status filter shows.
+  const totals = useMemo(
+    () => ({
       byState: Object.fromEntries(
         FILTERS.map((state) => [
           state,
           rows.filter((row) => row.state === state).length,
         ])
       ) as Record<InvoiceState, number>,
-    }
-  }, [rows, ready, today])
+    }),
+    [rows]
+  )
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -188,33 +131,21 @@ export function InvoicesView({
   }
 
   const filtering = search.trim() !== "" || filter !== "all"
+  // A page at a time: a company bills hundreds of loads a year.
+  const { shown, pager } = usePage(filtered, 50)
+
+  // The status filter's choices, each with how many invoices it shows.
+  const filterOptions: FilterOption<Filter>[] = [
+    { value: "all", name: "All", count: invoices.length },
+    ...FILTERS.map((state) => ({
+      value: state,
+      name: INVOICE_STATE_LABELS[state],
+      count: totals.byState[state],
+    })),
+  ]
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat
-          label="Ready to invoice"
-          value={formatRate(totals.ready)}
-          detail={count(ready.length, "load")}
-        />
-        <Stat
-          label="Waiting on pay"
-          value={formatRate(totals.open.amount)}
-          detail={count(totals.open.n, "invoice")}
-        />
-        <Stat
-          label="Overdue"
-          value={formatRate(totals.overdue.amount)}
-          detail={count(totals.overdue.n, "invoice")}
-          tone={totals.overdue.n ? "warning" : undefined}
-        />
-        <Stat
-          label="Paid, last 30 days"
-          value={formatRate(totals.paid.amount)}
-          detail={count(totals.paid.n, "invoice")}
-        />
-      </div>
-
       <SettingsCard
         title="Ready to invoice"
         description="Delivered and TONU loads with no invoice yet. Make a draft, check it, then send it with the paperwork attached."
@@ -319,11 +250,14 @@ export function InvoicesView({
         contentClassName={invoices.length ? "@container px-0 pb-0" : undefined}
         footer={
           invoices.length > 0 && (
-            <SettingsCardFooter
-              hint={
+            <ListPager
+              {...pager}
+              noun={
                 filtering
-                  ? `Showing ${filtered.length} of ${count(invoices.length, "invoice")}`
-                  : count(invoices.length, "invoice")
+                  ? `matching invoices (${invoices.length} in all)`
+                  : pager.total === 1
+                    ? "invoice"
+                    : "invoices"
               }
             />
           )
@@ -336,41 +270,21 @@ export function InvoicesView({
           </SettingsEmptyState>
         ) : (
           <>
-            <div className="flex flex-col gap-3 px-6 pb-4">
-              <div className="relative w-full">
-                <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Search invoice #, load # or broker"
-                  aria-label="Search invoices"
-                  className="pl-7"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-              </div>
-              <ToggleGroup
-                aria-label="Filter by status"
-                variant="outline"
-                size="sm"
-                spacing={1}
-                className="flex-wrap"
-                value={[filter]}
-                onValueChange={(value: string[]) =>
-                  setFilter((value[0] as Filter | undefined) ?? "all")
-                }
-              >
-                <ToggleGroupItem value="all">
-                  All {invoices.length}
-                </ToggleGroupItem>
-                {FILTERS.map((state) => (
-                  <ToggleGroupItem key={state} value={state}>
-                    {INVOICE_STATE_LABELS[state]}
-                    <span className="text-muted-foreground tabular-nums">
-                      {totals.byState[state]}
-                    </span>
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
-            </div>
+            <TableFilters
+              search={search}
+              onSearchChange={(value) => {
+                setSearch(value)
+                pager.onPage(1)
+              }}
+              searchPlaceholder="Search invoice #, load # or broker"
+              searchLabel="Search invoices"
+              filter={filter}
+              onFilterChange={(value) => {
+                setFilter(value)
+                pager.onPage(1)
+              }}
+              options={filterOptions}
+            />
             <Table className="[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6">
               <TableHeader className="bg-muted/40">
                 <TableRow>
@@ -400,7 +314,7 @@ export function InvoicesView({
                     </TableCell>
                   </TableRow>
                 )}
-                {filtered.map(({ invoice, state }) => (
+                {shown.map(({ invoice, state }) => (
                   <TableRow key={invoice.id}>
                     <TableCell className="py-3">
                       <Link

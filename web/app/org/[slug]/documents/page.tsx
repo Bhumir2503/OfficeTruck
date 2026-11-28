@@ -16,8 +16,11 @@ export default async function DocumentsPage({
   if (!organization) {
     notFound()
   }
-  const company = await getCompanyDocuments(organization.id)
-  const entries = await getAllDocuments(organization.id, company)
+  const companyQuery = getCompanyDocuments(organization.id)
+  const [company, entries] = await Promise.all([
+    companyQuery,
+    getAllDocuments(organization.id, companyQuery, `/org/${organization.slug}`),
+  ])
 
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">

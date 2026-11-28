@@ -13,6 +13,8 @@ import {
   TRUCK_DOCUMENT_LABELS,
   type TruckDocumentKind,
 } from "@/lib/truck-document-format"
+import { fileHref, type FileBucket } from "@/lib/document-links"
+import { fetchAll } from "@/lib/supabase/paging"
 import { createClient } from "@/lib/supabase/server"
 
 export type CompanyDocument = {
@@ -42,7 +44,9 @@ async function sign(supabase: Supabase, bucket: string, paths: string[]) {
 
 /** The company's own papers, soonest to expire first. */
 export async function getCompanyDocuments(
-  organizationId: string
+  organizationId: string,
+  /** False for no file links, where only the dates matter (the To do). */
+  links = true
 ): Promise<CompanyDocument[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -52,11 +56,13 @@ export async function getCompanyDocuments(
     .order("expires_on", { nullsFirst: false })
     .order("created_at", { ascending: false })
   if (error) throw error
-  const urls = await sign(
-    supabase,
-    "load-documents",
-    data.map((row) => row.path)
-  )
+  const urls = links
+    ? await sign(
+        supabase,
+        "load-documents",
+        data.map((row) => row.path)
+      )
+    : new Map<string, string>()
   return data.map(({ path, ...row }) => ({
     ...row,
     kind: row.kind as CompanyDocumentKind,
@@ -70,39 +76,62 @@ export async function getCompanyDocuments(
  */
 export async function getAllDocuments(
   organizationId: string,
-  company: CompanyDocument[]
+  /** The company's papers, or the query for them, to run alongside. */
+  companyQuery: CompanyDocument[] | Promise<CompanyDocument[]>,
+  /** /org/<slug>, for the file links. */
+  orgBase: string
 ): Promise<DocumentEntry[]> {
   const supabase = await createClient()
-  const [loadDocs, receipts, drivers, trucks] = await Promise.all([
-    supabase
-      .from("load_documents")
-      .select(
-        "id, kind, path, file_name, created_at, load:loads (id, reference)"
-      )
-      .eq("organization_id", organizationId),
-    supabase
-      .from("load_expenses")
-      .select(
-        "id, kind, receipt_path, receipt_name, spent_on, load:loads (id, reference)"
-      )
-      .eq("organization_id", organizationId)
-      .not("receipt_path", "is", null),
-    supabase
-      .from("driver_documents")
-      .select(
-        "id, kind, title, path, file_name, created_at, driver:drivers (id, full_name)"
-      )
-      .eq("organization_id", organizationId),
-    supabase
-      .from("truck_documents")
-      .select(
-        "id, kind, title, path, file_name, created_at, truck:trucks (id, unit_number)"
-      )
-      .eq("organization_id", organizationId),
-  ])
-  for (const result of [loadDocs, receipts, drivers, trucks]) {
-    if (result.error) throw result.error
-  }
+  const [company, loadRows, receiptData, driverData, truckData] =
+    await Promise.all([
+      companyQuery,
+      fetchAll((from, to) =>
+        supabase
+          .from("load_documents")
+          .select(
+            "id, kind, path, file_name, created_at, load:loads (id, reference)"
+          )
+          .eq("organization_id", organizationId)
+          .order("id")
+          .range(from, to)
+      ),
+      fetchAll((from, to) =>
+        supabase
+          .from("load_expenses")
+          .select(
+            "id, kind, receipt_path, receipt_name, spent_on, load:loads (id, reference)"
+          )
+          .eq("organization_id", organizationId)
+          .not("receipt_path", "is", null)
+          .order("id")
+          .range(from, to)
+      ),
+      fetchAll((from, to) =>
+        supabase
+          .from("driver_documents")
+          .select(
+            "id, kind, title, path, file_name, created_at, driver:drivers (id, full_name)"
+          )
+          .eq("organization_id", organizationId)
+          .order("id")
+          .range(from, to)
+      ),
+      fetchAll((from, to) =>
+        supabase
+          .from("truck_documents")
+          .select(
+            "id, kind, title, path, file_name, created_at, truck:trucks (id, unit_number)"
+          )
+          .eq("organization_id", organizationId)
+          .order("id")
+          .range(from, to)
+      ),
+    ])
+
+  const loadDocs = { data: loadRows }
+  const receipts = { data: receiptData }
+  const drivers = { data: driverData }
+  const trucks = { data: truckData }
 
   type Linked = { id: string; reference: string } | null
   const docs = loadDocs.data as unknown as {
@@ -140,22 +169,14 @@ export async function getAllDocuments(
     truck: { id: string; unit_number: string } | null
   }[]
 
-  const [loadUrls, driverUrls, truckUrls] = await Promise.all([
-    sign(supabase, "load-documents", [
-      ...docs.map((doc) => doc.path),
-      ...receiptRows.map((row) => row.receipt_path),
-    ]),
-    sign(
-      supabase,
-      "driver-documents",
-      driverRows.map((row) => row.path)
-    ),
-    sign(
-      supabase,
-      "truck-documents",
-      truckRows.map((row) => row.path)
-    ),
-  ])
+  // Opened through a link that signs on click: signing every file here
+  // made the page wait on storage for over a thousand links.
+  const open = (bucket: FileBucket) => ({
+    get: (path: string) => fileHref(orgBase, bucket, path),
+  })
+  const loadUrls = open("load-documents")
+  const driverUrls = open("driver-documents")
+  const truckUrls = open("truck-documents")
 
   const entries: DocumentEntry[] = [
     ...company.map((doc) => ({

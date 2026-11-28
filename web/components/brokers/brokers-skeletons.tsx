@@ -53,18 +53,20 @@ export function BrokersListSkeleton() {
       >
         <div className="flex flex-col gap-3 px-6 pb-4 sm:flex-row sm:items-center">
           <Skeleton className="h-9 w-full" />
-          {/* All, Flagged, Do not use. */}
-          <div className="flex shrink-0 gap-1">
-            <Skeleton className="h-8 w-14 rounded-md" />
-            <Skeleton className="h-8 w-22 rounded-md" />
-            <Skeleton className="h-8 w-28 rounded-md" />
-          </div>
+          {/* The filter's dropdown. */}
+          <Skeleton className="h-9 w-full shrink-0 rounded-md sm:w-44" />
         </div>
         <Table className="[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6">
           <TableHeader className="bg-muted/40">
             <TableRow>
               <TableHead>Customer</TableHead>
               <TableHead className="hidden md:table-cell">Terms</TableHead>
+              <TableHead className="hidden text-right sm:table-cell">
+                Owed
+              </TableHead>
+              <TableHead className="hidden text-right xl:table-cell">
+                Pays in
+              </TableHead>
               <TableHead className="hidden lg:table-cell">Invoices</TableHead>
               <TableHead className="text-right sm:text-left">FMCSA</TableHead>
             </TableRow>
@@ -78,6 +80,12 @@ export function BrokersListSkeleton() {
                 </TableCell>
                 <TableCell className="hidden md:table-cell">
                   <Skeleton className={cn("h-4", row.terms)} />
+                </TableCell>
+                <TableCell className="hidden sm:table-cell">
+                  <Skeleton className="ml-auto h-4 w-16" />
+                </TableCell>
+                <TableCell className="hidden xl:table-cell">
+                  <Skeleton className="ml-auto h-4 w-12" />
                 </TableCell>
                 <TableCell className="hidden lg:table-cell">
                   <Skeleton className={cn("h-4", row.email)} />
@@ -363,7 +371,7 @@ export function BrokerDetailSkeleton() {
               </div>
               <Line className="mt-1 w-56" />
               <div className="mt-3 flex flex-col divide-y border-t">
-                {["Terms", "Pays in", "Open", "Loads", "Last load"].map(
+                {["Terms", "Pays in", "Open", "Loads", "Last pickup"].map(
                   (label) => (
                     <div
                       key={label}

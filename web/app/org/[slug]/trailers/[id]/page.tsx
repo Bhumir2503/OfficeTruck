@@ -58,21 +58,26 @@ function Detail({
 export default async function TrailerPage({
   params,
 }: PageProps<"/org/[slug]/trailers/[id]">) {
-  const { organization, trailer } = await trailerFor(params)
-  if (!organization || !trailer) {
+  const { slug, id } = await params
+  const organization = await getOrganization(slug)
+  if (!organization) {
+    notFound()
+  }
+  const manager = canManage(organization)
+  const [trailer, trucks, maintenance, documents] = await Promise.all([
+    getTrailer(organization.id, id),
+    manager ? getTruckOptions(organization.id) : Promise.resolve([]),
+    getTrailerMaintenance(organization.id, id),
+    getTrailerDocuments(organization.id, id),
+  ])
+  if (!trailer) {
     notFound()
   }
 
   const base = `/org/${organization.slug}/trailers`
-  const manager = canManage(organization)
   const today = getToday()
   const warn = trailer.status === "active"
   const none = <span className="text-muted-foreground">Not set</span>
-  const [trucks, maintenance, documents] = await Promise.all([
-    manager ? getTruckOptions(organization.id) : Promise.resolve([]),
-    getTrailerMaintenance(organization.id, trailer.id),
-    getTrailerDocuments(organization.id, trailer.id),
-  ])
   // Same three dates as a truck: inspection, registration, plate.
   const items = truckComplianceItems(trailer, today)
   const subtitle = [

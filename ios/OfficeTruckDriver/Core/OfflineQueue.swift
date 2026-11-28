@@ -60,6 +60,10 @@ struct PendingExpense: Codable, Identifiable, Sendable {
     /// The company paid it (a fuel card, say): sent for its receipt, not
     /// paid back. Nil in expenses queued before this existed: the driver paid.
     var companyPaid: Bool? = nil
+    /// For IFTA, on fuel: gallons and the state it was bought in. Both or
+    /// neither; nil in expenses queued before this existed.
+    var gallons: Double? = nil
+    var jurisdiction: String? = nil
 
     /// Where the receipt goes in the load-documents bucket:
     /// <org>/<load>/receipt-<id>.pdf.
@@ -161,7 +165,8 @@ final class OfflineQueue {
     /// Keeps the receipt (if any) on disk and queues the expense.
     func enqueueExpense(
         loadID: UUID, organizationID: UUID, kind: ExpenseKind, amount: Double,
-        spentOn: String, note: String?, receipt: Data?, companyPaid: Bool = false
+        spentOn: String, note: String?, receipt: Data?, companyPaid: Bool = false,
+        gallons: Double? = nil, jurisdiction: String? = nil
     ) {
         let expense = PendingExpense(
             loadID: loadID,
@@ -172,7 +177,9 @@ final class OfflineQueue {
             note: note,
             hasReceipt: receipt != nil,
             createdAt: .now,
-            companyPaid: companyPaid
+            companyPaid: companyPaid,
+            gallons: gallons,
+            jurisdiction: jurisdiction
         )
         if let receipt {
             do {

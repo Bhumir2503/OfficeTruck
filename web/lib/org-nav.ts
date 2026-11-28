@@ -1,8 +1,8 @@
 import {
-  ChartColumnIcon,
   CircleUserRoundIcon,
   ContainerIcon,
   FolderOpenIcon,
+  FuelIcon,
   HandshakeIcon,
   IdCardIcon,
   LayoutDashboardIcon,
@@ -10,7 +10,6 @@ import {
   PackageIcon,
   ReceiptTextIcon,
   Settings2Icon,
-  ShieldCheckIcon,
   TruckIcon,
   type LucideIcon,
 } from "lucide-react"
@@ -23,9 +22,9 @@ export type OrgSection = {
   description: string
 }
 
-// The sidebar follows an owner's day: what needs attention, the loads and
-// the money they bring in, then the fleet, then compliance. Add new items to
-// the group they belong to.
+// The sidebar follows an owner's day: what needs attention and how the
+// business is doing, the loads and the money they bring in, then the fleet,
+// then paperwork. Add new items to the group they belong to.
 export const ORG_NAV: { label?: string; items: OrgSection[] }[] = [
   {
     label: "Overview",
@@ -34,7 +33,8 @@ export const ORG_NAV: { label?: string; items: OrgSection[] }[] = [
         title: "Dashboard",
         path: "",
         icon: LayoutDashboardIcon,
-        description: "What needs action today.",
+        description:
+          "What needs action today, and reports: profit per load, cost per mile and empty miles, broken down by truck, broker and route.",
       },
       {
         title: "Loads",
@@ -56,13 +56,6 @@ export const ORG_NAV: { label?: string; items: OrgSection[] }[] = [
         icon: ReceiptTextIcon,
         description:
           "Drafts, sent, overdue and paid invoices, plus factoring submissions.",
-      },
-      {
-        title: "Reports",
-        path: "reports",
-        icon: ChartColumnIcon,
-        description:
-          "Profit per load, cost per mile and empty miles, broken down by truck, broker and route.",
       },
     ],
   },
@@ -92,21 +85,21 @@ export const ORG_NAV: { label?: string; items: OrgSection[] }[] = [
     ],
   },
   {
-    label: "Compliance",
+    label: "Paperwork",
     items: [
-      {
-        title: "Compliance",
-        path: "compliance",
-        icon: ShieldCheckIcon,
-        description:
-          "The calendar of filings like IFTA, UCR and MCS-150, every driver's and truck's expiration dates with red, yellow and green status, and IFTA reports.",
-      },
       {
         title: "Documents",
         path: "documents",
         icon: FolderOpenIcon,
         description:
           "The company's authority, insurance and W-9 with expiration dates, and every load, driver and receipt file in one searchable place.",
+      },
+      {
+        title: "IFTA",
+        path: "ifta",
+        icon: FuelIcon,
+        description:
+          "The quarterly fuel tax return: each truck's miles by state and fuel purchases, worked into net taxable gallons by state.",
       },
     ],
   },

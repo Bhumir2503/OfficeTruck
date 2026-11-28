@@ -36,7 +36,8 @@ import { getLoadDocuments } from "@/lib/load-documents"
 import { getLoadInvoice } from "@/lib/invoices"
 import { getLoadExpenses } from "@/lib/load-expenses"
 import { getLoadDetail } from "@/lib/loads"
-import { canManage, getOrganization } from "@/lib/organizations"
+import { loadWhereNow } from "@/lib/load-format"
+import { canManage, getOrganization, getTimeZone } from "@/lib/organizations"
 import { getTruckOptions } from "@/lib/trucks"
 
 async function loadFor(params: PageProps<"/org/[slug]/loads/[id]">["params"]) {
@@ -57,16 +58,14 @@ export default async function LoadPage({
   params,
   searchParams,
 }: PageProps<"/org/[slug]/loads/[id]">) {
-  const { organization, detail } = await loadFor(params)
-  if (!organization || !detail) {
+  const { slug, id } = await params
+  const organization = await getOrganization(slug)
+  if (!organization) {
     notFound()
   }
-  const { load, stops, charges, versions } = detail
-
-  const base = `/org/${organization.slug}/loads`
-  const loadHref = `${base}/${load.id}`
-  const tab = parseLoadTab((await searchParams).tab)
+  // Everything at once, the load itself too: each is its own round trip.
   const [
+    detail,
     drivers,
     trucks,
     brokers,
@@ -75,16 +74,30 @@ export default async function LoadPage({
     documents,
     expenses,
     invoice,
+    timeZone,
   ] = await Promise.all([
+    getLoadDetail(organization.id, id),
     getDriverOptions(organization.id),
     getTruckOptions(organization.id),
     getBrokerOptions(organization.id),
     getFactoringCompany(organization.id),
-    getLoadEvents(organization.id, load.id),
-    getLoadDocuments(organization.id, load.id),
-    getLoadExpenses(organization.id, load.id),
-    getLoadInvoice(organization.id, load.id),
+    getLoadEvents(organization.id, id),
+    getLoadDocuments(organization.id, id),
+    getLoadExpenses(organization.id, id),
+    getLoadInvoice(organization.id, id),
+    getTimeZone(organization.id),
   ])
+  if (!detail) {
+    notFound()
+  }
+  const { load, stops, charges, versions } = detail
+
+  const base = `/org/${organization.slug}/loads`
+  const loadHref = `${base}/${load.id}`
+  const tab = parseLoadTab((await searchParams).tab)
+  // Where the driver is now, for the next step: worked out here, on the
+  // company's clock, so the page doesn't change as it loads.
+  const where = loadWhereNow(load, stops, timeZone)
 
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">
@@ -230,6 +243,7 @@ export default async function LoadPage({
               <LoadSidePanel
                 organizationId={organization.id}
                 load={load}
+                where={where}
                 charges={charges}
                 documents={documents}
                 expenses={expenses}

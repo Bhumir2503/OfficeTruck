@@ -56,6 +56,26 @@ export const markSentSchema = z.object({
 })
 export type MarkSentValues = z.output<typeof markSentSchema>
 
+/** A draft recorded as sent on an earlier day, from before using the app. */
+export const pastInvoiceSchema = z.object({
+  via: z.enum(["email", "portal", "other"], "Choose how it was sent."),
+  sent_on: z
+    .string("Enter the day it was sent.")
+    .regex(DATE, "Enter the day it was sent."),
+  /** The number it went out with, when that isn't the one it was given. */
+  number: z
+    .string()
+    .transform((value) => value.replace(/[,\s#]/g, ""))
+    .pipe(
+      z
+        .string()
+        .regex(/^(\d{1,9})?$/, "Enter a whole number, like 1001.")
+        .transform((value) => (value ? Number(value) : null))
+    )
+    .optional(),
+})
+export type PastInvoiceValues = z.input<typeof pastInvoiceSchema>
+
 export const paymentSchema = z.object({
   paid_on: z.string().regex(DATE, "Enter the date it was paid."),
   amount: money("Enter the amount paid.").refine(

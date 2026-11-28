@@ -21,12 +21,14 @@ export default async function TrucksPage({
     notFound()
   }
 
-  const [trucks, now, lastService] = await Promise.all([
-    getTrucks(organization.id),
+  const trucksQuery = getTrucks(organization.id)
+  const [trucks, milesSince, now, lastService] = await Promise.all([
+    trucksQuery,
+    // Started as soon as the trucks are in, alongside the rest.
+    trucksQuery.then((all) => getMilesSinceReading(organization.id, all)),
     getTrucksNow(organization.id, today()),
     getLastServiceByTruck(organization.id),
   ])
-  const milesSince = await getMilesSinceReading(organization.id, trucks)
 
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">

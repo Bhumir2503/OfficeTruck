@@ -8,9 +8,17 @@ import {
 import { complianceItems, expiry, today as getToday } from "@/lib/driver-format"
 import { getDqDatesByDriver } from "@/lib/dq/fleet"
 import { getDrivers } from "@/lib/drivers"
+import { getIftaReminder } from "@/lib/ifta"
+import {
+  dueDate,
+  previousQuarter,
+  quarterKey,
+  quarterLabel,
+  quarterOf,
+} from "@/lib/ifta-format"
 import { COMPANY_DOCUMENT_LABELS } from "@/lib/company-document-format"
 import { getCompanyDocuments } from "@/lib/documents"
-import { getInvoices, getLoadsToInvoice } from "@/lib/invoices"
+import { getLoadsToInvoice, getOpenInvoices } from "@/lib/invoices"
 import { cityState } from "@/lib/report-format"
 import type { AppointmentType, LoadStatus } from "@/lib/schemas/load"
 import { createClient } from "@/lib/supabase/server"
@@ -19,6 +27,7 @@ import {
   truckServiceItem,
   withEstimatedOdometer,
 } from "@/lib/truck-format"
+import { getTrailers } from "@/lib/trailers"
 import {
   getLastServiceByTruck,
   getMilesSinceReading,
@@ -32,32 +41,107 @@ import {
 export const getAttention = cache(async (organizationId: string) => {
   const today = getToday()
   const supabase = await createClient()
-  const [invoices, ready, booked, drivers, trucks, papers, dq, lastService] =
-    await Promise.all([
-      getInvoices(organizationId),
-      getLoadsToInvoice(organizationId),
-      supabase
-        .from("loads")
-        .select(
-          "id, reference, pickup_location, pickup_start, driver_id, truck_id"
-        )
-        .eq("organization_id", organizationId)
-        .eq("status", "booked")
-        .order("pickup_start"),
-      getDrivers(organizationId),
-      getTrucks(organizationId),
-      getCompanyDocuments(organizationId),
-      getDqDatesByDriver(organizationId),
-      getLastServiceByTruck(organizationId),
-    ])
+  // The IFTA return still to file: the quarter just ended.
+  const iftaQuarter = previousQuarter(quarterOf(today))
+  const [
+    invoices,
+    ready,
+    booked,
+    drivers,
+    { trucks, milesSince },
+    trailers,
+    papers,
+    dq,
+    lastService,
+    ifta,
+    onSchedule,
+    updates,
+  ] = await Promise.all([
+    getOpenInvoices(organizationId),
+    getLoadsToInvoice(organizationId),
+    supabase
+      .from("loads")
+      .select(
+        "id, reference, pickup_location, pickup_start, driver_id, truck_id"
+      )
+      .eq("organization_id", organizationId)
+      .eq("status", "booked")
+      .order("pickup_start"),
+    getDrivers(organizationId),
+    // With the miles each has run since its odometer reading, for service
+    // due by mileage: started as soon as the trucks are in.
+    getTrucks(organizationId).then(async (trucks) => {
+      const active = trucks.filter((truck) => truck.status === "active")
+      return {
+        trucks,
+        milesSince: await getMilesSinceReading(organizationId, active),
+      }
+    }),
+    getTrailers(organizationId),
+    getCompanyDocuments(organizationId, false),
+    getDqDatesByDriver(organizationId),
+    getLastServiceByTruck(organizationId),
+    getIftaReminder(organizationId, iftaQuarter),
+    // Loads on a driver's schedule: for documents they can't drive without,
+    // and dispatched ones that never picked up.
+    supabase
+      .from("loads")
+      .select(
+        "id, reference, status, pickup_location, pickup_start, driver_id, truck_id, driver:drivers!loads_driver_fkey (full_name)"
+      )
+      .eq("organization_id", organizationId)
+      .in("status", ["booked", "dispatched", "loaded"])
+      .order("pickup_start"),
+    supabase
+      .from("driver_updates")
+      .select("id, driver_id, kind, created_at")
+      .eq("organization_id", organizationId)
+      .eq("status", "pending")
+      .order("created_at"),
+  ])
   if (booked.error) {
     throw booked.error
   }
+  if (onSchedule.error) {
+    throw onSchedule.error
+  }
+  if (updates.error) {
+    throw updates.error
+  }
+  const scheduled = onSchedule.data as unknown as {
+    id: string
+    reference: string
+    status: string
+    pickup_location: string
+    pickup_start: string
+    driver_id: string | null
+    truck_id: string | null
+    driver: { full_name: string } | null
+  }[]
+  // Each driver's and truck's nearest load: on the road first, then the
+  // next booked.
+  type Scheduled = { reference: string; pickup_start: string }
+  const loadOf = new Map<string, Scheduled>()
+  const truckLoadOf = new Map<string, Scheduled>()
+  for (const load of [
+    ...scheduled.filter((load) => load.status !== "booked"),
+    ...scheduled.filter((load) => load.status === "booked"),
+  ]) {
+    const entry = { reference: load.reference, pickup_start: load.pickup_start }
+    if (load.driver_id && !loadOf.has(load.driver_id)) {
+      loadOf.set(load.driver_id, entry)
+    }
+    if (load.truck_id && !truckLoadOf.has(load.truck_id)) {
+      truckLoadOf.set(load.truck_id, entry)
+    }
+  }
+  const driverName = new Map(
+    drivers.map((driver) => [driver.id, driver.full_name])
+  )
 
   const activeTrucks = trucks.filter((truck) => truck.status === "active")
   // Service by mileage counts from the odometer estimated from loads run
   // since the last reading.
-  const milesSince = await getMilesSinceReading(organizationId, activeTrucks)
   const documents: AttentionInput["documents"] = [
     ...drivers
       .filter((driver) => driver.status === "active")
@@ -66,6 +150,7 @@ export const getAttention = cache(async (organizationId: string) => {
           owner: driver.full_name,
           item,
           path: `drivers/${driver.id}`,
+          onLoad: loadOf.get(driver.id) ?? null,
         }))
       ),
     ...activeTrucks.flatMap((truck) =>
@@ -82,8 +167,19 @@ export const getAttention = cache(async (organizationId: string) => {
           owner: `Truck ${truck.unit_number}`,
           item,
           path: `equipment/${truck.id}`,
+          onLoad: truckLoadOf.get(truck.id) ?? null,
         }))
     ),
+    // Trailers have the same three dates as trucks.
+    ...trailers
+      .filter((trailer) => trailer.status === "active")
+      .flatMap((trailer) =>
+        truckComplianceItems(trailer, today).map((item) => ({
+          owner: `Trailer ${trailer.unit_number}`,
+          item,
+          path: `trailers/${trailer.id}`,
+        }))
+      ),
   ]
   // A truck parked past the day it was due back from out of service.
   for (const truck of trucks) {
@@ -118,6 +214,22 @@ export const getAttention = cache(async (organizationId: string) => {
       path: "documents",
     })
   }
+  // The IFTA return, for companies that keep IFTA here, until it's marked
+  // filed. Like other dates, it shows from 30 days before it's due.
+  if (ifta.inUse && !ifta.filed) {
+    const due = dueDate(iftaQuarter)
+    documents.push({
+      owner: "Company",
+      item: {
+        key: "ifta_return",
+        label: `IFTA return for ${quarterLabel(iftaQuarter)}`,
+        kind: "due",
+        due,
+        expiry: expiry(due, today),
+      },
+      path: `ifta?q=${quarterKey(iftaQuarter)}`,
+    })
+  }
   const items = buildAttention({
     today,
     invoices,
@@ -127,6 +239,29 @@ export const getAttention = cache(async (organizationId: string) => {
       pickup_location: cityState(load.pickup_location),
     })),
     documents,
+    driverUpdates: (
+      updates.data as {
+        id: string
+        driver_id: string
+        kind: string
+        created_at: string
+      }[]
+    ).map((update) => ({
+      id: update.id,
+      driver: driverName.get(update.driver_id) ?? "A driver",
+      kind: update.kind,
+      path: `drivers/${update.driver_id}`,
+      submitted_at: update.created_at,
+    })),
+    dispatched: scheduled
+      .filter((load) => load.status === "dispatched" && load.driver_id)
+      .map((load) => ({
+        id: load.id,
+        reference: load.reference,
+        pickup_location: cityState(load.pickup_location),
+        pickup_start: load.pickup_start,
+        driver: load.driver?.full_name ?? null,
+      })),
   })
   return { today, items, invoices }
 })

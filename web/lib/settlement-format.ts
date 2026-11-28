@@ -13,6 +13,8 @@ export const PAYABLE_STATUSES: LoadStatus[] = [
   "invoiced",
   "paid",
   "factored",
+  // Only when the driver gets TONU pay; on its pickup day.
+  "tonu",
 ]
 
 const DAY = 86_400_000
@@ -153,6 +155,8 @@ export type SettlementLoad = {
   delivered_on?: string | null
   rate: number
   miles: number | null
+  /** A TONU: paid for the wasted trip, no miles run. */
+  tonu?: boolean
   /** The driver's pay on the load, or null when it can't be worked out. */
   pay: number | null
   /** "Dallas, TX → Atlanta, GA" */
@@ -163,9 +167,12 @@ export type SettlementExpense = {
   id: string
   load_id: string
   kind: string
+  /** Owed back to the driver; negative when it's taken off their pay. */
   amount: number
   spent_on: string
   note: string | null
+  /** Company-paid, taken off the driver's pay. */
+  deducted?: boolean
 }
 
 export type SettlementAdjustment = {

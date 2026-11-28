@@ -1,6 +1,6 @@
 "use client"
 
-import { Building2, Search } from "lucide-react"
+import { Building2 } from "lucide-react"
 import Link from "next/link"
 import { useMemo, useState } from "react"
 
@@ -10,8 +10,8 @@ import {
   SettingsCardFooter,
   SettingsEmptyState,
 } from "@/components/settings/settings-card"
+import { TableFilters, type FilterOption } from "@/components/table-filters"
 import { buttonVariants } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import {
   Table,
   TableBody,
@@ -20,9 +20,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { fmcsaFlags, formatMc, formatTerms } from "@/lib/broker-format"
-import type { BrokerWithFmcsa } from "@/lib/brokers"
+import type { BrokerMoney, BrokerWithFmcsa } from "@/lib/brokers"
+import { formatRate } from "@/lib/load-format"
 
 type Filter = "all" | "broker" | "shipper" | "flagged" | "do_not_use"
 
@@ -45,9 +45,12 @@ function isFlagged(broker: BrokerWithFmcsa) {
 
 export function BrokersTable({
   brokers,
+  money,
   base,
 }: {
   brokers: BrokerWithFmcsa[]
+  /** Open balance, overdue and days to pay, by broker id. */
+  money: Record<string, BrokerMoney>
   /** /org/<slug>/customers */
   base: string
 }) {
@@ -104,6 +107,11 @@ export function BrokersTable({
 
   const filtering = search.trim() !== "" || filter !== "all"
 
+  // The filter's choices, each with how many customers it shows.
+  const filterOptions: FilterOption<Filter>[] = (
+    Object.keys(FILTER_LABELS) as Filter[]
+  ).map((key) => ({ value: key, name: FILTER_LABELS[key], count: counts[key] }))
+
   return (
     <SettingsCard
       title="Customers"
@@ -119,43 +127,27 @@ export function BrokersTable({
         />
       }
     >
-      <div className="flex flex-col gap-3 px-6 pb-4 sm:flex-row sm:items-center">
-        <div className="relative w-full">
-          <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search name or MC"
-            aria-label="Search customers"
-            className="pl-7"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <ToggleGroup
-          aria-label="Filter customers"
-          variant="outline"
-          size="sm"
-          spacing={1}
-          className="shrink-0 flex-wrap"
-          value={[filter]}
-          onValueChange={(value: string[]) =>
-            setFilter((value[0] as Filter | undefined) ?? "all")
-          }
-        >
-          {(Object.keys(FILTER_LABELS) as Filter[]).map((key) => (
-            <ToggleGroupItem key={key} value={key}>
-              {FILTER_LABELS[key]}
-              <span className="text-muted-foreground tabular-nums">
-                {counts[key]}
-              </span>
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
-      </div>
+      <TableFilters
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search name or MC"
+        searchLabel="Search customers"
+        filter={filter}
+        onFilterChange={setFilter}
+        options={filterOptions}
+        filterLabel="Filter customers"
+      />
       <Table className="[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6">
         <TableHeader className="bg-muted/40">
           <TableRow>
             <TableHead>Customer</TableHead>
             <TableHead className="hidden md:table-cell">Terms</TableHead>
+            <TableHead className="hidden text-right sm:table-cell">
+              Owed
+            </TableHead>
+            <TableHead className="hidden text-right xl:table-cell">
+              Pays in
+            </TableHead>
             <TableHead className="hidden lg:table-cell">Invoices</TableHead>
             <TableHead className="text-right sm:text-left">FMCSA</TableHead>
           </TableRow>
@@ -164,7 +156,7 @@ export function BrokersTable({
           {filtered.length === 0 && (
             <TableRow>
               <TableCell
-                colSpan={4}
+                colSpan={6}
                 className="h-24 text-center text-muted-foreground"
               >
                 {search.trim() === "" && filter !== "all"
@@ -202,6 +194,27 @@ export function BrokersTable({
                 {formatTerms(
                   broker.payment_terms_days,
                   broker.quick_pay_fee_percent
+                )}
+              </TableCell>
+              <TableCell className="hidden text-right text-sm tabular-nums sm:table-cell">
+                {money[broker.id]?.open.count ? (
+                  <>
+                    {formatRate(money[broker.id].open.balance)}
+                    {money[broker.id].overdue.count > 0 && (
+                      <span className="block text-xs text-destructive">
+                        {formatRate(money[broker.id].overdue.balance)} overdue
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
+              </TableCell>
+              <TableCell className="hidden text-right text-sm tabular-nums xl:table-cell">
+                {money[broker.id]?.avgDaysToPay != null ? (
+                  `${money[broker.id].avgDaysToPay} days`
+                ) : (
+                  <span className="text-muted-foreground">—</span>
                 )}
               </TableCell>
               <TableCell className="hidden text-sm lg:table-cell">

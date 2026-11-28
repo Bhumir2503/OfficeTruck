@@ -1,4 +1,5 @@
 import type { InvoiceMethod } from "@/lib/schemas/broker"
+import { possessive } from "@/lib/text-format"
 
 // Shared by server and client: no server-only imports here.
 
@@ -19,7 +20,7 @@ export type FactoringCompany = {
 /** "emailed to invoices@rts.com", or "uploaded to RTS's portal". */
 export function describeSubmission(company: FactoringCompany) {
   if (company.submission_method === "portal") {
-    return `uploaded to ${company.name}'s portal`
+    return `uploaded to ${possessive(company.name)} portal`
   }
   return company.submission_emails[0]
     ? `emailed to ${company.submission_emails[0]}`

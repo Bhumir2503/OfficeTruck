@@ -5,20 +5,22 @@ import {
   ChevronRightIcon,
   CircleCheckBig,
   ClockAlertIcon,
+  FileCheckIcon,
   FileWarningIcon,
+  MapPinOffIcon,
   PackageIcon,
   SendIcon,
   UserRoundXIcon,
   type LucideIcon,
 } from "lucide-react"
 import Link from "next/link"
-import { useState } from "react"
 
 import {
-  SettingsCard,
-  SettingsCardFooter,
-} from "@/components/settings/settings-card"
-import { Button } from "@/components/ui/button"
+  ListPager,
+  PAGED_BODY,
+  usePage,
+} from "@/components/dashboard/list-pager"
+import { SettingsCard } from "@/components/settings/settings-card"
 import type { AttentionItem, AttentionKind } from "@/lib/dashboard-format"
 
 const ICONS: Record<AttentionKind, LucideIcon> = {
@@ -27,6 +29,8 @@ const ICONS: Record<AttentionKind, LucideIcon> = {
   needs_driver: UserRoundXIcon,
   pod: PackageIcon,
   invoice_ready: SendIcon,
+  review: FileCheckIcon,
+  check_in: MapPinOffIcon,
 }
 
 const TONES: Record<AttentionItem["tone"], string> = {
@@ -34,8 +38,6 @@ const TONES: Record<AttentionItem["tone"], string> = {
   warning: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
   default: "bg-muted text-muted-foreground",
 }
-
-const FIRST = 8
 
 /** The dashboard's to-do list, most pressing first. */
 export function AttentionList({
@@ -46,8 +48,7 @@ export function AttentionList({
   /** /org/<slug> */
   base: string
 }) {
-  const [showAll, setShowAll] = useState(false)
-  const shown = showAll ? items : items.slice(0, FIRST)
+  const { shown, pager } = usePage(items)
   const late = items.filter((item) => item.tone === "danger").length
 
   return (
@@ -60,26 +61,13 @@ export function AttentionList({
             ? `${items.length} open, ${late} late`
             : `${items.length} open`
       }
-      contentClassName={items.length ? "px-0 pb-0" : "pt-1 pb-5"}
-      footer={
-        items.length > FIRST && (
-          <SettingsCardFooter
-            hint={
-              showAll
-                ? `Showing all ${items.length}.`
-                : `Showing ${FIRST} of ${items.length}.`
-            }
-          >
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowAll((value) => !value)}
-            >
-              {showAll ? "Show fewer" : "Show all"}
-            </Button>
-          </SettingsCardFooter>
-        )
-      }
+      // Fills its half of the row, so it ends level with On the road.
+      className="flex h-full flex-col"
+      contentClassName={cn(
+        PAGED_BODY,
+        items.length ? "px-0 pb-0" : "pt-1 pb-5"
+      )}
+      footer={<ListPager {...pager} noun="items" />}
     >
       {items.length === 0 ? (
         <p className="flex items-center gap-2 text-sm text-muted-foreground">

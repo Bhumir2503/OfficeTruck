@@ -1,6 +1,5 @@
 "use client"
 
-import { Search } from "lucide-react"
 import Link from "next/link"
 import { useMemo, useState } from "react"
 
@@ -8,8 +7,8 @@ import {
   SettingsCard,
   SettingsCardFooter,
 } from "@/components/settings/settings-card"
+import { TableFilters, type FilterOption } from "@/components/table-filters"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import {
   Table,
   TableBody,
@@ -18,7 +17,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import {
   DOCUMENT_GROUP_LABELS,
   DOCUMENT_GROUPS,
@@ -55,13 +53,18 @@ export function AllDocuments({
     [entries, group, query]
   )
   const shown = showAll ? filtered : filtered.slice(0, PAGE)
-  const counts = useMemo(() => {
-    const result: Record<string, number> = { all: entries.length }
-    for (const key of DOCUMENT_GROUPS) {
-      result[key] = entries.filter((entry) => entry.group === key).length
-    }
-    return result
-  }, [entries])
+  // The type filter's choices, each with how many files it shows.
+  const filterOptions = useMemo<FilterOption<DocumentGroup | "all">[]>(
+    () => [
+      { value: "all", name: "All", count: entries.length },
+      ...DOCUMENT_GROUPS.map((key) => ({
+        value: key,
+        name: DOCUMENT_GROUP_LABELS[key],
+        count: entries.filter((entry) => entry.group === key).length,
+      })),
+    ],
+    [entries]
+  )
 
   return (
     <SettingsCard
@@ -87,44 +90,16 @@ export function AllDocuments({
         )
       }
     >
-      <div className="flex flex-col gap-3 px-6 pb-4 sm:flex-row sm:items-center">
-        <div className="relative w-full">
-          <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search load, driver or type, e.g. POD TQL-1042"
-            aria-label="Search documents"
-            className="pl-7"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </div>
-        <ToggleGroup
-          aria-label="Filter documents"
-          variant="outline"
-          size="sm"
-          spacing={1}
-          className="shrink-0 flex-wrap"
-          value={[group]}
-          onValueChange={(value: string[]) =>
-            setGroup((value[0] as DocumentGroup | undefined) ?? "all")
-          }
-        >
-          <ToggleGroupItem value="all">
-            All
-            <span className="text-muted-foreground tabular-nums">
-              {counts.all}
-            </span>
-          </ToggleGroupItem>
-          {DOCUMENT_GROUPS.map((key) => (
-            <ToggleGroupItem key={key} value={key}>
-              {DOCUMENT_GROUP_LABELS[key]}
-              <span className="text-muted-foreground tabular-nums">
-                {counts[key]}
-              </span>
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
-      </div>
+      <TableFilters
+        search={query}
+        onSearchChange={setQuery}
+        searchPlaceholder="Search load, driver or type, e.g. POD TQL-1042"
+        searchLabel="Search documents"
+        filter={group}
+        onFilterChange={setGroup}
+        options={filterOptions}
+        filterLabel="Filter by type"
+      />
       <Table className={TABLE}>
         <TableHeader className="bg-muted/40">
           <TableRow>

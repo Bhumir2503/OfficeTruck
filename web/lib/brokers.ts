@@ -1,10 +1,17 @@
+import { cache } from "react"
+
 import { FMCSA_COLUMNS, type FmcsaRecord } from "@/lib/fmcsa"
 import type {
   ContactRole,
   CustomerKind,
   InvoiceMethod,
 } from "@/lib/schemas/broker"
+import {
+  brokerPaymentStats,
+  type BrokerPaymentStats,
+} from "@/lib/invoice-format"
 import type { LoadStatus } from "@/lib/schemas/load"
+import { fetchAll } from "@/lib/supabase/paging"
 import { createClient } from "@/lib/supabase/server"
 
 export type Broker = {
@@ -93,7 +100,7 @@ export async function getBrokers(
 }
 
 /** One broker with its FMCSA record, or null if it isn't in this organization. */
-export async function getBroker(
+export const getBroker = cache(async function getBroker(
   organizationId: string,
   id: string
 ): Promise<BrokerWithFmcsa | null> {
@@ -121,7 +128,7 @@ export async function getBroker(
     ...broker,
     fmcsa: broker.mc_number ? (fmcsa.get(broker.mc_number) ?? null) : null,
   }
-}
+})
 
 /** The broker in this organization with this MC number, if there is one. */
 export async function findBrokerByMc(
@@ -224,17 +231,59 @@ export async function getBrokerLoads(
   brokerId: string
 ): Promise<BrokerLoad[]> {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("loads")
-    .select(
-      "id, reference, pickup_location, delivery_location, pickup_start, rate, status, rate_con_from"
-    )
-    .eq("organization_id", organizationId)
-    .eq("broker_id", brokerId)
-    .order("pickup_start", { ascending: false })
-
-  if (error) {
-    throw error
-  }
+  const data = await fetchAll((from, to) =>
+    supabase
+      .from("loads")
+      .select(
+        "id, reference, pickup_location, delivery_location, pickup_start, rate, status, rate_con_from"
+      )
+      .eq("organization_id", organizationId)
+      .eq("broker_id", brokerId)
+      .order("pickup_start", { ascending: false })
+      .order("id")
+      .range(from, to)
+  )
   return data as BrokerLoad[]
+}
+
+/** A customer's money at a glance, for the customers list. */
+export type BrokerMoney = Pick<
+  BrokerPaymentStats,
+  "avgDaysToPay" | "open" | "overdue"
+>
+
+/** Open balance, overdue and average days to pay, by broker id. */
+export async function getBrokerMoney(
+  organizationId: string,
+  /** "YYYY-MM-DD" */
+  today: string
+): Promise<Record<string, BrokerMoney>> {
+  const supabase = await createClient()
+  const rows = await fetchAll((from, to) =>
+    supabase
+      .from("invoices")
+      .select(
+        "status, invoice_date, due_on, paid_on, total, paid_amount, load:loads!invoices_organization_id_load_id_fkey!inner (broker_id)"
+      )
+      .eq("organization_id", organizationId)
+      .neq("status", "void")
+      .not("load.broker_id", "is", null)
+      .order("id")
+      .range(from, to)
+  )
+  const byBroker = new Map<string, Parameters<typeof brokerPaymentStats>[0]>()
+  for (const row of rows as unknown as (Omit<
+    Parameters<typeof brokerPaymentStats>[0][number],
+    "payments"
+  > & { load: { broker_id: string } })[]) {
+    const list = byBroker.get(row.load.broker_id) ?? []
+    list.push({ ...row, payments: [] })
+    byBroker.set(row.load.broker_id, list)
+  }
+  const money: Record<string, BrokerMoney> = {}
+  for (const [id, invoices] of byBroker) {
+    const { avgDaysToPay, open, overdue } = brokerPaymentStats(invoices, today)
+    money[id] = { avgDaysToPay, open, overdue }
+  }
+  return money
 }

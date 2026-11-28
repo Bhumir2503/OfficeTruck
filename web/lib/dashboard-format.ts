@@ -1,4 +1,5 @@
 import type { ComplianceItem } from "@/lib/driver-format"
+import { possessive } from "@/lib/text-format"
 import type { InvoiceStatus } from "@/lib/invoice-format"
 import type { LoadStatus } from "@/lib/schemas/load"
 
@@ -9,7 +10,13 @@ import type { LoadStatus } from "@/lib/schemas/load"
  */
 
 export type AttentionKind =
-  "overdue" | "document" | "needs_driver" | "pod" | "invoice_ready"
+  | "overdue"
+  | "document"
+  | "needs_driver"
+  | "pod"
+  | "invoice_ready"
+  | "review"
+  | "check_in"
 
 export type AttentionItem = {
   /** Unique in the list. */
@@ -36,7 +43,12 @@ export type AttentionInput = {
     due_on: string | null
     total: number | string | null
     paid_amount: number | string | null
-    load: { reference: string; broker_name: string; rate: number | string }
+    load: {
+      reference: string
+      broker_name: string
+      broker_id?: string | null
+      rate: number | string
+    }
   }[]
   /** Delivered or TONU loads with no invoice yet. */
   ready: {
@@ -66,7 +78,42 @@ export type AttentionInput = {
     owner: string
     item: ComplianceItem
     path: string | null
+    /**
+     * For a driver: the load on their schedule, if any. A CDL or medical
+     * card that isn't on file is only raised for a driver who's driving.
+     */
+    onLoad?: { reference: string; pickup_start: string } | null
   }[]
+  /** CDLs and medical cards drivers sent from the app, waiting for review. */
+  driverUpdates?: {
+    id: string
+    driver: string
+    /** "cdl" or "medical_card". */
+    kind: string
+    path: string
+    /** When it was sent, an ISO timestamp. */
+    submitted_at: string
+  }[]
+  /** Dispatched loads, for the ones past pickup with no check-in. */
+  dispatched?: {
+    id: string
+    reference: string
+    pickup_location: string
+    /** Wall-clock time, "YYYY-MM-DDTHH:mm:ss". */
+    pickup_start: string
+    driver: string | null
+  }[]
+}
+
+/** How far ahead a load makes a lapsing document a blocker. */
+export const BLOCKER_DAYS = 7
+
+/** Documents a driver can't legally drive without. */
+const REQUIRED_TO_DRIVE = new Set(["cdl", "medical_card"])
+
+const UPDATE_LABELS: Record<string, string> = {
+  cdl: "CDL",
+  medical_card: "medical card",
 }
 
 const DAY = 86_400_000
@@ -93,9 +140,6 @@ const dateOf = (value: string) =>
   shortDate.format(new Date(`${value.slice(0, 10)}T00:00:00Z`))
 
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`
-const possessive = (name: string) =>
-  name.endsWith("s") ? `${name}’` : `${name}’s`
-
 /** "Medical card" → "medical card", but "CDL" stays "CDL". */
 const lowerFirst = (label: string) =>
   /^[A-Z][a-z]/.test(label) ? label[0].toLowerCase() + label.slice(1) : label
@@ -108,6 +152,13 @@ export function relativeDay(days: number) {
   return days > 0 ? `in ${days} days` : `${-days} days ago`
 }
 
+/** How a missing load document is named in the To do. */
+const DOC_NAMES: Record<string, string> = {
+  rate_con: "rate con",
+  bol: "BOL",
+  pod: "POD",
+}
+
 /** Which documents count as "expiring soon": late, or due within 30 days. */
 const SOON = new Set(["expired", "urgent", "soon"])
 
@@ -117,21 +168,30 @@ export function buildAttention(input: AttentionInput): AttentionItem[] {
   const { today } = input
   const items: (AttentionItem & { urgency: number })[] = []
 
+  // Overdue invoices, by broker: one slow payer is one call, not ten rows.
+  const overdue = new Map<
+    string,
+    { id: string; number: number; late: number; left: number }[]
+  >()
+  const brokerOf = new Map<string, { name: string; id: string | null }>()
   for (const invoice of input.invoices) {
     const total = Number(invoice.total ?? invoice.load.rate)
     const left = Math.max(0, total - Number(invoice.paid_amount ?? 0))
     if (invoice.status === "sent" && invoice.due_on && invoice.due_on < today) {
       if (left <= 0) continue
-      const late = daysFrom(invoice.due_on, today)
-      items.push({
-        key: `overdue:${invoice.id}`,
-        kind: "overdue",
-        tone: "danger",
-        title: `Invoice #${invoice.number} is ${plural(late, "day")} overdue`,
-        detail: `${invoice.load.broker_name} · ${usd.format(left)} left to pay`,
-        path: `invoices/${invoice.id}`,
-        urgency: -late,
+      const group = invoice.load.broker_id ?? invoice.load.broker_name
+      brokerOf.set(group, {
+        name: invoice.load.broker_name,
+        id: invoice.load.broker_id ?? null,
       })
+      const list = overdue.get(group) ?? []
+      list.push({
+        id: invoice.id,
+        number: invoice.number,
+        late: daysFrom(invoice.due_on, today),
+        left,
+      })
+      overdue.set(group, list)
     } else if (invoice.status === "draft") {
       items.push({
         key: `draft:${invoice.id}`,
@@ -143,6 +203,34 @@ export function buildAttention(input: AttentionInput): AttentionItem[] {
         urgency: 0,
       })
     }
+  }
+
+  for (const [group, list] of overdue) {
+    const broker = brokerOf.get(group)!
+    const oldest = Math.max(...list.map((invoice) => invoice.late))
+    if (list.length === 1) {
+      const [invoice] = list
+      items.push({
+        key: `overdue:${invoice.id}`,
+        kind: "overdue",
+        tone: "danger",
+        title: `Invoice #${invoice.number} is ${plural(invoice.late, "day")} overdue`,
+        detail: `${broker.name} · ${usd.format(invoice.left)} left to pay`,
+        path: `invoices/${invoice.id}`,
+        urgency: -invoice.late,
+      })
+      continue
+    }
+    const left = list.reduce((sum, invoice) => sum + invoice.left, 0)
+    items.push({
+      key: `overdue-broker:${group}`,
+      kind: "overdue",
+      tone: "danger",
+      title: `${broker.name}: ${list.length} invoices overdue`,
+      detail: `${usd.format(left)} left to pay · oldest ${plural(oldest, "day")} late`,
+      path: broker.id ? `customers/${broker.id}` : "invoices",
+      urgency: -oldest,
+    })
   }
 
   for (const load of input.ready) {
@@ -159,13 +247,18 @@ export function buildAttention(input: AttentionInput): AttentionItem[] {
         path: `loads/${load.id}`,
         urgency: -ago,
       })
-    } else if (load.missing.length === 0) {
+    } else {
+      // Brokers want the rate con too, but a missing one shouldn't hide a
+      // load that's otherwise ready to bill.
+      const missing = load.missing.length
+        ? ` · Missing ${load.missing.map((kind) => DOC_NAMES[kind] ?? kind).join(", ")}`
+        : ""
       items.push({
         key: `ready:${load.id}`,
         kind: "invoice_ready",
         tone: "default",
         title: `${load.reference} is ready to invoice`,
-        detail: `${delivered} · ${load.broker_name} · ${usd.format(Number(load.rate))}`,
+        detail: `${delivered} · ${load.broker_name} · ${usd.format(Number(load.rate))}${missing}`,
         path: `loads/${load.id}`,
         urgency: -ago,
       })
@@ -193,9 +286,75 @@ export function buildAttention(input: AttentionInput): AttentionItem[] {
     })
   }
 
-  for (const { owner, item, path } of input.documents) {
+  for (const load of input.dispatched ?? []) {
+    const days = daysFrom(load.pickup_start, today)
+    if (days < 1) continue
+    items.push({
+      key: `check_in:${load.id}`,
+      kind: "check_in",
+      tone: "danger",
+      title: `${load.reference} hasn't picked up`,
+      detail: `Pickup was ${dateOf(load.pickup_start)}, ${plural(days, "day")} ago · ${load.driver ? `${load.driver}, no check-in` : "No check-in"}`,
+      path: `loads/${load.id}`,
+      urgency: -days,
+    })
+  }
+
+  for (const update of input.driverUpdates ?? []) {
+    items.push({
+      key: `review:${update.id}`,
+      kind: "review",
+      tone: "warning",
+      title: `${update.driver} sent a new ${UPDATE_LABELS[update.kind] ?? "document"} to review`,
+      detail: `From the driver app, ${dateOf(update.submitted_at)} · Check the date against the card`,
+      path: update.path,
+      urgency: 0,
+    })
+  }
+
+  for (const { owner, item, path, onLoad } of input.documents) {
     const { expiry } = item
-    if (expiry.state === "missing" || !SOON.has(expiry.state)) continue
+    if (expiry.state === "missing") {
+      if (onLoad && REQUIRED_TO_DRIVE.has(item.key)) {
+        items.push({
+          key: `document:${path ?? owner}:${item.key}`,
+          kind: "document",
+          tone: "danger",
+          title: `${owner} has no ${lowerFirst(item.label)} on file`,
+          detail: `Driving ${onLoad.reference} · Add the date from the card`,
+          path,
+          urgency: -1000,
+        })
+      }
+      continue
+    }
+    // A blocker: lapsed, or lapsing before the pickup of a load in the next
+    // BLOCKER_DAYS days. The driver or truck can't legally run it.
+    const pickup = onLoad?.pickup_start.slice(0, 10)
+    if (
+      onLoad &&
+      pickup &&
+      item.due &&
+      daysFrom(today, pickup) <= BLOCKER_DAYS &&
+      item.due < (pickup > today ? pickup : today)
+    ) {
+      const lapsed = expiry.state === "expired"
+      items.push({
+        key: `document:${path ?? owner}:${item.key}`,
+        kind: "document",
+        tone: "danger",
+        title: `${owner} can't legally run ${onLoad.reference}`,
+        detail: `${item.label} ${
+          lapsed
+            ? `${item.kind === "expires" ? "expired" : "was due"} ${dateOf(item.due)}`
+            : `${item.kind === "expires" ? "expires" : "is due"} ${dateOf(item.due)}, before pickup ${dateOf(pickup)}`
+        }`,
+        path,
+        urgency: -900,
+      })
+      continue
+    }
+    if (!SOON.has(expiry.state)) continue
     const late = expiry.state === "expired"
     const verb =
       item.kind === "expires"
@@ -254,6 +413,8 @@ export function countActions(items: AttentionItem[]): ActionCounts {
     needs_driver: 0,
     pod: 0,
     invoice_ready: 0,
+    review: 0,
+    check_in: 0,
   }
   for (const item of items) counts[item.kind]++
   return counts

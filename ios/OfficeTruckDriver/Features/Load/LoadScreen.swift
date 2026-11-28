@@ -692,6 +692,9 @@ struct LoadScreen: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(kind.label).foregroundStyle(.primary)
                                 Text(([WallClock.day(expense.spentOn)] + (expense.companyPaid ? ["Company paid"] : [])
+                                      + (expense.gallons.flatMap { gal in
+                                          expense.jurisdiction.map { "\(gal.formatted(.number.precision(.fractionLength(0...3)))) gal in \($0)" }
+                                      }.map { [$0] } ?? [])
                                       + [expense.note].compactMap { $0 }
                                       // A company-paid one always has its receipt.
                                       + (expense.receiptPath != nil && !expense.companyPaid ? ["Receipt"] : [])).joined(separator: " · "))
@@ -1079,6 +1082,8 @@ struct AddExpenseView: View {
     @State private var amountText = ""
     @State private var spentOn = Date.now
     @State private var note = ""
+    @State private var gallonsText = ""
+    @State private var jurisdiction = ""
     @State private var pages: [UIImage] = []
     @State private var scanning = false
     @State private var choosingPhotos = false
@@ -1092,6 +1097,22 @@ struct AddExpenseView: View {
         guard let value = try? Decimal(amountText.replacingOccurrences(of: "$", with: ""), format: .number),
               value > 0, value <= 99_999_999.99 else { return nil }
         return (NSDecimalNumber(decimal: value).doubleValue * 100).rounded() / 100
+    }
+
+    /// Gallons typed on a fuel receipt; nil when blank or not a real amount.
+    private var gallons: Double? {
+        guard kind == .fuel,
+              let value = try? Decimal(gallonsText, format: .number),
+              value > 0, value <= 10_000 else { return nil }
+        return (NSDecimalNumber(decimal: value).doubleValue * 1000).rounded() / 1000
+    }
+
+    /// Gallons and state go together, or not at all.
+    private var fuelDetailsOK: Bool {
+        guard kind == .fuel else { return true }
+        let typed = !gallonsText.trimmingCharacters(in: .whitespaces).isEmpty
+        if !typed && jurisdiction.isEmpty { return true }
+        return gallons != nil && !jurisdiction.isEmpty
     }
 
     var body: some View {
@@ -1128,6 +1149,30 @@ struct AddExpenseView: View {
                         .onChange(of: note) { _, text in
                             if text.count > 200 { note = String(text.prefix(200)) }
                         }
+                }
+
+                if kind == .fuel {
+                    Section {
+                        LabeledContent("Gallons") {
+                            TextField("0.0", text: $gallonsText)
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.trailing)
+                                .font(.body.monospacedDigit())
+                        }
+                        Picker("State", selection: $jurisdiction) {
+                            Text("Not set").tag("")
+                            ForEach(IFTA.jurisdictions, id: \.code) { place in
+                                Text(place.name).tag(place.code)
+                            }
+                        }
+                    } header: {
+                        Text("For fuel tax (optional)")
+                    } footer: {
+                        Text(fuelDetailsOK
+                             ? "From the receipt: the gallons and the state you bought it in. The office files fuel tax with them."
+                             : "Enter both the gallons and the state, or leave both blank.")
+                            .foregroundStyle(fuelDetailsOK ? Color.secondary : Color.red)
+                    }
                 }
 
                 Section {
@@ -1180,7 +1225,7 @@ struct AddExpenseView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     // A company-paid expense is only here for its receipt.
                     Button("Add", action: add)
-                        .disabled(amount == nil || (companyPaid && pages.isEmpty))
+                        .disabled(amount == nil || (companyPaid && pages.isEmpty) || !fuelDetailsOK)
                 }
             }
             .onAppear { amountFocused = true }
@@ -1230,7 +1275,9 @@ struct AddExpenseView: View {
             spentOn: WallClock.string(from: spentOn),
             note: trimmed.isEmpty ? nil : trimmed,
             receipt: receipt,
-            companyPaid: companyPaid
+            companyPaid: companyPaid,
+            gallons: kind == .fuel ? gallons : nil,
+            jurisdiction: kind == .fuel && gallons != nil ? jurisdiction : nil
         )
         dismiss()
     }

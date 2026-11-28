@@ -1,3 +1,6 @@
+import { cache } from "react"
+
+import { detentionClock } from "@/lib/load-format"
 import type { DriverDocumentKind } from "@/lib/driver-document-format"
 import type { PayPeriod } from "@/lib/settlement-format"
 import type { LoadStatus } from "@/lib/schemas/load"
@@ -15,6 +18,7 @@ import {
 import { complianceItems, LAST_DELIVERY_DAYS, today } from "@/lib/driver-format"
 import { getDqDatesByDriver } from "@/lib/dq/fleet"
 import { cityState } from "@/lib/report-format"
+import { fetchAll } from "@/lib/supabase/paging"
 import { createClient } from "@/lib/supabase/server"
 
 export type Driver = {
@@ -78,7 +82,7 @@ export async function getDrivers(organizationId: string): Promise<Driver[]> {
 }
 
 /** One driver, or null if they aren't in this organization. */
-export async function getDriver(
+export const getDriver = cache(async function getDriver(
   organizationId: string,
   id: string
 ): Promise<Driver | null> {
@@ -98,7 +102,7 @@ export async function getDriver(
     throw error
   }
   return data as Driver | null
-}
+})
 
 /** A driver as listed in the load form's driver picker. */
 export type DriverOption = {
@@ -164,6 +168,15 @@ export type DriverLoad = {
   /** The pay rate locked onto the load when this driver was assigned. */
   driver_pay_type: PayType | null
   driver_pay_rate: number | null
+  /**
+   * On a load on the road: the stop the driver is checked in at and hasn't
+   * left, with the check-in time in the company's zone ("5:40 AM").
+   */
+  at_stop?: {
+    kind: "pickup" | "delivery"
+    location: string
+    since: string
+  } | null
 }
 
 /** The loads a driver has been assigned, newest pickup first. */
@@ -172,19 +185,58 @@ export async function getDriverLoads(
   driverId: string
 ): Promise<DriverLoad[]> {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("loads")
-    .select(
-      "id, reference, pickup_location, delivery_location, pickup_start, delivery_start, delivery_end, delivered_on, rate, miles, status, driver_pay_type, driver_pay_rate"
-    )
-    .eq("organization_id", organizationId)
-    .eq("driver_id", driverId)
-    .order("pickup_start", { ascending: false })
+  const [data, { data: organization }] = await Promise.all([
+    fetchAll((from, to) =>
+      supabase
+        .from("loads")
+        .select(
+          "id, reference, pickup_location, delivery_location, pickup_start, delivery_start, delivery_end, delivered_on, rate, miles, status, driver_pay_type, driver_pay_rate, tonu_driver_pay, stops:load_stops (kind, location, position, arrived_at, departed_at)"
+        )
+        .eq("organization_id", organizationId)
+        .eq("driver_id", driverId)
+        .order("pickup_start", { ascending: false })
+        .order("id")
+        .range(from, to)
+    ),
+    supabase
+      .from("organizations")
+      .select("time_zone")
+      .eq("id", organizationId)
+      .maybeSingle(),
+  ])
 
-  if (error) {
-    throw error
+  const time = new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: organization?.time_zone ?? "America/Chicago",
+  })
+  type Stop = {
+    kind: "pickup" | "delivery"
+    location: string
+    position: number
+    arrived_at: string | null
+    departed_at: string | null
   }
-  return data as DriverLoad[]
+  return (data as (Omit<DriverLoad, "at_stop"> & { stops: Stop[] })[]).map(
+    ({ stops, ...load }) => {
+      const here =
+        load.status === "dispatched" || load.status === "loaded"
+          ? [...stops]
+              .sort((a, b) => b.position - a.position)
+              .find((stop) => stop.arrived_at && !stop.departed_at)
+          : undefined
+      return {
+        ...load,
+        at_stop: here
+          ? {
+              kind: here.kind,
+              location: here.location,
+              since: time.format(new Date(here.arrived_at!)),
+            }
+          : null,
+      }
+    }
+  )
 }
 
 /** A load on the drivers list's Now column. */
@@ -196,6 +248,16 @@ export type DriverNowLoad = {
   to: string
   status: "booked" | "dispatched" | "loaded"
   pickup_start: string
+  /**
+   * The stop the driver is checked in at and hasn't left: its kind, the
+   * check-in time on the company's clock ("5:40 AM"), and whether free time
+   * has run out.
+   */
+  at_stop?: {
+    kind: "pickup" | "delivery"
+    since: string
+    detention: boolean
+  } | null
 }
 
 /** A driver's most recent delivered load, for the drivers list. */
@@ -212,6 +274,11 @@ export type DriverNow = {
   current: DriverNowLoad | null
   next: DriverNowLoad | null
   last: DriverLastDelivery | null
+  /**
+   * For a driver with no load on: the truck they usually drive, when it's
+   * out of service, so they don't read as available.
+   */
+  parked?: { unit: string; until: string | null } | null
 }
 
 // A load counts as delivered from here on in the flow.
@@ -228,7 +295,28 @@ export async function getDriversNow(
   /** "YYYY-MM-DD" */
   today: string
 ): Promise<Record<string, DriverNow>> {
-  return getLoadsNow(organizationId, today, "driver_id")
+  const supabase = await createClient()
+  const [now, parked] = await Promise.all([
+    getLoadsNow(organizationId, today, "driver_id"),
+    supabase
+      .from("trucks")
+      .select("unit_number, default_driver_id, out_of_service_until")
+      .eq("organization_id", organizationId)
+      .eq("status", "out_of_service")
+      .not("default_driver_id", "is", null),
+  ])
+  if (parked.error) {
+    throw parked.error
+  }
+  for (const truck of parked.data) {
+    const driverId = truck.default_driver_id as string
+    const entry = (now[driverId] ??= { current: null, next: null, last: null })
+    entry.parked = {
+      unit: truck.unit_number as string,
+      until: (truck.out_of_service_until as string | null) ?? null,
+    }
+  }
+  return now
 }
 
 /**
@@ -246,11 +334,11 @@ export async function getLoadsNow(
   // Only recent deliveries, so the list doesn't read the whole history.
   const since = new Date(`${today}T00:00:00Z`)
   since.setUTCDate(since.getUTCDate() - LAST_DELIVERY_DAYS)
-  const [open, delivered] = await Promise.all([
+  const [open, delivered, organization] = await Promise.all([
     supabase
       .from("loads")
       .select(
-        "id, driver_id, truck_id, reference, pickup_location, delivery_location, pickup_start, status"
+        "id, driver_id, truck_id, reference, pickup_location, delivery_location, pickup_start, status, detention_free_hours, detention_rate, stops:load_stops (kind, position, arrived_at, departed_at, appointment_at)"
       )
       .eq("organization_id", organizationId)
       .not(by, "is", null)
@@ -265,7 +353,18 @@ export async function getLoadsNow(
       .not(by, "is", null)
       .in("status", DELIVERED)
       .gte("delivered_on", since.toISOString().slice(0, 10)),
+    supabase
+      .from("organizations")
+      .select("time_zone")
+      .eq("id", organizationId)
+      .maybeSingle(),
   ])
+  const clock = new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: organization.data?.time_zone ?? "America/Chicago",
+  })
+  const now = Date.now()
 
   if (open.error) {
     throw open.error
@@ -289,7 +388,36 @@ export async function getLoadsNow(
       }
     }
   }
+  type OpenStop = {
+    kind: "pickup" | "delivery"
+    position: number
+    arrived_at: string | null
+    departed_at: string | null
+    appointment_at: string | null
+  }
   for (const row of open.data) {
+    const stops = (row.stops ?? []) as OpenStop[]
+    // The latest stop checked in at and not left yet.
+    const here =
+      row.status === "booked"
+        ? undefined
+        : [...stops]
+            .sort((a, b) => b.position - a.position)
+            .find((stop) => stop.arrived_at && !stop.departed_at)
+    const detention = here
+      ? detentionClock(
+          here,
+          {
+            detention_free_hours:
+              row.detention_free_hours === null
+                ? null
+                : Number(row.detention_free_hours),
+            detention_rate:
+              row.detention_rate === null ? null : Number(row.detention_rate),
+          },
+          now
+        )
+      : null
     const load: DriverNowLoad = {
       id: row.id,
       reference: row.reference,
@@ -297,6 +425,13 @@ export async function getLoadsNow(
       to: cityState(row.delivery_location),
       status: row.status as DriverNowLoad["status"],
       pickup_start: row.pickup_start,
+      at_stop: here
+        ? {
+            kind: here.kind,
+            since: clock.format(new Date(here.arrived_at!)),
+            detention: !!detention?.started,
+          }
+        : null,
     }
     const entry = entryOf(row[by]!)
     // In transit beats dispatched; otherwise the earliest pickup wins.

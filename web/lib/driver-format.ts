@@ -278,11 +278,24 @@ export type LockedPay = {
 /**
  * What the driver earns on a load, at the rate locked onto it when they were
  * assigned (not their rate today). Null when there's no rate, or a per-mile
- * rate on a load without miles.
+ * rate on a load without miles. A TONU load was never driven: it pays the
+ * flat TONU amount locked onto it, or nothing.
  */
 export function loadDriverPay(
-  load: LockedPay & { rate: number; miles: number | null }
+  load: LockedPay & {
+    rate: number
+    miles: number | null
+    status?: string
+    /** On a TONU: the flat amount locked when it was marked, if any. */
+    tonu_driver_pay?: number | string | null
+  }
 ) {
+  if (load.status === "tonu") {
+    if (load.tonu_driver_pay !== null && load.tonu_driver_pay !== undefined) {
+      return Number(load.tonu_driver_pay)
+    }
+    return load.driver_pay_type ? 0 : null
+  }
   return driverPay(
     { pay_type: load.driver_pay_type, pay_rate: load.driver_pay_rate },
     load
@@ -376,6 +389,12 @@ export type DriverStepLoad = {
   /** Wall-clock times, "YYYY-MM-DDTHH:mm:ss". */
   pickup_start: string
   delivery_start: string
+  /** The stop the driver is checked in at, if any; "since" is a clock time. */
+  at_stop?: {
+    kind: "pickup" | "delivery"
+    location: string
+    since: string
+  } | null
 }
 
 export type DriverStep = {
@@ -499,8 +518,9 @@ export function driverNextSteps(
       id: `on:${onLoad.id}`,
       tone: "default",
       title: `On load ${onLoad.reference}`,
-      detail:
-        onLoad.status === "loaded"
+      detail: onLoad.at_stop
+        ? `At the ${onLoad.at_stop.kind} in ${onLoad.at_stop.location} since ${onLoad.at_stop.since}.`
+        : onLoad.status === "loaded"
           ? `In transit to ${onLoad.delivery_location}, delivering ${day(onLoad.delivery_start)}.`
           : `Dispatched. Picks up ${day(onLoad.pickup_start)} in ${onLoad.pickup_location}.`,
       action: { type: "load", id: onLoad.id, reference: onLoad.reference },

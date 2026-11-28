@@ -358,9 +358,24 @@ export async function markLoadTonu(
   }
 
   const supabase = await createClient()
+  // The driver's pay for the wasted trip: as entered, else the company's
+  // default, else nothing. Only for a load with a driver.
+  let driverPay = parsed.data.driver_pay ?? null
+  if (driverPay === null) {
+    const { data: organization } = await supabase
+      .from("organizations")
+      .select("tonu_driver_pay")
+      .eq("id", organizationId)
+      .maybeSingle()
+    driverPay =
+      organization?.tonu_driver_pay === null ||
+      organization?.tonu_driver_pay === undefined
+        ? null
+        : Number(organization.tonu_driver_pay)
+  }
   const { data, error } = await supabase
     .from("loads")
-    .update({ status: "tonu" })
+    .update({ status: "tonu", tonu_driver_pay: driverPay })
     .eq("organization_id", organizationId)
     .eq("id", loadId)
     .select("id")

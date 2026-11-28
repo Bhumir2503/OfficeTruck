@@ -1,3 +1,5 @@
+import { cache } from "react"
+
 import type { Ownership, TruckStatus } from "@/lib/schemas/truck"
 import type { TrailerType } from "@/lib/schemas/trailer"
 import { createClient } from "@/lib/supabase/server"
@@ -47,7 +49,7 @@ export async function getTrailers(organizationId: string): Promise<Trailer[]> {
 }
 
 /** One trailer, or null if it isn't in this organization. */
-export async function getTrailer(
+export const getTrailer = cache(async function getTrailer(
   organizationId: string,
   id: string
 ): Promise<Trailer | null> {
@@ -66,7 +68,7 @@ export async function getTrailer(
     throw error
   }
   return data as unknown as Trailer | null
-}
+})
 
 /** A trailer's maintenance log, newest first, with links to receipts. */
 export async function getTrailerMaintenance(

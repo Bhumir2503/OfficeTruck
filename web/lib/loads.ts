@@ -1,4 +1,7 @@
+import { cache } from "react"
+
 import { paymentDue, type PaymentDue } from "@/lib/load-views"
+import { fetchAll, fetchByIds } from "@/lib/supabase/paging"
 import { createClient } from "@/lib/supabase/server"
 import type { PayType } from "@/lib/schemas/driver"
 import type {
@@ -77,20 +80,20 @@ export type Load = {
 }
 
 const LOAD_COLUMNS =
-  "id, reference, broker_name, broker_id, broker:brokers!loads_broker_fkey (id, legal_name, email_domains, phone, payment_terms_days), rate_con_from, pickup_location, pickup_start, pickup_end, pickup_appointment_type, delivery_location, delivery_start, delivery_end, delivery_appointment_type, rate, status, driver_name, driver_id, driver:drivers!loads_driver_fkey (id, full_name, pay_type, pay_rate), miles, driver_pay_type, driver_pay_rate, empty_miles, truck, truck_id, truck_link:trucks!loads_truck_fkey (id, unit_number), reference_numbers, equipment, commodity, weight_lbs, trailer_number, detention_free_hours, detention_rate, notes, cancel_reason, completed_manually, created_at, updated_at"
+  "id, reference, broker_name, broker_id, broker:brokers!loads_broker_fkey (id, legal_name, email_domains, phone, payment_terms_days), rate_con_from, pickup_location, pickup_start, pickup_end, pickup_appointment_type, delivery_location, delivery_start, delivery_end, delivery_appointment_type, rate, status, driver_name, driver_id, driver:drivers!loads_driver_fkey (id, full_name, pay_type, pay_rate), miles, driver_pay_type, driver_pay_rate, tonu_driver_pay, empty_miles, truck, truck_id, truck_link:trucks!loads_truck_fkey (id, unit_number), reference_numbers, equipment, commodity, weight_lbs, trailer_number, detention_free_hours, detention_rate, notes, cancel_reason, completed_manually, created_at, updated_at"
 
 /** Every load in the organization, newest pickup first. */
 export async function getLoads(organizationId: string): Promise<Load[]> {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("loads")
-    .select(LOAD_COLUMNS)
-    .eq("organization_id", organizationId)
-    .order("pickup_start", { ascending: false })
-
-  if (error) {
-    throw error
-  }
+  const data = await fetchAll((from, to) =>
+    supabase
+      .from("loads")
+      .select(LOAD_COLUMNS)
+      .eq("organization_id", organizationId)
+      .order("pickup_start", { ascending: false })
+      .order("id")
+      .range(from, to)
+  )
   return data as unknown as Load[]
 }
 
@@ -114,35 +117,34 @@ export async function getPaymentsDue(
 
   const supabase = await createClient()
   // An invoice sent from OfficeTruck knows its own due date.
-  const { data: invoices, error: invoicesError } = await supabase
-    .from("invoices")
-    .select("load_id, due_on")
-    .eq("organization_id", organizationId)
-    .eq("status", "sent")
-    .in(
-      "load_id",
-      waiting.map((load) => load.id)
-    )
-  if (invoicesError) {
-    throw invoicesError
-  }
+  const waitingIds = waiting.map((load) => load.id)
+  const [invoices, data] = await Promise.all([
+    fetchByIds(waitingIds, (chunk, from, to) =>
+      supabase
+        .from("invoices")
+        .select("load_id, due_on")
+        .eq("organization_id", organizationId)
+        .eq("status", "sent")
+        .in("load_id", chunk)
+        .order("id")
+        .range(from, to)
+    ),
+    fetchByIds(waitingIds, (chunk, from, to) =>
+      supabase
+        .from("load_events")
+        .select("load_id, created_at")
+        .eq("organization_id", organizationId)
+        .eq("to_status", "invoiced")
+        .in("load_id", chunk)
+        .order("created_at")
+        .order("id")
+        .range(from, to)
+    ),
+  ])
   const invoiceDue = new Map(
     invoices.map((invoice) => [invoice.load_id, invoice.due_on as string])
   )
 
-  const { data, error } = await supabase
-    .from("load_events")
-    .select("load_id, created_at")
-    .eq("organization_id", organizationId)
-    .eq("to_status", "invoiced")
-    .in(
-      "load_id",
-      waiting.map((load) => load.id)
-    )
-    .order("created_at")
-  if (error) {
-    throw error
-  }
   // The latest time each load was invoiced.
   const invoicedOn = new Map<string, string>()
   for (const event of data) {
@@ -261,7 +263,10 @@ export type RateVersion = {
 }
 
 /** A load with its stops, charges and rate versions, for the load page. */
-export async function getLoadDetail(organizationId: string, id: string) {
+export const getLoadDetail = cache(async function getLoadDetail(
+  organizationId: string,
+  id: string
+) {
   const load = await getLoad(organizationId, id)
   if (!load) {
     return null
@@ -301,4 +306,4 @@ export async function getLoadDetail(organizationId: string, id: string) {
     charges: charges.data as unknown as LoadCharge[],
     versions: versions.data as unknown as RateVersion[],
   }
-}
+})

@@ -1,6 +1,6 @@
 "use client"
 
-import { Search, Truck as TruckIcon } from "lucide-react"
+import { Truck as TruckIcon } from "lucide-react"
 import Link from "next/link"
 import { useMemo, useState } from "react"
 
@@ -10,9 +10,9 @@ import {
   SettingsCardFooter,
 } from "@/components/settings/settings-card"
 import { LastDeliveryCell, NowCell, NowLine } from "@/components/now-cells"
+import { TableFilters, type FilterOption } from "@/components/table-filters"
 import { TruckStatusBadge } from "@/components/trucks/truck-badges"
 import { buttonVariants } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import {
   Table,
   TableBody,
@@ -21,13 +21,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   formatDate,
   needsAction,
@@ -198,23 +191,14 @@ export function TrucksTable({
     )
 
   // The status filter's choices, each with how many trucks it shows.
-  const filterOptions: {
-    value: Filter
-    name: string
-    label: string
-    count: number
-  }[] = [
+  const filterOptions: FilterOption<Filter>[] = [
     ...TRUCK_STATUSES.map((status) => ({
       value: status,
       name: TRUCK_STATUS_LABELS[status],
       count: counts[status],
     })),
-    { value: "all" as const, name: "All", count: trucks.length },
-  ].map((option) => ({
-    ...option,
-    // What the closed dropdown shows.
-    label: `${option.name} (${option.count})`,
-  }))
+    { value: "all", name: "All", count: trucks.length },
+  ]
 
   const empty = trucks.length === 0
   const filtering = search.trim() !== "" || filter !== "all"
@@ -250,44 +234,16 @@ export function TrucksTable({
         />
       }
     >
-      <div className="flex flex-col gap-3 px-6 pb-4 sm:flex-row sm:items-center">
-        <div className="relative w-full">
-          <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search unit, VIN or plate"
-            aria-label="Search trucks"
-            className="pl-7"
-            value={search}
-            disabled={empty}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <Select
-          value={filter}
-          onValueChange={(value) =>
-            setFilter((value as Filter | null) ?? "all")
-          }
-          items={filterOptions}
-          disabled={empty}
-        >
-          <SelectTrigger
-            aria-label="Filter by status"
-            className="w-full shrink-0 sm:w-44"
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {filterOptions.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.name}
-                <span className="ml-auto pr-2 text-muted-foreground tabular-nums">
-                  {option.count}
-                </span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <TableFilters
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search unit, VIN or plate"
+        searchLabel="Search trucks"
+        filter={filter}
+        onFilterChange={setFilter}
+        options={filterOptions}
+        disabled={empty}
+      />
       <Table className="[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6">
         <TableHeader className="bg-muted/40">
           <TableRow>
@@ -298,7 +254,9 @@ export function TrucksTable({
             </TableHead>
             <TableHead className="hidden lg:table-cell">Odometer</TableHead>
             <TableHead className="hidden xl:table-cell">Driver</TableHead>
-            <TableHead className="hidden sm:table-cell">Compliance</TableHead>
+            <TableHead className="hidden min-w-60 sm:table-cell">
+              Compliance
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -417,7 +375,7 @@ export function TrucksTable({
                     <span className="text-muted-foreground">None</span>
                   )}
                 </TableCell>
-                <TableCell className="hidden max-w-80 text-sm whitespace-normal sm:table-cell">
+                <TableCell className="hidden max-w-80 min-w-60 text-sm whitespace-normal sm:table-cell">
                   {off ? (
                     <span className="text-muted-foreground">Not tracked</span>
                   ) : warnings.length ? (

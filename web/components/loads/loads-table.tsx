@@ -1,6 +1,6 @@
 "use client"
 
-import { ArrowRight, Inbox, PackagePlus, Search } from "lucide-react"
+import { ArrowRight, Inbox, PackagePlus } from "lucide-react"
 import Link from "next/link"
 import { useMemo, useState } from "react"
 
@@ -8,14 +8,14 @@ import {
   LoadRowAction,
   type RowActionContext,
 } from "@/components/loads/load-row-action"
+import { ListPager, usePage } from "@/components/dashboard/list-pager"
 import { LoadStatusMenu } from "@/components/loads/load-status-menu"
 import {
   SettingsCard,
-  SettingsCardFooter,
   SettingsEmptyState,
 } from "@/components/settings/settings-card"
+import { TableFilters, type FilterOption } from "@/components/table-filters"
 import { buttonVariants } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import {
   Table,
   TableBody,
@@ -24,7 +24,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { formatRate, formatStopDate } from "@/lib/load-format"
 import type { PaymentDue } from "@/lib/load-views"
 import type { Load } from "@/lib/loads"
@@ -35,6 +34,9 @@ import {
 } from "@/lib/schemas/load"
 
 type Filter = LoadStatus | "all"
+
+/** Rows per page: a company's history runs to thousands of loads. */
+const PAGE_SIZE = 50
 
 export function LoadsTable({
   loads,
@@ -89,6 +91,7 @@ export function LoadsTable({
           load.broker_name.toLowerCase().includes(query))
     )
   }, [loads, filter, search])
+  const { shown, pager } = usePage(filtered, PAGE_SIZE)
 
   if (loads.length === 0) {
     return (
@@ -110,6 +113,16 @@ export function LoadsTable({
 
   const filtering = search.trim() !== "" || filter !== "all"
 
+  // The status filter's choices, each with how many loads it shows.
+  const filterOptions: FilterOption<Filter>[] = [
+    { value: "all", name: "All", count: loads.length },
+    ...LOAD_STATUSES.map((status) => ({
+      value: status,
+      name: LOAD_STATUS_LABELS[status],
+      count: counts[status],
+    })),
+  ]
+
   return (
     <SettingsCard
       title="All loads"
@@ -125,48 +138,33 @@ export function LoadsTable({
       }
       contentClassName="@container px-0 pb-0"
       footer={
-        <SettingsCardFooter
-          hint={
+        <ListPager
+          {...pager}
+          noun={
             filtering
-              ? `Showing ${filtered.length} of ${loads.length} ${loads.length === 1 ? "load" : "loads"}`
-              : `${loads.length} ${loads.length === 1 ? "load" : "loads"}`
+              ? `matching loads (${loads.length} in all)`
+              : pager.total === 1
+                ? "load"
+                : "loads"
           }
         />
       }
     >
-      <div className="flex flex-col gap-3 px-6 pb-4">
-        <div className="relative w-full">
-          <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search load # or broker"
-            aria-label="Search loads"
-            className="pl-7"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <ToggleGroup
-          aria-label="Filter by status"
-          variant="outline"
-          size="sm"
-          spacing={1}
-          className="flex-wrap"
-          value={[filter]}
-          onValueChange={(value: string[]) =>
-            setFilter((value[0] as Filter | undefined) ?? "all")
-          }
-        >
-          <ToggleGroupItem value="all">All {loads.length}</ToggleGroupItem>
-          {LOAD_STATUSES.map((status) => (
-            <ToggleGroupItem key={status} value={status}>
-              {LOAD_STATUS_LABELS[status]}
-              <span className="text-muted-foreground tabular-nums">
-                {counts[status]}
-              </span>
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
-      </div>
+      <TableFilters
+        search={search}
+        onSearchChange={(value) => {
+          setSearch(value)
+          pager.onPage(1)
+        }}
+        searchPlaceholder="Search load # or broker"
+        searchLabel="Search loads"
+        filter={filter}
+        onFilterChange={(value) => {
+          setFilter(value)
+          pager.onPage(1)
+        }}
+        options={filterOptions}
+      />
       <Table className="[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6">
         <TableHeader className="bg-muted/40">
           <TableRow>
@@ -198,7 +196,7 @@ export function LoadsTable({
               </TableCell>
             </TableRow>
           )}
-          {filtered.map((load) => (
+          {shown.map((load) => (
             <TableRow key={load.id}>
               <TableCell className="py-3 @max-4xl:max-w-0">
                 <Link

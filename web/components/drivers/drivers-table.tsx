@@ -1,11 +1,12 @@
 "use client"
 
-import { Search, UserRoundPlus } from "lucide-react"
+import { UserRoundPlus } from "lucide-react"
 import Link from "next/link"
 import { useMemo, useState } from "react"
 
 import {
   AllCurrent,
+  MissingBadge,
   DriverStatusBadge,
   ExpiryBadge,
 } from "@/components/drivers/driver-badges"
@@ -14,9 +15,9 @@ import {
   SettingsCardFooter,
 } from "@/components/settings/settings-card"
 import { LastDeliveryCell, NowCell, NowLine } from "@/components/now-cells"
+import { TableFilters, type FilterOption } from "@/components/table-filters"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { buttonVariants } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import {
   Table,
   TableBody,
@@ -25,13 +26,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   complianceItems,
   formatPay,
@@ -52,6 +46,15 @@ type Filter = DriverStatus | "all"
 
 function plural(count: number, word: string) {
   return `${count} ${count === 1 ? word : `${word}s`}`
+}
+
+/** The CDL and medical card when they aren't on file: the driver can't drive. */
+function missingToDrive(items: ComplianceItem[]) {
+  return items.filter(
+    (item) =>
+      item.expiry.state === "missing" &&
+      (item.key === "cdl" || item.key === "medical_card")
+  )
 }
 
 /** Items that are late or due within 60 days, most pressing first. */
@@ -81,9 +84,13 @@ function ComplianceSummary({
     return <span className="text-muted-foreground">Not tracked</span>
   }
   const warnings = flagged(items)
-  if (warnings.length) {
+  const missing = missingToDrive(items)
+  if (warnings.length || missing.length) {
     return (
       <div className="flex flex-wrap gap-1">
+        {missing.map((item) => (
+          <MissingBadge key={item.key} item={item} />
+        ))}
         {warnings.map((item) => (
           <ExpiryBadge key={item.key} item={item} showLabel />
         ))}
@@ -155,7 +162,8 @@ export function DriversTable({
     () =>
       rows.filter(
         ({ driver, items }) =>
-          driver.status === "active" && flagged(items).length > 0
+          driver.status === "active" &&
+          (flagged(items).length > 0 || missingToDrive(items).length > 0)
       ).length,
     [rows]
   )
@@ -169,23 +177,14 @@ export function DriversTable({
     )
 
   // The status filter's choices, each with how many drivers it shows.
-  const filterOptions: {
-    value: Filter
-    name: string
-    label: string
-    count: number
-  }[] = [
+  const filterOptions: FilterOption<Filter>[] = [
     ...DRIVER_STATUSES.map((status) => ({
       value: status,
       name: DRIVER_STATUS_LABELS[status],
       count: counts[status],
     })),
-    { value: "all" as const, name: "All", count: drivers.length },
-  ].map((option) => ({
-    ...option,
-    // What the closed dropdown shows.
-    label: `${option.name} (${option.count})`,
-  }))
+    { value: "all", name: "All", count: drivers.length },
+  ]
 
   const empty = drivers.length === 0
   const filtering = search.trim() !== "" || filter !== "all"
@@ -208,8 +207,8 @@ export function DriversTable({
               <>
                 {count} ·{" "}
                 <span className="text-amber-700 dark:text-amber-300">
-                  {plural(attention, "active driver")} with something due in the
-                  next 60 days
+                  {plural(attention, "active driver")} with something missing or
+                  due in the next 60 days
                 </span>
               </>
             ) : (
@@ -219,44 +218,17 @@ export function DriversTable({
         />
       }
     >
-      <div className="flex flex-col gap-3 px-6 pb-4 sm:flex-row sm:items-center">
-        <div className="relative w-full">
-          <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search by name"
-            aria-label="Search drivers"
-            className="pl-7"
-            value={search}
-            disabled={empty}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <Select
-          value={filter}
-          onValueChange={(value) =>
-            setFilter((value as Filter | null) ?? "all")
-          }
-          items={filterOptions}
-          disabled={empty}
-        >
-          <SelectTrigger
-            aria-label="Filter by status"
-            className="w-full shrink-0 sm:w-40"
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {filterOptions.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.name}
-                <span className="ml-auto pr-2 text-muted-foreground tabular-nums">
-                  {option.count}
-                </span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <TableFilters
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by name"
+        searchLabel="Search drivers"
+        filter={filter}
+        onFilterChange={setFilter}
+        options={filterOptions}
+        filterClassName="sm:w-40"
+        disabled={empty}
+      />
       <Table className="[&_td:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:first-child]:pl-6 [&_th:last-child]:pr-6">
         <TableHeader className="bg-muted/40">
           <TableRow>
@@ -303,6 +275,8 @@ export function DriversTable({
           )}
           {filtered.map(({ driver, items }) => {
             const warnings = driver.status === "active" ? flagged(items) : []
+            const missing =
+              driver.status === "active" ? missingToDrive(items) : []
             return (
               // The name's link covers the whole row, so any of it opens
               // the driver; the load links sit above it.
@@ -338,9 +312,12 @@ export function DriversTable({
                         off={driver.status === "inactive"}
                         now={now[driver.id]}
                       />
-                      {warnings.length > 0 && (
+                      {warnings.length + missing.length > 0 && (
                         // The compliance column is hidden on phones; keep the warnings.
                         <div className="mt-1 flex flex-wrap gap-1 sm:hidden">
+                          {missing.map((item) => (
+                            <MissingBadge key={item.key} item={item} />
+                          ))}
                           {warnings.map((item) => (
                             <ExpiryBadge key={item.key} item={item} showLabel />
                           ))}

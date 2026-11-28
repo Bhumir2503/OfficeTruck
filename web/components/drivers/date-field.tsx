@@ -24,6 +24,8 @@ export function DateField({
   errors,
   onUpdate,
   className,
+  min,
+  max,
 }: {
   id: string
   name: string
@@ -33,6 +35,9 @@ export function DateField({
   errors?: { message: string }[]
   onUpdate: (form: HTMLFormElement | null) => void
   className?: string
+  /** Earliest and latest days that can be picked, "YYYY-MM-DD". */
+  min?: string
+  max?: string
 }) {
   const [value, setValue] = useState(defaultValue ?? "")
   const hiddenRef = useRef<HTMLInputElement>(null)
@@ -74,6 +79,8 @@ export function DateField({
         onChange={change}
         invalid={invalid}
         label={label}
+        min={min}
+        max={max}
       />
       {invalid ? (
         <FieldError errors={errors} />

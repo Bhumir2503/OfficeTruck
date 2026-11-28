@@ -1,3 +1,4 @@
+import { cityState } from "@/lib/report-format"
 import type { AppointmentType, LoadStatus } from "@/lib/schemas/load"
 
 // Stop times are wall-clock times with no zone, so they're read and printed
@@ -33,9 +34,26 @@ function wallClock(value: string) {
   return new Date(`${value.slice(0, 19)}Z`)
 }
 
-/** "Nov 14" */
-export function formatStopDate(value: string) {
-  return dateFormat.format(wallClock(value))
+const yearDateFormat = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  timeZone: "UTC",
+})
+
+/**
+ * "Nov 14" this year, "Dec 3, 2025" any other: once there's more than a
+ * year of loads, a date without its year is ambiguous.
+ */
+export function formatStopDate(
+  value: string,
+  /** The current year; this year by default. */
+  thisYear = new Date().getFullYear()
+) {
+  const date = wallClock(value)
+  return (
+    date.getUTCFullYear() === thisYear ? dateFormat : yearDateFormat
+  ).format(date)
 }
 
 /** "Fri, Nov 14, 2026, 8:00 AM – 11:00 AM", or with a date on both ends when the window spans days. */
@@ -178,6 +196,68 @@ export function detentionClock(
         ? null
         : Math.round(billableHours * Number(terms.detention_rate) * 100) / 100,
   }
+}
+
+/**
+ * Where the driver is on a load on the road, in one line for the load's
+ * next step: "At the pickup in Springdale, AR since 5:40 AM", or "In
+ * detention at the pickup since 5:40 AM: $656.25 so far". Null when they
+ * aren't checked in at a stop. `timeZone` is the company's, for the clock.
+ */
+export function whereNow(
+  stops: (DetentionStop & {
+    kind: "pickup" | "delivery"
+    position: number
+    location: string
+  })[],
+  terms: { detention_free_hours: number | null; detention_rate: number | null },
+  now: number,
+  timeZone: string
+) {
+  const here = [...stops]
+    .sort((a, b) => b.position - a.position)
+    .find((stop) => stop.arrived_at && !stop.departed_at)
+  if (!here) return null
+  const since = new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone,
+  }).format(new Date(here.arrived_at!))
+  const clock = detentionClock(here, terms, now)
+  if (clock?.started) {
+    return `In detention at the ${here.kind} since ${since}${
+      clock.amount === null
+        ? ""
+        : `: ${new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(clock.amount)} so far`
+    }.`
+  }
+  return `At the ${here.kind} in ${cityState(here.location)} since ${since}.`
+}
+
+/** whereNow for a load on the road, as of now; null for any other load. */
+export function loadWhereNow(
+  load: {
+    status: string
+    detention_free_hours: number | string | null
+    detention_rate: number | string | null
+  },
+  stops: Parameters<typeof whereNow>[0],
+  timeZone: string
+) {
+  if (load.status !== "dispatched" && load.status !== "loaded") return null
+  return whereNow(
+    stops,
+    {
+      detention_free_hours:
+        load.detention_free_hours === null
+          ? null
+          : Number(load.detention_free_hours),
+      detention_rate:
+        load.detention_rate === null ? null : Number(load.detention_rate),
+    },
+    Date.now(),
+    timeZone
+  )
 }
 
 // ------------------------------------------------------------- Odometer ----

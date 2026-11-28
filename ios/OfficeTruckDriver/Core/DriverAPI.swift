@@ -183,6 +183,9 @@ struct DriverAPI: Sendable {
             let receipt_type: String?
             let client_id: UUID
             let paid_by: String
+            // Left out when nil, so a server without them still takes it.
+            let gallons: Double?
+            let jurisdiction: String?
         }
         try await client.rpc("add_my_expense", params: Params(
             target_load: expense.loadID,
@@ -194,7 +197,9 @@ struct DriverAPI: Sendable {
             receipt_name: receipt == nil ? nil : "\(expense.kind.label) receipt \(expense.spentOn).pdf",
             receipt_type: receipt == nil ? nil : "application/pdf",
             client_id: expense.id,
-            paid_by: expense.companyPaid == true ? "company" : "driver"
+            paid_by: expense.companyPaid == true ? "company" : "driver",
+            gallons: expense.gallons,
+            jurisdiction: expense.jurisdiction
         )).execute()
     }
 
