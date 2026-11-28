@@ -43,7 +43,12 @@ export type AttentionInput = {
     due_on: string | null
     total: number | string | null
     paid_amount: number | string | null
-    load: { reference: string; broker_name: string; rate: number | string }
+    load: {
+      reference: string
+      broker_name: string
+      broker_id?: string | null
+      rate: number | string
+    }
   }[]
   /** Delivered or TONU loads with no invoice yet. */
   ready: {
@@ -163,21 +168,30 @@ export function buildAttention(input: AttentionInput): AttentionItem[] {
   const { today } = input
   const items: (AttentionItem & { urgency: number })[] = []
 
+  // Overdue invoices, by broker: one slow payer is one call, not ten rows.
+  const overdue = new Map<
+    string,
+    { id: string; number: number; late: number; left: number }[]
+  >()
+  const brokerOf = new Map<string, { name: string; id: string | null }>()
   for (const invoice of input.invoices) {
     const total = Number(invoice.total ?? invoice.load.rate)
     const left = Math.max(0, total - Number(invoice.paid_amount ?? 0))
     if (invoice.status === "sent" && invoice.due_on && invoice.due_on < today) {
       if (left <= 0) continue
-      const late = daysFrom(invoice.due_on, today)
-      items.push({
-        key: `overdue:${invoice.id}`,
-        kind: "overdue",
-        tone: "danger",
-        title: `Invoice #${invoice.number} is ${plural(late, "day")} overdue`,
-        detail: `${invoice.load.broker_name} · ${usd.format(left)} left to pay`,
-        path: `invoices/${invoice.id}`,
-        urgency: -late,
+      const group = invoice.load.broker_id ?? invoice.load.broker_name
+      brokerOf.set(group, {
+        name: invoice.load.broker_name,
+        id: invoice.load.broker_id ?? null,
       })
+      const list = overdue.get(group) ?? []
+      list.push({
+        id: invoice.id,
+        number: invoice.number,
+        late: daysFrom(invoice.due_on, today),
+        left,
+      })
+      overdue.set(group, list)
     } else if (invoice.status === "draft") {
       items.push({
         key: `draft:${invoice.id}`,
@@ -189,6 +203,34 @@ export function buildAttention(input: AttentionInput): AttentionItem[] {
         urgency: 0,
       })
     }
+  }
+
+  for (const [group, list] of overdue) {
+    const broker = brokerOf.get(group)!
+    const oldest = Math.max(...list.map((invoice) => invoice.late))
+    if (list.length === 1) {
+      const [invoice] = list
+      items.push({
+        key: `overdue:${invoice.id}`,
+        kind: "overdue",
+        tone: "danger",
+        title: `Invoice #${invoice.number} is ${plural(invoice.late, "day")} overdue`,
+        detail: `${broker.name} · ${usd.format(invoice.left)} left to pay`,
+        path: `invoices/${invoice.id}`,
+        urgency: -invoice.late,
+      })
+      continue
+    }
+    const left = list.reduce((sum, invoice) => sum + invoice.left, 0)
+    items.push({
+      key: `overdue-broker:${group}`,
+      kind: "overdue",
+      tone: "danger",
+      title: `${broker.name}: ${list.length} invoices overdue`,
+      detail: `${usd.format(left)} left to pay · oldest ${plural(oldest, "day")} late`,
+      path: broker.id ? `customers/${broker.id}` : "invoices",
+      urgency: -oldest,
+    })
   }
 
   for (const load of input.ready) {

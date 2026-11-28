@@ -1,3 +1,5 @@
+import { cache } from "react"
+
 import type { PayType } from "@/lib/schemas/driver"
 import type { LoadStatus } from "@/lib/schemas/load"
 import type {
@@ -78,7 +80,7 @@ export async function getTrucks(organizationId: string): Promise<Truck[]> {
 }
 
 /** One truck, or null if it isn't in this organization. */
-export async function getTruck(
+export const getTruck = cache(async function getTruck(
   organizationId: string,
   id: string
 ): Promise<Truck | null> {
@@ -98,7 +100,7 @@ export async function getTruck(
     throw error
   }
   return data as unknown as Truck | null
-}
+})
 
 /** A truck as listed in the load form's truck picker. */
 export type TruckOption = {

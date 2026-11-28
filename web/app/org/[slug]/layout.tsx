@@ -58,7 +58,8 @@ export default async function OrganizationLayout({
         organization={organization}
         user={{ name, email, avatarUrl }}
         organizations={await getMyOrganizations()}
-        dashboardBadge={totalActions(await getActionCounts(organization.id))}
+        // Not awaited: the badge streams in, so no page waits on the To do.
+        dashboardBadge={getActionCounts(organization.id).then(totalActions)}
       />
       <SidebarInset>
         <SiteHeader slug={organization.slug} />

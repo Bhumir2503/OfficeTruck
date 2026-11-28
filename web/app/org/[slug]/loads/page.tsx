@@ -20,14 +20,16 @@ export default async function LoadsPage({
   }
 
   const base = `/org/${organization.slug}/loads`
-  const [loads, drivers, trucks, invoices, inboxWaiting] = await Promise.all([
-    getLoads(organization.id),
-    getDriverOptions(organization.id),
-    getTruckOptions(organization.id),
-    getLoadInvoices(organization.id),
-    getInboxWaiting(organization.id),
-  ])
-  const payments = await getPaymentsDue(organization.id, loads)
+  const loadsQuery = getLoads(organization.id)
+  const [loads, payments, drivers, trucks, invoices, inboxWaiting] =
+    await Promise.all([
+      loadsQuery,
+      loadsQuery.then((all) => getPaymentsDue(organization.id, all)),
+      getDriverOptions(organization.id),
+      getTruckOptions(organization.id),
+      getLoadInvoices(organization.id),
+      getInboxWaiting(organization.id),
+    ])
 
   return (
     <div className="px-4 py-6 lg:px-6 lg:py-8">

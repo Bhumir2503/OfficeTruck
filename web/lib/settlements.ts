@@ -229,9 +229,10 @@ export async function getSettlement(
     ids.length
       ? supabase
           .from("load_expenses")
-          .select("id, load_id, kind, amount, spent_on, note")
+          .select("id, load_id, kind, amount, spent_on, note, paid_by")
           .eq("organization_id", organizationId)
-          .eq("paid_by", "driver")
+          // Owed back, or taken off.
+          .in("paid_by", ["driver", "deduct"])
           .in("load_id", ids)
           .order("spent_on")
       : Promise.resolve({ data: [], error: null }),
@@ -247,9 +248,11 @@ export async function getSettlement(
   if (expenses.error) throw expenses.error
   if (adjustments.error) throw adjustments.error
 
-  const liveExpenses = (expenses.data ?? []).map((expense) => ({
+  const liveExpenses = (expenses.data ?? []).map(({ paid_by, ...expense }) => ({
     ...expense,
-    amount: Number(expense.amount),
+    amount:
+      paid_by === "deduct" ? -Number(expense.amount) : Number(expense.amount),
+    ...(paid_by === "deduct" ? { deducted: true } : {}),
   }))
   const driverAdjustments = (adjustments.data ?? []).map(
     ({ id, description, amount }) => ({

@@ -76,8 +76,32 @@ export default async function DriverPage({
   params,
   searchParams,
 }: PageProps<"/org/[slug]/drivers/[id]">) {
+  // Start what doesn't need the driver's row before reading it: each query
+  // is its own round trip. (A missing driver just gets empty results.)
+  const [{ slug, id }, early] = await Promise.all([params, searchParams])
+  const org = await getOrganization(slug)
+  const earlyToday = getToday()
+  const onPay = parseDriverTab(early.tab) === "pay" && !!org && canManage(org)
+  const started = org && {
+    loads: getDriverLoads(org.id, id),
+    documents: getDriverDocuments(org.id, id),
+    dqFile: loadDqFile({
+      driverId: id,
+      organizationId: org.id,
+      manager: canManage(org),
+      today: earlyToday,
+    }),
+    // Used only when no period is picked; cheap enough to start anyway.
+    unpaid: onPay
+      ? getOldestUnpaidDay(org.id, id, earlyToday)
+      : Promise.resolve(null),
+    paidWeeks: onPay ? getPaidWeeks(org.id, id) : Promise.resolve([]),
+    updates: canManage(org)
+      ? getDriverUpdates(org.id, id)
+      : Promise.resolve([]),
+  }
   const { organization, driver } = await driverFor(params)
-  if (!organization || !driver) {
+  if (!organization || !driver || !started) {
     notFound()
   }
 
@@ -101,10 +125,7 @@ export default async function DriverPage({
   const payHref = `${driverHref}?tab=pay`
   const onPayment = tab === "pay"
   const chosen = parsePeriod(query.week, period)
-  const unpaidSince =
-    onPayment && !chosen
-      ? await getOldestUnpaidDay(organization.id, driver.id, today)
-      : null
+  const unpaidSince = onPayment && !chosen ? await started.unpaid : null
   const week =
     chosen ??
     (unpaidSince
@@ -112,14 +133,9 @@ export default async function DriverPage({
       : shiftPeriod(thisWeek, period, -1))
   const [loads, documents, dqFile, settlement, paidWeeks, updates] =
     await Promise.all([
-      getDriverLoads(organization.id, driver.id),
-      getDriverDocuments(organization.id, driver.id),
-      loadDqFile({
-        driverId: driver.id,
-        organizationId: organization.id,
-        manager,
-        today,
-      }),
+      started.loads,
+      started.documents,
+      started.dqFile,
       onPayment
         ? getSettlement(
             organization.id,
@@ -133,9 +149,9 @@ export default async function DriverPage({
               : null
           )
         : null,
-      onPayment ? getPaidWeeks(organization.id, driver.id) : [],
+      started.paidWeeks,
       // A new CDL or medical card sent from the driver app.
-      manager ? getDriverUpdates(organization.id, driver.id) : [],
+      started.updates,
     ])
   // Booked loads still locked at a rate other than the driver's current one.
   const staleLoads = loads

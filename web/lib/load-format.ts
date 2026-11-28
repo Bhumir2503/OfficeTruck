@@ -34,9 +34,26 @@ function wallClock(value: string) {
   return new Date(`${value.slice(0, 19)}Z`)
 }
 
-/** "Nov 14" */
-export function formatStopDate(value: string) {
-  return dateFormat.format(wallClock(value))
+const yearDateFormat = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  timeZone: "UTC",
+})
+
+/**
+ * "Nov 14" this year, "Dec 3, 2025" any other: once there's more than a
+ * year of loads, a date without its year is ambiguous.
+ */
+export function formatStopDate(
+  value: string,
+  /** The current year; this year by default. */
+  thisYear = new Date().getFullYear()
+) {
+  const date = wallClock(value)
+  return (
+    date.getUTCFullYear() === thisYear ? dateFormat : yearDateFormat
+  ).format(date)
 }
 
 /** "Fri, Nov 14, 2026, 8:00 AM – 11:00 AM", or with a date on both ends when the window spans days. */

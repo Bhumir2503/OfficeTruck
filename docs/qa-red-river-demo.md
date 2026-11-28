@@ -247,23 +247,61 @@ up with real volume. **Tick items here as they're fixed.**
   *Fixed:* both lists show 50 rows a page (search and filter go back to page
   1). /loads is now 1.0 MB and 1.4 s, /invoices 657 KB. What's left is the
   row data sent to the browser for search; server-side search would cut it.
-- [ ] **Invoice numbers follow entry order, not date.** Past invoices take the
+- [x] **Invoice numbers follow entry order, not date.** Past invoices take the
   next number, and the list sorts by number, so September's #1001–#1008 sit
   under January's #1009. Let "Record as sent earlier" take the original
   number (`set_invoice_number` exists) and sort by invoice date.
-- [ ] **No owner-operator deductions.** Company-paid fuel on Ray's loads is a
+  *Fixed:* "Record as sent earlier" has an Invoice number field (it calls
+  `set_invoice_number` first), and invoice lists sort by invoice date, then
+  number.
+- [x] **No owner-operator deductions.** Company-paid fuel on Ray's loads is a
   company cost with no way to take it off his settlement, so truck 104 shows
   a -4% margin. A "deduct from driver" choice on company-paid expenses.
-- [ ] **One broker floods the To do.** Ten separate "Invoice #… overdue" rows
+  *Fixed:* expenses take a third "Paid by": Off driver's pay
+  (`paid_by = 'deduct'`, migration `20261128011327`). It comes off the
+  driver's settlement as a red line, isn't a company cost in reports or the
+  load's profit, and is marked on the expense. Ray's company fuel in the demo
+  is now marked that way; his paid weeks keep the lines they were paid with.
+- [x] **One broker floods the To do.** Ten separate "Invoice #… overdue" rows
   for Prairie Path; group per broker ("Prairie Path: 8 overdue, $6,836").
-- [ ] **Customer page wording.** "Last load: Dec 3" is a booked future load;
+  *Fixed:* two or more overdue invoices from one customer are one line,
+  linking to the customer ("Prairie Path…: 10 invoices overdue, $8,286.00
+  left to pay · oldest 96 days late").
+- [x] **Customer page wording.** "Last load: Dec 3" is a booked future load;
   the Loads tab (95) and "At a glance" (92) differ by cancelled loads with
   nothing saying so.
-- [ ] **Customers list has no money.** Open balance, overdue and days to pay
+  *Fixed:* "Last pickup" is the latest on or before today, with "Next
+  pickup" for one still to come; "Not counting 3 cancelled loads" under
+  Loads, and the Loads tab footer says how many were cancelled.
+- [x] **Customers list has no money.** Open balance, overdue and days to pay
   are only on each customer's page.
-- [ ] **Dates without a year** in the loads list ("Dec 3") get ambiguous once
+  *Fixed:* Owed (with overdue in red) and Pays in columns.
+- [x] **Dates without a year** in the loads list ("Dec 3") get ambiguous once
   there's more than a year of loads.
-- [ ] Dashboard takes ~2.5 s with a year of data (dev server).
+  *Fixed:* `formatStopDate` adds the year to any date outside this year.
+- [x] Dashboard takes ~2.5 s with a year of data (dev server).
+  *Fixed, with every page:* each Supabase round trip from here is ~200 ms,
+  so pages were slow from queries waiting on each other.
+  - The sidebar's To do count ran on every page and held up the response.
+    It now streams in after the page and does a third of the work (open
+    invoices only, ready-to-invoice in one request, no file links).
+  - Pages start all their queries at once, the record itself included
+    (load, driver, truck, trailer, customer pages; Loads, Equipment,
+    Documents, Settings). Detail lookups are cached per request, so the tab
+    title and the page share one.
+  - Documents links sign on click (`documents/open`) instead of signing
+    ~1,400 files on every visit.
+  - Report data embeds expenses in the loads query; the dashboard reads 24
+    months and IFTA only its quarter. `fetchByIds` runs chunks in parallel.
+  - `getLoadInvoices` (the Loads list) was still capped at 1,000 rows;
+    it reads whole now.
+
+  Dev server, median of warm loads, before → after: dashboard 1,958 →
+  705 ms; Reports 1,897 → 685; IFTA 1,334 → 701; Documents 1,381 → 899;
+  Loads 1,213 → 972; load page 1,042 → ~685; Invoices 869 → 694; customers,
+  drivers, trailers, settings ~760–870 → ~525–580; driver, truck, customer
+  pages ~870–910 → ~650–690. Loads and Documents are now mostly the size of
+  the data sent for search; server-side search would be the next step.
 
 ## Cleanup when done
 

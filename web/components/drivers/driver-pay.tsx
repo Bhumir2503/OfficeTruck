@@ -302,12 +302,18 @@ export function DriverPay({
     })),
     ...settlement.expenses.map((expense) => ({
       key: `expense-${expense.id}`,
-      kind: "expense" as const,
+      kind: expense.deducted ? ("deduct" as const) : ("expense" as const),
       title: EXPENSE_LABELS[expense.kind as ExpenseKind] ?? expense.kind,
-      detail: [reference.get(expense.load_id), expense.note]
+      detail: [
+        reference.get(expense.load_id),
+        expense.deducted && "Company paid, taken off pay",
+        expense.note,
+      ]
         .filter(Boolean)
         .join(" · "),
-      amount: formatRate(expense.amount),
+      amount: expense.deducted
+        ? money(expense.amount)
+        : formatRate(expense.amount),
     })),
     ...settlement.adjustments.map((adjustment) => ({
       key: `adjustment-${adjustment.id}`,
@@ -405,8 +411,8 @@ export function DriverPay({
                 </span>
                 {lines.length > 0 && (
                   <span className="block text-xs tabular-nums">
-                    Loads {formatRate(totals.gross)} · Owed back{" "}
-                    {formatRate(totals.reimbursements)} · Adjustments{" "}
+                    Loads {formatRate(totals.gross)} · Expenses{" "}
+                    {money(totals.reimbursements)} · Adjustments{" "}
                     {formatRate(totals.adjustments)}
                   </span>
                 )}

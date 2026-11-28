@@ -6,11 +6,12 @@ import {
 } from "@/lib/report-format"
 import type { PayType } from "@/lib/schemas/driver"
 import type { LoadStatus } from "@/lib/schemas/load"
-import { fetchAll, fetchByIds } from "@/lib/supabase/paging"
+import { fetchAll } from "@/lib/supabase/paging"
 import { createClient } from "@/lib/supabase/server"
 
 type Row = {
   id: string
+  load_expenses: { amount: number | string; paid_by: string }[]
   reference: string
   status: LoadStatus
   delivery_start: string
@@ -36,44 +37,47 @@ type Row = {
 }
 
 const COLUMNS =
-  "id, reference, status, delivery_start, delivered_on, rate, miles, empty_miles, driver_pay_type, driver_pay_rate, tonu_driver_pay, pickup_location, delivery_location, broker_name, broker_id, broker:brokers!loads_broker_fkey (legal_name), driver_name, driver_id, driver:drivers!loads_driver_fkey (full_name), truck, truck_id, truck_link:trucks!loads_truck_fkey (unit_number)"
+  "id, reference, status, delivery_start, delivered_on, rate, miles, empty_miles, driver_pay_type, driver_pay_rate, tonu_driver_pay, pickup_location, delivery_location, broker_name, broker_id, broker:brokers!loads_broker_fkey (legal_name), driver_name, driver_id, driver:drivers!loads_driver_fkey (full_name), truck, truck_id, truck_link:trucks!loads_truck_fkey (unit_number), load_expenses (amount, paid_by)"
 
 /** Every delivered (or further along) load, with its pay and expenses totalled. */
 export async function getReportLoads(
-  organizationId: string
+  organizationId: string,
+  /**
+   * "YYYY-MM-DD": only loads delivered from this day on (a TONU, with no
+   * delivery, by its delivery date). All of them when left out.
+   */
+  since?: string
 ): Promise<ReportLoad[]> {
   const supabase = await createClient()
-  const data = await fetchAll((from, to) =>
-    supabase
+  const data = await fetchAll((from, to) => {
+    const query = supabase
       .from("loads")
       .select(COLUMNS)
       .eq("organization_id", organizationId)
       .in("status", REPORTED_STATUSES)
+    return (
+      since
+        ? query.or(
+            `delivered_on.gte.${since},and(delivered_on.is.null,delivery_start.gte.${since})`
+          )
+        : query
+    )
       .order("delivered_on", { ascending: false })
       .order("id")
       .range(from, to)
-  )
+  })
   const rows = data as unknown as Row[]
 
+  // What the company spent on each load. Not the expenses taken off the
+  // driver's pay: the driver pays those.
   const expenses = new Map<string, number>()
-  if (rows.length) {
-    const spent = await fetchByIds(
-      rows.map((row) => row.id),
-      (chunk, from, to) =>
-        supabase
-          .from("load_expenses")
-          .select("load_id, amount")
-          .eq("organization_id", organizationId)
-          .in("load_id", chunk)
-          .order("id")
-          .range(from, to)
+  for (const row of rows) {
+    expenses.set(
+      row.id,
+      row.load_expenses
+        .filter((expense) => expense.paid_by !== "deduct")
+        .reduce((sum, expense) => sum + Number(expense.amount), 0)
     )
-    for (const expense of spent) {
-      expenses.set(
-        expense.load_id,
-        (expenses.get(expense.load_id) ?? 0) + Number(expense.amount)
-      )
-    }
   }
 
   return rows.map((row) => {

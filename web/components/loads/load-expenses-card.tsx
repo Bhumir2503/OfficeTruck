@@ -217,11 +217,16 @@ function ExpenseForm({
               <ToggleGroupItem value="driver" className="flex-1">
                 Driver
               </ToggleGroupItem>
+              <ToggleGroupItem value="deduct" className="flex-1">
+                Off driver&apos;s pay
+              </ToggleGroupItem>
             </ToggleGroup>
             <FieldDescription>
               {paidBy === "driver"
                 ? "Out of the driver's pocket, so it's owed back to them."
-                : "On the company card or account."}
+                : paidBy === "deduct"
+                  ? "On the company card, taken off the driver's settlement: for owner-operators who pay their own fuel."
+                  : "On the company card or account."}
             </FieldDescription>
           </Field>
           {kind === "fuel" && (
@@ -348,7 +353,7 @@ export function LoadExpensesCard({
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<LoadExpense | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
-  const { total, owedToDriver } = expenseTotals(expenses)
+  const { total, owedToDriver, deducted } = expenseTotals(expenses)
   const lumpers = expenses.filter((expense) => expense.kind === "lumper")
   const lumperTotal = expenseTotals(lumpers).total
 
@@ -399,9 +404,14 @@ export function LoadExpensesCard({
         expenses.length > 0 && (
           <SettingsCardFooter
             hint={
-              owedToDriver > 0
-                ? `${formatRate(owedToDriver)} paid by the driver, owed back on their settlement.`
-                : "All paid by the company."
+              [
+                owedToDriver > 0 &&
+                  `${formatRate(owedToDriver)} paid by the driver, owed back on their settlement.`,
+                deducted > 0 &&
+                  `${formatRate(deducted)} taken off the driver's pay.`,
+              ]
+                .filter(Boolean)
+                .join(" ") || "All paid by the company."
             }
           >
             <span className="text-sm">
@@ -462,6 +472,11 @@ export function LoadExpensesCard({
                     {expense.paid_by === "driver" && (
                       <span className="rounded-4xl bg-amber-500/15 px-2 text-xs font-medium text-amber-800 dark:text-amber-200">
                         Driver paid
+                      </span>
+                    )}
+                    {expense.paid_by === "deduct" && (
+                      <span className="rounded-4xl bg-sky-500/15 px-2 text-xs font-medium text-sky-800 dark:text-sky-200">
+                        Off driver&apos;s pay
                       </span>
                     )}
                     {expense.receipt_url ? (

@@ -1,3 +1,5 @@
+import { cache } from "react"
+
 import { detentionClock } from "@/lib/load-format"
 import type { DriverDocumentKind } from "@/lib/driver-document-format"
 import type { PayPeriod } from "@/lib/settlement-format"
@@ -80,7 +82,7 @@ export async function getDrivers(organizationId: string): Promise<Driver[]> {
 }
 
 /** One driver, or null if they aren't in this organization. */
-export async function getDriver(
+export const getDriver = cache(async function getDriver(
   organizationId: string,
   id: string
 ): Promise<Driver | null> {
@@ -100,7 +102,7 @@ export async function getDriver(
     throw error
   }
   return data as Driver | null
-}
+})
 
 /** A driver as listed in the load form's driver picker. */
 export type DriverOption = {

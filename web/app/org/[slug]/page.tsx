@@ -12,7 +12,16 @@ import { getAttention, getMovingLoads, getWaitingStops } from "@/lib/dashboard"
 import { balanceDue } from "@/lib/invoice-format"
 import { canManage, getOrganization } from "@/lib/organizations"
 import { monthToDate } from "@/lib/report-format"
+import { today as getToday } from "@/lib/driver-format"
 import { getReportLoads } from "@/lib/reports"
+
+/** The first of the month 24 months back: as far as the charts reach. */
+function chartsSince(today: string) {
+  const year = Number(today.slice(0, 4))
+  const month = Number(today.slice(5, 7))
+  const back = year * 12 + (month - 1) - 23
+  return `${Math.floor(back / 12)}-${String((back % 12) + 1).padStart(2, "0")}-01`
+}
 
 /**
  * The dashboard, laid out like shadcnblocks' Dashboard 2: the period and the
@@ -31,12 +40,17 @@ export default async function DashboardPage({
   }
 
   const base = `/org/${organization.slug}`
-  const { today, items, invoices } = await getAttention(organization.id)
-  const [moving, reportLoads, waiting] = await Promise.all([
-    getMovingLoads(organization.id, today),
-    getReportLoads(organization.id),
-    getWaitingStops(organization.id),
-  ])
+  const today = getToday()
+  // All at once. The charts go back 24 months at most (a year, against the
+  // year before), so older loads aren't read.
+  const [{ items, invoices }, moving, reportLoads, waiting] = await Promise.all(
+    [
+      getAttention(organization.id),
+      getMovingLoads(organization.id, today),
+      getReportLoads(organization.id, chartsSince(today)),
+      getWaitingStops(organization.id),
+    ]
+  )
 
   const { current, previous } = monthToDate(reportLoads, today)
   let owed = 0

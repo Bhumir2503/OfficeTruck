@@ -289,7 +289,8 @@ export function LoadSidePanel({
     total: expenseTotals(expenses.filter((expense) => expense.kind === kind))
       .total,
   })).filter((line) => line.total > 0)
-  const expenseTotal = expenseTotals(expenses).total
+  // What the company is out: deductions come back off the driver's pay.
+  const { companyCost: expenseTotal, deducted } = expenseTotals(expenses)
   const locked = formatPay(load.driver_pay_type, load.driver_pay_rate)
   const allMiles = (load.miles ?? 0) + (load.empty_miles ?? 0)
 
@@ -682,6 +683,11 @@ export function LoadSidePanel({
               −{formatRate(line.total)}
             </MoneyLine>
           ))}
+          {deducted > 0 && (
+            <MoneyLine label="Taken off driver's pay" muted>
+              +{formatRate(deducted)}
+            </MoneyLine>
+          )}
           <div className="my-1 border-t" />
           <MoneyLine label={spent.length ? "Profit" : "Margin"} strong>
             {pay === null ? "—" : formatRate(revenue - pay - expenseTotal)}
