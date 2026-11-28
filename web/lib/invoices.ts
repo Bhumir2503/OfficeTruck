@@ -1,3 +1,5 @@
+import { cache } from "react"
+
 import { getFactoringCompany } from "@/lib/factoring"
 import type {
   BillingBroker,
@@ -11,7 +13,7 @@ import { getLoadExpenses } from "@/lib/load-expenses"
 import { getLoadDetail } from "@/lib/loads"
 import { getOrganizationProfile } from "@/lib/organizations"
 import type { LoadStatus } from "@/lib/schemas/load"
-import { fetchAll, fetchByIds } from "@/lib/supabase/paging"
+import { fetchAll } from "@/lib/supabase/paging"
 import { createClient } from "@/lib/supabase/server"
 
 export type Invoice = {
@@ -62,6 +64,7 @@ export type InvoiceListItem = Invoice & {
     id: string
     reference: string
     broker_name: string
+    broker_id: string | null
     rate: number
     status: LoadStatus
     delivery_start: string
@@ -69,7 +72,7 @@ export type InvoiceListItem = Invoice & {
   }
 }
 
-/** Every invoice in the organization, newest number first. */
+/** Every invoice in the organization, newest first by invoice date. */
 export async function getInvoices(
   organizationId: string
 ): Promise<InvoiceListItem[]> {
@@ -78,9 +81,12 @@ export async function getInvoices(
     supabase
       .from("invoices")
       .select(
-        `${INVOICE_COLUMNS}, load:loads!invoices_organization_id_load_id_fkey (id, reference, broker_name, rate, status, delivery_start, broker:brokers!loads_broker_fkey (quick_pay_fee_percent)), payments:invoice_payments (paid_on, amount)`
+        `${INVOICE_COLUMNS}, load:loads!invoices_organization_id_load_id_fkey (id, reference, broker_name, broker_id, rate, status, delivery_start, broker:brokers!loads_broker_fkey (quick_pay_fee_percent)), payments:invoice_payments (paid_on, amount)`
       )
       .eq("organization_id", organizationId)
+      // By invoice date (drafts, undated, first), so a past invoice recorded
+      // late sits with its month, not on top.
+      .order("invoice_date", { ascending: false, nullsFirst: true })
       .order("number", { ascending: false })
       .order("id")
       .range(from, to)
@@ -102,6 +108,7 @@ export async function getBrokerInvoices(
       )
       .eq("organization_id", organizationId)
       .eq("load.broker_id", brokerId)
+      .order("invoice_date", { ascending: false, nullsFirst: true })
       .order("number", { ascending: false })
       .order("id")
       .range(from, to)
@@ -123,94 +130,78 @@ export type ReadyLoad = {
   missing: DocumentKind[]
 }
 
+/**
+ * Drafts and sent invoices only, for the To do and the dashboard's money
+ * owed: paid and void ones never need action, and they're most of them.
+ */
+export async function getOpenInvoices(
+  organizationId: string
+): Promise<InvoiceListItem[]> {
+  const supabase = await createClient()
+  const data = await fetchAll((from, to) =>
+    supabase
+      .from("invoices")
+      .select(
+        `${INVOICE_COLUMNS}, load:loads!invoices_organization_id_load_id_fkey (id, reference, broker_name, broker_id, rate, status, delivery_start, broker:brokers!loads_broker_fkey (quick_pay_fee_percent)), payments:invoice_payments (paid_on, amount)`
+      )
+      .eq("organization_id", organizationId)
+      .in("status", ["draft", "sent"])
+      .order("number", { ascending: false })
+      .order("id")
+      .range(from, to)
+  )
+  return data as unknown as InvoiceListItem[]
+}
+
 /** Loads that are done and waiting to be billed, oldest delivery first. */
 export async function getLoadsToInvoice(
   organizationId: string
 ): Promise<ReadyLoad[]> {
   const supabase = await createClient()
-  // Read whole: past 1,000 invoices, a partial list would show billed
-  // loads as ready to invoice again.
-  const [loads, invoiced] = await Promise.all([
-    fetchAll((from, to) =>
-      supabase
-        .from("loads")
-        .select(
-          "id, reference, broker_name, rate, status, delivery_start, delivered_on"
-        )
-        .eq("organization_id", organizationId)
-        .in("status", ["delivered", "tonu"])
-        .order("delivery_start")
-        .order("id")
-        .range(from, to)
-    ),
-    fetchAll((from, to) =>
-      supabase
-        .from("invoices")
-        .select("load_id")
-        .eq("organization_id", organizationId)
-        .neq("status", "void")
-        .order("id")
-        .range(from, to)
-    ),
-  ])
+  // One request, with each load's invoices and paperwork embedded: this
+  // runs on every page (the sidebar badge), and each separate lookup was
+  // another round trip to wait for.
+  const loads = (await fetchAll((from, to) =>
+    supabase
+      .from("loads")
+      .select(
+        "id, reference, broker_name, rate, status, delivery_start, delivered_on, invoices!invoices_organization_id_load_id_fkey (status), load_documents (kind), load_charges (kind), load_expenses (kind, receipt_path)"
+      )
+      .eq("organization_id", organizationId)
+      .in("status", ["delivered", "tonu"])
+      .order("delivery_start")
+      .order("id")
+      .range(from, to)
+  )) as unknown as (Omit<ReadyLoad, "missing"> & {
+    invoices: { status: string }[]
+    load_documents: { kind: DocumentKind }[]
+    load_charges: { kind: string }[]
+    load_expenses: { kind: string; receipt_path: string | null }[]
+  })[]
 
-  const billed = new Set(invoiced.map((row) => row.load_id))
-  const rows = (loads as Omit<ReadyLoad, "missing">[]).filter(
-    (load) => !billed.has(load.id)
-  )
-  if (!rows.length) {
-    return []
-  }
-
-  const ids = rows.map((load) => load.id)
-  const [documentRows, chargeRows, lumperRows] = await Promise.all([
-    fetchByIds(ids, (chunk, from, to) =>
-      supabase
-        .from("load_documents")
-        .select("load_id, kind")
-        .in("load_id", chunk)
-        .order("id")
-        .range(from, to)
-    ),
-    fetchByIds(ids, (chunk, from, to) =>
-      supabase
-        .from("load_charges")
-        .select("load_id, kind")
-        .in("load_id", chunk)
-        .order("id")
-        .range(from, to)
-    ),
-    // A lumper receipt on an expense counts as the lumper receipt.
-    fetchByIds(ids, (chunk, from, to) =>
-      supabase
-        .from("load_expenses")
-        .select("load_id")
-        .in("load_id", chunk)
-        .eq("kind", "lumper")
-        .not("receipt_path", "is", null)
-        .order("id")
-        .range(from, to)
-    ),
-  ])
-  const documents = { data: documentRows }
-  const charges = { data: chargeRows }
-  const lumpers = { data: lumperRows }
-
-  return rows.map((load) => {
-    const docs = (documents.data ?? []).filter((d) => d.load_id === load.id)
-    if ((lumpers.data ?? []).some((e) => e.load_id === load.id)) {
-      docs.push({ load_id: load.id, kind: "lumper_receipt" })
-    }
-    const lines = (charges.data ?? []).filter((c) => c.load_id === load.id)
-    return {
-      ...load,
-      // A TONU load never ran, so there's no BOL or POD to wait for.
-      missing:
-        load.status === "tonu"
-          ? []
-          : missingDocuments(lines, docs as { kind: DocumentKind }[]),
-    }
-  })
+  return loads
+    .filter((load) => !load.invoices.some((i) => i.status !== "void"))
+    .map(
+      ({ invoices, load_documents, load_charges, load_expenses, ...load }) => {
+        void invoices
+        const docs: { kind: DocumentKind }[] = [...load_documents]
+        // A lumper receipt on an expense counts as the lumper receipt.
+        if (load_expenses.some((e) => e.kind === "lumper" && e.receipt_path)) {
+          docs.push({ kind: "lumper_receipt" })
+        }
+        return {
+          ...load,
+          // A TONU load never ran, so there's no BOL or POD to wait for.
+          missing:
+            load.status === "tonu"
+              ? []
+              : missingDocuments(
+                  load_charges as Parameters<typeof missingDocuments>[0],
+                  docs
+                ),
+        }
+      }
+    )
 }
 
 export type LoadInvoice = Pick<Invoice, "id" | "number" | "status" | "due_on">
@@ -220,14 +211,15 @@ export async function getLoadInvoices(
   organizationId: string
 ): Promise<Record<string, LoadInvoice>> {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("invoices")
-    .select("id, load_id, number, status, due_on")
-    .eq("organization_id", organizationId)
-    .neq("status", "void")
-  if (error) {
-    throw error
-  }
+  const data = await fetchAll((from, to) =>
+    supabase
+      .from("invoices")
+      .select("id, load_id, number, status, due_on")
+      .eq("organization_id", organizationId)
+      .neq("status", "void")
+      .order("id")
+      .range(from, to)
+  )
   return Object.fromEntries(
     data.map(({ load_id, ...invoice }) => [load_id, invoice as LoadInvoice])
   )
@@ -267,7 +259,10 @@ export type InvoiceBroker = BillingBroker & {
 }
 
 /** Everything an invoice page, the PDF and the email need. */
-export async function getInvoiceDetail(organizationId: string, id: string) {
+export const getInvoiceDetail = cache(async function getInvoiceDetail(
+  organizationId: string,
+  id: string
+) {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from("invoices")
@@ -360,7 +355,7 @@ export async function getInvoiceDetail(organizationId: string, id: string) {
       void_reason: string | null
     }[],
   }
-}
+})
 
 export type InvoiceDetail = NonNullable<
   Awaited<ReturnType<typeof getInvoiceDetail>>

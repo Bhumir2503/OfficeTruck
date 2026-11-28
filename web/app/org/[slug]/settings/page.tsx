@@ -29,19 +29,21 @@ export default async function GeneralSettingsPage({
     notFound()
   }
 
-  const { data: org } = await (
-    await createClient()
-  )
-    .from("organizations")
-    .select(
-      "icon_url, time_zone, broker_updates, detention_notices, detention_auto_charge, auto_invoice, auto_invoice_reminders, tonu_driver_pay"
-    )
-    .eq("id", organization.id)
-    .single()
+  const supabase = await createClient()
+  const [{ data: org }, profile] = await Promise.all([
+    supabase
+      .from("organizations")
+      .select(
+        "icon_url, time_zone, broker_updates, detention_notices, detention_auto_charge, auto_invoice, auto_invoice_reminders, tonu_driver_pay"
+      )
+      .eq("id", organization.id)
+      .single(),
+    getOrganizationProfile(organization.id),
+  ])
 
   const props = {
     organizationId: organization.id,
-    profile: await getOrganizationProfile(organization.id),
+    profile,
     canEdit: canManage(organization),
   }
 

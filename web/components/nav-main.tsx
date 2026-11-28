@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { Suspense, use } from "react"
 
 import {
   SidebarGroup,
@@ -24,6 +25,23 @@ export function useIsActive(base: string) {
       : pathname === base
 }
 
+/**
+ * The dashboard's to-do count. It streams in after the page: working it out
+ * reads invoices, loads and documents, and no page should wait on it.
+ */
+function DashboardBadge({ count }: { count: Promise<number> | number }) {
+  const n = typeof count === "number" ? count : use(count)
+  if (n <= 0) return null
+  return (
+    <SidebarMenuBadge
+      aria-label={`${n} items need action`}
+      className="bg-destructive text-white peer-data-active/menu-button:text-white"
+    >
+      {n}
+    </SidebarMenuBadge>
+  )
+}
+
 export function NavMain({
   base,
   groups,
@@ -31,7 +49,7 @@ export function NavMain({
 }: {
   base: string
   groups: { label?: string; items: OrgSection[] }[]
-  dashboardBadge: number
+  dashboardBadge: Promise<number> | number
 }) {
   const isActive = useIsActive(base)
 
@@ -52,13 +70,10 @@ export function NavMain({
                 <item.icon />
                 <span>{item.title}</span>
               </SidebarMenuButton>
-              {item.path === "" && dashboardBadge > 0 && (
-                <SidebarMenuBadge
-                  aria-label={`${dashboardBadge} items need action`}
-                  className="bg-destructive text-white peer-data-active/menu-button:text-white"
-                >
-                  {dashboardBadge}
-                </SidebarMenuBadge>
+              {item.path === "" && (
+                <Suspense fallback={null}>
+                  <DashboardBadge count={dashboardBadge} />
+                </Suspense>
               )}
             </SidebarMenuItem>
           ))}

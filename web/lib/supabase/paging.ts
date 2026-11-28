@@ -31,17 +31,19 @@ export const ID_CHUNK = 150
 
 /**
  * A query filtered by a list of ids, run in chunks of ID_CHUNK (each read
- * whole with fetchAll), with the results joined. For lists of ids that grow
- * with the company, like every load it has run.
+ * whole with fetchAll, all at once), with the results joined in order. For
+ * lists of ids that grow with the company, like every load it has run.
  */
 export async function fetchByIds<T>(
   ids: readonly string[],
   page: (chunk: string[], from: number, to: number) => PromiseLike<Result<T>>
 ): Promise<T[]> {
-  const rows: T[] = []
+  const chunks: string[][] = []
   for (let i = 0; i < ids.length; i += ID_CHUNK) {
-    const chunk = ids.slice(i, i + ID_CHUNK)
-    rows.push(...(await fetchAll((from, to) => page(chunk, from, to))))
+    chunks.push(ids.slice(i, i + ID_CHUNK))
   }
-  return rows
+  const results = await Promise.all(
+    chunks.map((chunk) => fetchAll((from, to) => page(chunk, from, to)))
+  )
+  return results.flat()
 }

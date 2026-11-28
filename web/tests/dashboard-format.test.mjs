@@ -48,6 +48,42 @@ describe("buildAttention", () => {
     assert.equal(item.path, "invoices/i1")
   })
 
+  it("groups one broker's overdue invoices into one line", () => {
+    const load = {
+      reference: "R",
+      broker_name: "Prairie Path",
+      broker_id: "b1",
+      rate: 1000,
+    }
+    const items = buildAttention({
+      ...empty,
+      invoices: [
+        invoice({
+          id: "a",
+          number: 1,
+          due_on: "2026-11-01",
+          total: 1000,
+          load,
+        }),
+        invoice({
+          id: "b",
+          number: 2,
+          due_on: "2026-10-17",
+          total: 800,
+          paid_amount: 300,
+          load,
+        }),
+        invoice({ id: "c", number: 3 }),
+      ],
+    })
+    assert.equal(items.length, 2)
+    const [group, single] = items
+    assert.equal(group.title, "Prairie Path: 2 invoices overdue")
+    assert.equal(group.detail, "$1,500.00 left to pay · oldest 30 days late")
+    assert.equal(group.path, "customers/b1")
+    assert.equal(single.title, "Invoice #3 is 12 days overdue")
+  })
+
   it("skips invoices that aren't late, and paid-off ones", () => {
     const items = buildAttention({
       ...empty,

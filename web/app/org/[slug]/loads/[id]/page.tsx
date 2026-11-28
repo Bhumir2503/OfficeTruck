@@ -58,16 +58,14 @@ export default async function LoadPage({
   params,
   searchParams,
 }: PageProps<"/org/[slug]/loads/[id]">) {
-  const { organization, detail } = await loadFor(params)
-  if (!organization || !detail) {
+  const { slug, id } = await params
+  const organization = await getOrganization(slug)
+  if (!organization) {
     notFound()
   }
-  const { load, stops, charges, versions } = detail
-
-  const base = `/org/${organization.slug}/loads`
-  const loadHref = `${base}/${load.id}`
-  const tab = parseLoadTab((await searchParams).tab)
+  // Everything at once, the load itself too: each is its own round trip.
   const [
+    detail,
     drivers,
     trucks,
     brokers,
@@ -78,16 +76,25 @@ export default async function LoadPage({
     invoice,
     timeZone,
   ] = await Promise.all([
+    getLoadDetail(organization.id, id),
     getDriverOptions(organization.id),
     getTruckOptions(organization.id),
     getBrokerOptions(organization.id),
     getFactoringCompany(organization.id),
-    getLoadEvents(organization.id, load.id),
-    getLoadDocuments(organization.id, load.id),
-    getLoadExpenses(organization.id, load.id),
-    getLoadInvoice(organization.id, load.id),
+    getLoadEvents(organization.id, id),
+    getLoadDocuments(organization.id, id),
+    getLoadExpenses(organization.id, id),
+    getLoadInvoice(organization.id, id),
     getTimeZone(organization.id),
   ])
+  if (!detail) {
+    notFound()
+  }
+  const { load, stops, charges, versions } = detail
+
+  const base = `/org/${organization.slug}/loads`
+  const loadHref = `${base}/${load.id}`
+  const tab = parseLoadTab((await searchParams).tab)
   // Where the driver is now, for the next step: worked out here, on the
   // company's clock, so the page doesn't change as it loads.
   const where = loadWhereNow(load, stops, timeZone)

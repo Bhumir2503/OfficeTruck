@@ -57,7 +57,15 @@ export function CustomerGlance({
   termsDays: number
   quickPay: number | null
   stats: BrokerPaymentStats
-  loads: { count: number; booked: number; last: string | null }
+  loads: {
+    /** Not counting cancelled loads. */
+    count: number
+    booked: number
+    cancelled: number
+    /** The latest pickup up to today, and the soonest one after. */
+    last: string | null
+    next: string | null
+  }
 }) {
   const danger = flags.find((flag) => flag.tone === "danger")
   const slow =
@@ -138,9 +146,17 @@ export function CustomerGlance({
               ? `${loads.count} · ${formatRate(loads.booked)}`
               : "None yet"}
           </Row>
-          <Row label="Last load">
+          {loads.cancelled > 0 && (
+            <p className="-mt-1 pb-1 text-right text-xs text-muted-foreground">
+              Not counting {plural(loads.cancelled, "cancelled load")}
+            </p>
+          )}
+          <Row label="Last pickup">
             {loads.last ? formatStopDate(loads.last) : "—"}
           </Row>
+          {loads.next && (
+            <Row label="Next pickup">{formatStopDate(loads.next)}</Row>
+          )}
         </dl>
       </div>
     </section>

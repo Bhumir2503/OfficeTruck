@@ -21,7 +21,8 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { fmcsaFlags, formatMc, formatTerms } from "@/lib/broker-format"
-import type { BrokerWithFmcsa } from "@/lib/brokers"
+import type { BrokerMoney, BrokerWithFmcsa } from "@/lib/brokers"
+import { formatRate } from "@/lib/load-format"
 
 type Filter = "all" | "broker" | "shipper" | "flagged" | "do_not_use"
 
@@ -44,9 +45,12 @@ function isFlagged(broker: BrokerWithFmcsa) {
 
 export function BrokersTable({
   brokers,
+  money,
   base,
 }: {
   brokers: BrokerWithFmcsa[]
+  /** Open balance, overdue and days to pay, by broker id. */
+  money: Record<string, BrokerMoney>
   /** /org/<slug>/customers */
   base: string
 }) {
@@ -138,6 +142,12 @@ export function BrokersTable({
           <TableRow>
             <TableHead>Customer</TableHead>
             <TableHead className="hidden md:table-cell">Terms</TableHead>
+            <TableHead className="hidden text-right sm:table-cell">
+              Owed
+            </TableHead>
+            <TableHead className="hidden text-right xl:table-cell">
+              Pays in
+            </TableHead>
             <TableHead className="hidden lg:table-cell">Invoices</TableHead>
             <TableHead className="text-right sm:text-left">FMCSA</TableHead>
           </TableRow>
@@ -146,7 +156,7 @@ export function BrokersTable({
           {filtered.length === 0 && (
             <TableRow>
               <TableCell
-                colSpan={4}
+                colSpan={6}
                 className="h-24 text-center text-muted-foreground"
               >
                 {search.trim() === "" && filter !== "all"
@@ -184,6 +194,27 @@ export function BrokersTable({
                 {formatTerms(
                   broker.payment_terms_days,
                   broker.quick_pay_fee_percent
+                )}
+              </TableCell>
+              <TableCell className="hidden text-right text-sm tabular-nums sm:table-cell">
+                {money[broker.id]?.open.count ? (
+                  <>
+                    {formatRate(money[broker.id].open.balance)}
+                    {money[broker.id].overdue.count > 0 && (
+                      <span className="block text-xs text-destructive">
+                        {formatRate(money[broker.id].overdue.balance)} overdue
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
+              </TableCell>
+              <TableCell className="hidden text-right text-sm tabular-nums xl:table-cell">
+                {money[broker.id]?.avgDaysToPay != null ? (
+                  `${money[broker.id].avgDaysToPay} days`
+                ) : (
+                  <span className="text-muted-foreground">—</span>
                 )}
               </TableCell>
               <TableCell className="hidden text-sm lg:table-cell">

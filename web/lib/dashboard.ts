@@ -18,7 +18,7 @@ import {
 } from "@/lib/ifta-format"
 import { COMPANY_DOCUMENT_LABELS } from "@/lib/company-document-format"
 import { getCompanyDocuments } from "@/lib/documents"
-import { getInvoices, getLoadsToInvoice } from "@/lib/invoices"
+import { getLoadsToInvoice, getOpenInvoices } from "@/lib/invoices"
 import { cityState } from "@/lib/report-format"
 import type { AppointmentType, LoadStatus } from "@/lib/schemas/load"
 import { createClient } from "@/lib/supabase/server"
@@ -48,7 +48,7 @@ export const getAttention = cache(async (organizationId: string) => {
     ready,
     booked,
     drivers,
-    trucks,
+    { trucks, milesSince },
     trailers,
     papers,
     dq,
@@ -57,7 +57,7 @@ export const getAttention = cache(async (organizationId: string) => {
     onSchedule,
     updates,
   ] = await Promise.all([
-    getInvoices(organizationId),
+    getOpenInvoices(organizationId),
     getLoadsToInvoice(organizationId),
     supabase
       .from("loads")
@@ -68,9 +68,17 @@ export const getAttention = cache(async (organizationId: string) => {
       .eq("status", "booked")
       .order("pickup_start"),
     getDrivers(organizationId),
-    getTrucks(organizationId),
+    // With the miles each has run since its odometer reading, for service
+    // due by mileage: started as soon as the trucks are in.
+    getTrucks(organizationId).then(async (trucks) => {
+      const active = trucks.filter((truck) => truck.status === "active")
+      return {
+        trucks,
+        milesSince: await getMilesSinceReading(organizationId, active),
+      }
+    }),
     getTrailers(organizationId),
-    getCompanyDocuments(organizationId),
+    getCompanyDocuments(organizationId, false),
     getDqDatesByDriver(organizationId),
     getLastServiceByTruck(organizationId),
     getIftaReminder(organizationId, iftaQuarter),
@@ -134,7 +142,6 @@ export const getAttention = cache(async (organizationId: string) => {
   const activeTrucks = trucks.filter((truck) => truck.status === "active")
   // Service by mileage counts from the odometer estimated from loads run
   // since the last reading.
-  const milesSince = await getMilesSinceReading(organizationId, activeTrucks)
   const documents: AttentionInput["documents"] = [
     ...drivers
       .filter((driver) => driver.status === "active")

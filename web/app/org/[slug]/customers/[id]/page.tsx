@@ -236,11 +236,15 @@ function LoadsCard({
       footer={
         loads.length > 0 && (
           <SettingsCardFooter
-            hint={`${loads.length} ${loads.length === 1 ? "load" : "loads"} · ${formatRate(
-              loads
-                .filter((load) => load.status !== "cancelled")
-                .reduce((sum, load) => sum + Number(load.rate), 0)
-            )} booked`}
+            hint={(() => {
+              const kept = loads.filter((load) => load.status !== "cancelled")
+              const cancelled = loads.length - kept.length
+              return `${loads.length} ${loads.length === 1 ? "load" : "loads"}${
+                cancelled ? ` (${cancelled} cancelled)` : ""
+              } · ${formatRate(
+                kept.reduce((sum, load) => sum + Number(load.rate), 0)
+              )} booked`
+            })()}
           />
         )
       }
@@ -308,8 +312,28 @@ export default async function BrokerPage({
   params,
   searchParams,
 }: PageProps<"/org/[slug]/customers/[id]">) {
-  const { organization, broker } = await brokerFor(params)
-  if (!organization || !broker) {
+  const { slug, id } = await params
+  const organization = await getOrganization(slug)
+  if (!organization) {
+    notFound()
+  }
+  // The customer and everything on their page at once: each is its own
+  // round trip.
+  const supabase = await createClient()
+  const [broker, contacts, loads, factoring, invoices, { data: org }] =
+    await Promise.all([
+      getBroker(organization.id, id),
+      getBrokerContacts(organization.id, id),
+      getBrokerLoads(organization.id, id),
+      getFactoringCompany(organization.id),
+      getBrokerInvoices(organization.id, id),
+      supabase
+        .from("organizations")
+        .select("broker_updates, auto_invoice")
+        .eq("id", organization.id)
+        .maybeSingle(),
+    ])
+  if (!broker) {
     notFound()
   }
 
@@ -320,18 +344,6 @@ export default async function BrokerPage({
   const asked = parseCustomerTab((await searchParams).tab)
   const tab = tabs.includes(asked) ? asked : "overview"
   const today = localToday()
-  const [contacts, loads, factoring, invoices, { data: org }] =
-    await Promise.all([
-      getBrokerContacts(organization.id, broker.id),
-      getBrokerLoads(organization.id, broker.id),
-      getFactoringCompany(organization.id),
-      getBrokerInvoices(organization.id, broker.id),
-      (await createClient())
-        .from("organizations")
-        .select("broker_updates, auto_invoice")
-        .eq("id", organization.id)
-        .maybeSingle(),
-    ])
   const booked = loads.filter((load) => load.status !== "cancelled")
 
   const subtitle = [
@@ -539,7 +551,17 @@ export default async function BrokerPage({
                     (sum, load) => sum + Number(load.rate),
                     0
                   ),
-                  last: booked[0]?.pickup_start ?? null,
+                  cancelled: loads.length - booked.length,
+                  // Newest first: the latest that has picked up, and the
+                  // soonest still to come.
+                  last:
+                    booked.find(
+                      (load) => load.pickup_start.slice(0, 10) <= today
+                    )?.pickup_start ?? null,
+                  next:
+                    booked.findLast(
+                      (load) => load.pickup_start.slice(0, 10) > today
+                    )?.pickup_start ?? null,
                 }}
               />
               <CustomerNotes

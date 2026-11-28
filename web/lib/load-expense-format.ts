@@ -25,12 +25,17 @@ export const EXPENSE_LABELS: Record<ExpenseKind, string> = {
   other: "Other",
 }
 
-export const PAID_BY = ["company", "driver"] as const
+/**
+ * "deduct": the company paid (its fuel card, say) and takes it off the
+ * driver's settlement, for owner-operators who run on their own fuel.
+ */
+export const PAID_BY = ["company", "driver", "deduct"] as const
 export type PaidBy = (typeof PAID_BY)[number]
 
 export const PAID_BY_LABELS: Record<PaidBy, string> = {
   company: "Company",
   driver: "Driver, out of pocket",
+  deduct: "Company, taken off driver's pay",
 }
 
 /** A receipt file already uploaded to the load's folder. */
@@ -116,13 +121,19 @@ export const expenseSchema = z
 
 export type ExpenseValues = z.output<typeof expenseSchema>
 
-/** Totals for a load's expenses: all of them, and what's owed to the driver. */
+/**
+ * Totals for a load's expenses: all of them, what's owed back to the driver,
+ * what's taken off their pay, and what the company is out in the end (all
+ * but the deductions, which the driver pays back).
+ */
 export function expenseTotals(expenses: { amount: number; paid_by: PaidBy }[]) {
   let total = 0
   let owedToDriver = 0
+  let deducted = 0
   for (const expense of expenses) {
     total += Number(expense.amount)
     if (expense.paid_by === "driver") owedToDriver += Number(expense.amount)
+    if (expense.paid_by === "deduct") deducted += Number(expense.amount)
   }
-  return { total, owedToDriver }
+  return { total, owedToDriver, deducted, companyCost: total - deducted }
 }

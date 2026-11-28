@@ -9,6 +9,7 @@ import {
   loadMilesByTruck,
   parseQuarter,
   quarterKey,
+  quarterRange,
   recentQuarters,
 } from "@/lib/ifta-format"
 import { canManage, getOrganization } from "@/lib/organizations"
@@ -39,7 +40,8 @@ export default async function IftaPage({
   const [record, trucks, loads] = await Promise.all([
     getIftaQuarter(organization.id, quarter),
     getTrucks(organization.id),
-    getReportLoads(organization.id),
+    // Only the quarter's loads count toward its miles.
+    getReportLoads(organization.id, quarterRange(quarter).start),
   ])
 
   return (

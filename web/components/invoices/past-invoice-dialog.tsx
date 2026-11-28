@@ -14,7 +14,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Field, FieldLabel } from "@/components/ui/field"
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
 import {
   Select,
   SelectContent,
@@ -56,6 +57,7 @@ export function PastInvoiceDialog({
 }) {
   const [sentOn, setSentOn] = useState("")
   const [via, setVia] = useState<Via>("email")
+  const [numberText, setNumberText] = useState(String(number))
   const [error, setError] = useState<string | null>(null)
   const [pending, start] = useTransition()
 
@@ -66,15 +68,19 @@ export function PastInvoiceDialog({
     }
     setError(null)
     start(async () => {
+      const changed = numberText.replace(/[,\s#]/g, "") !== String(number)
       const result = await recordPastInvoice(organizationId, invoiceId, {
         via,
         sent_on: sentOn,
+        number: changed ? numberText : undefined,
       })
       if ("error" in result) {
         setError(result.error)
         return
       }
-      toast.success(`Invoice ${number} recorded as sent.`)
+      toast.success(
+        `Invoice ${changed ? numberText.replace(/[,\s#]/g, "") : number} recorded as sent.`
+      )
       onOpenChange(false)
     })
   }
@@ -102,6 +108,20 @@ export function PastInvoiceDialog({
               max={today}
               invalid={!!error}
             />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="past-invoice-number">
+              Invoice number
+            </FieldLabel>
+            <Input
+              id="past-invoice-number"
+              inputMode="numeric"
+              value={numberText}
+              onChange={(event) => setNumberText(event.target.value)}
+            />
+            <FieldDescription>
+              The number it went out with, if it had one before.
+            </FieldDescription>
           </Field>
           <Field>
             <FieldLabel htmlFor="past-invoice-via">How</FieldLabel>

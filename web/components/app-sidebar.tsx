@@ -30,7 +30,8 @@ export function AppSidebar({
   organization: Organization
   user: { name: string; email: string; avatarUrl: string | null }
   organizations: Organization[]
-  dashboardBadge: number
+  /** Streams in after the page; see NavMain. */
+  dashboardBadge: Promise<number>
 }) {
   const base = `/org/${organization.slug}`
 

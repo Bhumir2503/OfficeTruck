@@ -383,6 +383,21 @@ export async function recordPastInvoice(
     return { error: parsed.error.issues[0].message }
   }
   const supabase = await createClient()
+  // The number it really went out with, so the list stays in date order.
+  if (parsed.data.number) {
+    const { error } = await supabase.rpc("set_invoice_number", {
+      target_invoice: invoiceId,
+      new_number: parsed.data.number,
+    })
+    if (error) {
+      return {
+        error:
+          error.code === "23505"
+            ? `Invoice ${parsed.data.number} already exists. Choose another number.`
+            : rpcError(error),
+      }
+    }
+  }
   const { error } = await supabase.rpc("record_past_invoice", {
     target_invoice: invoiceId,
     via: parsed.data.via,

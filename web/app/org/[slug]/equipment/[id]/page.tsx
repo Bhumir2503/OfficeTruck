@@ -68,24 +68,36 @@ export default async function TruckPage({
   params,
   searchParams,
 }: PageProps<"/org/[slug]/equipment/[id]">) {
-  const { organization, truck } = await truckFor(params)
-  if (!organization || !truck) {
+  const { slug, id } = await params
+  const organization = await getOrganization(slug)
+  if (!organization) {
+    notFound()
+  }
+  const manager = canManage(organization)
+  const truckQuery = getTruck(organization.id, id)
+  // The truck and everything on its page at once: each is a round trip.
+  const [truck, drivers, documents, maintenance, milesSince] =
+    await Promise.all([
+      truckQuery,
+      manager ? getDriverOptions(organization.id) : Promise.resolve([]),
+      getTruckDocuments(organization.id, id),
+      getTruckMaintenance(organization.id, id),
+      truckQuery.then((found) =>
+        found
+          ? getMilesSinceReading(organization.id, [found])
+          : ({} as Awaited<ReturnType<typeof getMilesSinceReading>>)
+      ),
+    ])
+  if (!truck) {
     notFound()
   }
 
   const base = `/org/${organization.slug}/equipment`
-  const manager = canManage(organization)
   const truckHref = `${base}/${truck.id}`
   const tab = parseTruckTab((await searchParams).tab)
   const today = getToday()
   const warn = truck.status === "active"
   // The This week and Loads cards are set aside for now.
-  const [drivers, documents, maintenance, milesSince] = await Promise.all([
-    manager ? getDriverOptions(organization.id) : Promise.resolve([]),
-    getTruckDocuments(organization.id, truck.id),
-    getTruckMaintenance(organization.id, truck.id),
-    getMilesSinceReading(organization.id, [truck]),
-  ])
   // Service by mileage counts from the odometer estimated from loads run
   // since the last reading.
   const since = milesSince[truck.id]

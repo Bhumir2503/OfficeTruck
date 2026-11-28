@@ -167,9 +167,12 @@ export type SettlementExpense = {
   id: string
   load_id: string
   kind: string
+  /** Owed back to the driver; negative when it's taken off their pay. */
   amount: number
   spent_on: string
   note: string | null
+  /** Company-paid, taken off the driver's pay. */
+  deducted?: boolean
 }
 
 export type SettlementAdjustment = {

@@ -62,8 +62,19 @@ export const pastInvoiceSchema = z.object({
   sent_on: z
     .string("Enter the day it was sent.")
     .regex(DATE, "Enter the day it was sent."),
+  /** The number it went out with, when that isn't the one it was given. */
+  number: z
+    .string()
+    .transform((value) => value.replace(/[,\s#]/g, ""))
+    .pipe(
+      z
+        .string()
+        .regex(/^(\d{1,9})?$/, "Enter a whole number, like 1001.")
+        .transform((value) => (value ? Number(value) : null))
+    )
+    .optional(),
 })
-export type PastInvoiceValues = z.output<typeof pastInvoiceSchema>
+export type PastInvoiceValues = z.input<typeof pastInvoiceSchema>
 
 export const paymentSchema = z.object({
   paid_on: z.string().regex(DATE, "Enter the date it was paid."),

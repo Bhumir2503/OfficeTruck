@@ -1,3 +1,5 @@
+import { cache } from "react"
+
 import { paymentDue, type PaymentDue } from "@/lib/load-views"
 import { fetchAll, fetchByIds } from "@/lib/supabase/paging"
 import { createClient } from "@/lib/supabase/server"
@@ -116,31 +118,33 @@ export async function getPaymentsDue(
   const supabase = await createClient()
   // An invoice sent from OfficeTruck knows its own due date.
   const waitingIds = waiting.map((load) => load.id)
-  const invoices = await fetchByIds(waitingIds, (chunk, from, to) =>
-    supabase
-      .from("invoices")
-      .select("load_id, due_on")
-      .eq("organization_id", organizationId)
-      .eq("status", "sent")
-      .in("load_id", chunk)
-      .order("id")
-      .range(from, to)
-  )
+  const [invoices, data] = await Promise.all([
+    fetchByIds(waitingIds, (chunk, from, to) =>
+      supabase
+        .from("invoices")
+        .select("load_id, due_on")
+        .eq("organization_id", organizationId)
+        .eq("status", "sent")
+        .in("load_id", chunk)
+        .order("id")
+        .range(from, to)
+    ),
+    fetchByIds(waitingIds, (chunk, from, to) =>
+      supabase
+        .from("load_events")
+        .select("load_id, created_at")
+        .eq("organization_id", organizationId)
+        .eq("to_status", "invoiced")
+        .in("load_id", chunk)
+        .order("created_at")
+        .order("id")
+        .range(from, to)
+    ),
+  ])
   const invoiceDue = new Map(
     invoices.map((invoice) => [invoice.load_id, invoice.due_on as string])
   )
 
-  const data = await fetchByIds(waitingIds, (chunk, from, to) =>
-    supabase
-      .from("load_events")
-      .select("load_id, created_at")
-      .eq("organization_id", organizationId)
-      .eq("to_status", "invoiced")
-      .in("load_id", chunk)
-      .order("created_at")
-      .order("id")
-      .range(from, to)
-  )
   // The latest time each load was invoiced.
   const invoicedOn = new Map<string, string>()
   for (const event of data) {
@@ -259,7 +263,10 @@ export type RateVersion = {
 }
 
 /** A load with its stops, charges and rate versions, for the load page. */
-export async function getLoadDetail(organizationId: string, id: string) {
+export const getLoadDetail = cache(async function getLoadDetail(
+  organizationId: string,
+  id: string
+) {
   const load = await getLoad(organizationId, id)
   if (!load) {
     return null
@@ -299,4 +306,4 @@ export async function getLoadDetail(organizationId: string, id: string) {
     charges: charges.data as unknown as LoadCharge[],
     versions: versions.data as unknown as RateVersion[],
   }
-}
+})
