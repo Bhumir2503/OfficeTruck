@@ -292,7 +292,7 @@ export function DriverPay({
       kind: "load" as const,
       title: load.reference,
       href: `${loadsBase}/${load.id}`,
-      detail: `${formatStopDate(load.delivered_on ? `${load.delivered_on}T00:00:00` : load.delivery_start)} · ${load.route}${load.tonu ? " · TONU" : load.miles ? ` · ${load.miles} mi` : ""}`,
+      detail: `${formatStopDate(load.delivered_on ? `${load.delivered_on}T00:00:00` : load.delivery_start)} · ${load.route}${load.tonu ? " · TONU" : load.miles ? ` · ${load.miles} mi` : ""}${load.late ? " · Recorded after that period was paid" : ""}`,
       amount:
         load.pay === null ? (
           <span className="text-destructive">Needs miles</span>
@@ -305,9 +305,10 @@ export function DriverPay({
       kind: expense.deducted ? ("deduct" as const) : ("expense" as const),
       title: EXPENSE_LABELS[expense.kind as ExpenseKind] ?? expense.kind,
       detail: [
-        reference.get(expense.load_id),
+        reference.get(expense.load_id) ?? expense.reference,
         expense.deducted && "Company paid, taken off pay",
         expense.note,
+        expense.late && "Turned in after that period was paid",
       ]
         .filter(Boolean)
         .join(" · "),

@@ -512,8 +512,9 @@ export function LoadStatusMenu({
             <DialogTitle>Delete load {load.reference}?</DialogTitle>
             <DialogDescription>
               Its stops, check-ins, charges, paperwork and expenses are deleted
-              too, and this can&apos;t be undone. A load that&apos;s invoiced or
-              on a paid pay statement can&apos;t be deleted; cancel it instead.
+              too, and this can&apos;t be undone. A load with an invoice
+              can&apos;t be deleted until the invoice is voided, and one on a
+              paid pay statement stays: cancel that one instead.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

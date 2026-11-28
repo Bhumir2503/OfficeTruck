@@ -161,6 +161,11 @@ export type SettlementLoad = {
   pay: number | null
   /** "Dallas, TX → Atlanta, GA" */
   route: string
+  /**
+   * Delivered in an earlier period that was already paid by the time it was
+   * recorded, so it's paid here instead.
+   */
+  late?: boolean
 }
 
 export type SettlementExpense = {
@@ -173,6 +178,12 @@ export type SettlementExpense = {
   note: string | null
   /** Company-paid, taken off the driver's pay. */
   deducted?: boolean
+  /**
+   * Turned in after its load's period was paid, so it's settled here
+   * instead. `reference` names the load, which isn't on this statement.
+   */
+  late?: boolean
+  reference?: string
 }
 
 export type SettlementAdjustment = {
@@ -219,6 +230,75 @@ export function settlementTotals(
     net: cents(gross + reimbursements + adjusted),
     unpriced,
   }
+}
+
+// ------------------------------------------------------- Late arrivals --
+// A load's delivery, or a driver's receipt, is sometimes recorded after the
+// period it belongs to has been paid. A paid statement is frozen, so these
+// ride on the next statement to be paid instead of being lost.
+
+/** A paid statement, as far as catching late loads and receipts goes. */
+export type PaidPeriod = {
+  week_start: string
+  period_end: string
+  load_ids: string[]
+  /** The expenses it paid; null for one paid before its lines were kept. */
+  expense_ids: string[] | null
+}
+
+/**
+ * The day after the driver's latest paid period ends. The open period
+ * holding this day is the next one payroll will pay, so it takes what came
+ * in late. Null when nothing has been paid yet.
+ */
+export function carryDay(paid: Pick<PaidPeriod, "period_end">[]) {
+  if (!paid.length) return null
+  const latest = paid.reduce(
+    (max, row) => (row.period_end > max ? row.period_end : max),
+    paid[0]!.period_end
+  )
+  return shiftDays(latest, 1)
+}
+
+/**
+ * Loads delivered inside a period that has been paid, yet on no paid
+ * statement: recorded after payroll ran. (A load in a period still open
+ * isn't late; it's waiting there.)
+ */
+export function lateLoads<
+  T extends { id: string; delivered_on: string | null },
+>(loads: T[], paid: PaidPeriod[]): T[] {
+  const settled = new Set(paid.flatMap((row) => row.load_ids))
+  return loads.filter(
+    (load) =>
+      !settled.has(load.id) &&
+      load.delivered_on !== null &&
+      paid.some(
+        (row) =>
+          load.delivered_on! >= row.week_start &&
+          load.delivered_on! <= row.period_end
+      )
+  )
+}
+
+/**
+ * Driver expenses on a paid statement's loads that the statement didn't
+ * include: the receipt came in after payroll ran. Statements paid before
+ * their lines were kept can't tell, so their loads' expenses count as paid.
+ */
+export function lateExpenses<T extends { id: string; load_id: string }>(
+  expenses: T[],
+  paid: PaidPeriod[]
+): T[] {
+  const statement = new Map<string, PaidPeriod>()
+  for (const row of paid) {
+    for (const id of row.load_ids) statement.set(id, row)
+  }
+  const settled = new Set(paid.flatMap((row) => row.expense_ids ?? []))
+  return expenses.filter((expense) => {
+    const row = statement.get(expense.load_id)
+    return !!row && row.expense_ids !== null && !settled.has(expense.id)
+  })
 }
 
 /**

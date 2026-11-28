@@ -177,7 +177,12 @@ export async function markPaid(
   const current = await getSettlement(organizationId, driverId, week, period)
   if (!current) return { error: "That driver isn't in this organization." }
   if (current.status === "paid") return { error: "Already marked paid." }
-  if (current.loads.length === 0 && current.adjustments.length === 0) {
+  if (
+    current.loads.length === 0 &&
+    current.adjustments.length === 0 &&
+    // A late receipt alone is still money owed.
+    current.expenses.length === 0
+  ) {
     return { error: "Nothing to pay this period." }
   }
   if (current.totals.unpriced > 0) {

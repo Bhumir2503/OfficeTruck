@@ -2,8 +2,11 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 
 import {
+  carryDay,
   formatPeriod,
   formatWeek,
+  lateExpenses,
+  lateLoads,
   parseAdjustment,
   parsePeriod,
   periodEnd,
@@ -126,6 +129,63 @@ describe("pay periods", () => {
     assert.equal(
       formatPeriod("2026-12-28", "2027-01-10"),
       "Dec 28, 2026 – Jan 10, 2027"
+    )
+  })
+})
+
+describe("late loads and receipts", () => {
+  // Two paid weeks; the newer one kept its lines, the older one predates that.
+  const paid = [
+    {
+      week_start: "2026-09-07",
+      period_end: "2026-09-13",
+      load_ids: ["a", "b"],
+      expense_ids: ["e1"],
+    },
+    {
+      week_start: "2026-08-31",
+      period_end: "2026-09-06",
+      load_ids: ["z"],
+      expense_ids: null,
+    },
+  ]
+
+  it("carry to the day after the latest paid period", () => {
+    assert.equal(carryDay(paid), "2026-09-14")
+    assert.equal(carryDay([]), null)
+    // Across a year end, and whatever order the rows come in.
+    assert.equal(
+      carryDay([{ period_end: "2026-12-27" }, { period_end: "2027-01-03" }]),
+      "2027-01-04"
+    )
+  })
+
+  it("a load delivered in a paid week but on no statement is late", () => {
+    const loads = [
+      { id: "a", delivered_on: "2026-09-08" }, // paid
+      { id: "late", delivered_on: "2026-09-09" }, // recorded after payroll
+      { id: "first-day", delivered_on: "2026-09-07" },
+      { id: "last-day", delivered_on: "2026-09-13" },
+      { id: "open-week", delivered_on: "2026-09-15" }, // its week isn't paid
+      { id: "no-day", delivered_on: null },
+    ]
+    assert.deepEqual(
+      lateLoads(loads, paid).map((load) => load.id),
+      ["late", "first-day", "last-day"]
+    )
+    assert.deepEqual(lateLoads(loads, []), [])
+  })
+
+  it("a receipt the statement didn't pay is late", () => {
+    const expenses = [
+      { id: "e1", load_id: "a" }, // paid with the statement
+      { id: "e2", load_id: "b" }, // turned in afterwards
+      { id: "e3", load_id: "z" }, // statement kept no lines: counts as paid
+      { id: "e4", load_id: "unpaid-load" }, // rides with its own load
+    ]
+    assert.deepEqual(
+      lateExpenses(expenses, paid).map((expense) => expense.id),
+      ["e2"]
     )
   })
 })
